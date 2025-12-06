@@ -401,3 +401,118 @@ function sendHumanDirection(dir) {
     });
 }
 
+/**
+ * WebGamePlayer: A generic Phaser-based web game replay player.
+ * Usage:
+ *   const player = new WebGamePlayer({
+ *     phaserConfig: { ... }, // Phaser config
+ *     mountId: 'phaser-container', // DOM id to mount
+ *     createScene: () => new YourPhaserSceneClass(),
+ *   });
+ *   player.loadReplay(replayArray);
+ *   player.play();
+ *   player.pause();
+ *   player.goto(turnIndex);
+ *   player.onTurnChange = (turn) => { ... };
+ */
+class WebGamePlayer {
+    constructor({ phaserConfig, mountId, createScene }) {
+        this.mountId = mountId;
+        this.createScene = createScene;
+        this.phaserConfig = Object.assign({}, phaserConfig, {
+            parent: mountId,
+            scene: [createScene()]
+        });
+        this.phaserGame = new Phaser.Game(this.phaserConfig);
+        this.replayArr = [];
+        this.turnIdx = 0;
+        this.timer = null;
+        this.playing = false;
+        this.onTurnChange = null;
+        this.maxTurn = 0;
+        this.scene = null;
+        this._initSceneReady();
+    }
+
+    _initSceneReady() {
+        // Wait for Phaser scene to be ready
+        this.phaserGame.events.on('ready', () => {
+            this.scene = this.phaserGame.scene.scenes[0];
+        });
+        // Fallback: try to get scene after short delay
+        setTimeout(() => {
+            if (!this.scene) {
+                this.scene = this.phaserGame.scene.scenes[0];
+            }
+        }, 500);
+    }
+
+    loadReplay(replayArr) {
+        this.replayArr = replayArr;
+        this.maxTurn = replayArr.length - 1;
+        this.turnIdx = 0;
+        if (this.scene && this.replayArr.length > 0) {
+            this._gotoTurn(0);
+        }
+    }
+
+    play() {
+        if (this.playing || !this.replayArr.length) return;
+        this.playing = true;
+        this._playLoop();
+    }
+
+    pause() {
+        this.playing = false;
+        if (this.timer) clearTimeout(this.timer);
+    }
+
+    goto(turnIdx) {
+        this.pause();
+        this._gotoTurn(turnIdx);
+    }
+
+    _gotoTurn(idx) {
+        idx = Math.max(0, Math.min(this.maxTurn, idx));
+        // Reset to initial state
+        if (!this.scene) return;
+        let initialState = JSON.parse(JSON.stringify(this.replayArr[0]));
+        this.scene.updateFromState(initialState);
+        // Apply actions incrementally
+        for (let i = 1; i <= idx; ++i) {
+            this.scene.updateFromState(this.replayArr[i]);
+        }
+        this.turnIdx = idx;
+        if (typeof this.onTurnChange === 'function') {
+            this.onTurnChange(idx);
+        }
+    }
+
+    _playLoop() {
+        if (!this.playing) return;
+        if (this.turnIdx < this.maxTurn) {
+            this.turnIdx++;
+            this._gotoTurn(this.turnIdx);
+            this.timer = setTimeout(() => this._playLoop(), 400);
+        } else {
+            this.pause();
+        }
+    }
+}
+
+// Example usage for Snake game (replace original replay logic):
+// const player = new WebGamePlayer({
+//     phaserConfig: {
+//         type: Phaser.AUTO,
+//         width: CANVAS_SIZE,
+//         height: CANVAS_SIZE,
+//     },
+//     mountId: 'phaser-container',
+//     createScene: () => new SnakeScene()
+// });
+// player.loadReplay(replayArr);
+// player.play();
+// player.pause();
+// player.goto(turnIdx);
+// player.onTurnChange = (idx) => { ... };
+

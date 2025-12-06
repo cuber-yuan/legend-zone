@@ -99,7 +99,9 @@
                 {% if current_user.is_authenticated %}
                 <li class="flex items-center ml-4 mb-4 lg:ml-0 lg:mb-0">
                     <span class="text-sm text-gray-200">
-                        Logged in as: <strong>{{ current_user.id }}</strong>
+                        Logged in as:
+                        <a href="{{ url_for('main.profile', username=current_user.id) }}"
+                           class="text-white font-semibold hover:underline ml-1">{{ current_user.id }}</a>
                     </span>
                 </li>
                 <li class="flex items-center ml-4 mb-4 lg:ml-0 lg:mb-0">

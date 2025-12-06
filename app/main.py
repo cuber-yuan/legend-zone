@@ -24,6 +24,10 @@ def home():
 def games():
     return render_template('games.html')
 
+@main_bp.route('/profile')
+def profile():
+    return render_template('profile.html')
+
 @main_bp.route('/rating')
 def rating():
     return render_template('rating.html')
