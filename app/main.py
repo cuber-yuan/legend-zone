@@ -43,22 +43,25 @@ def profile(username):
             cursorclass=pymysql.cursors.DictCursor
         )
         with conn.cursor() as cursor:
-            cursor.execute("SELECT id FROM users WHERE username = %s", (username,))
+
+            cursor.execute("SELECT id, created_at FROM users WHERE username = %s", (username,))
             user_row = cursor.fetchone()
             if not user_row:
                 # user not found -> redirect to home
                 return redirect(url_for('main.home'))
             user_id = user_row['id']
+            registered_at = user_row.get('created_at')
             cursor.execute("SELECT id, bot_name AS name, description FROM bots WHERE user_id = %s", (user_id,))
             bots = cursor.fetchall()
     except Exception as e:
         # return empty list on error (or log the error)
         bots = []
+        registered_at = None
     finally:
         if conn:
             conn.close()
 
-    return render_template('profile.html', bots=bots, user_not_found=False, username=username)
+    return render_template('profile.html', bots=bots, user_not_found=False, username=username, registered_at=registered_at)
 
 @main_bp.route('/rating')
 def rating():

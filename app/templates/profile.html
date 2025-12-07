@@ -22,7 +22,14 @@
     {% endif %}
 
     <div class="bg-white p-4 rounded shadow flex items-center justify-between">
-      <div>
+      <!-- avatar on the far left -->
+      <div class="flex-shrink-0 mr-4">
+        <img src="{{ avatar_url or url_for('static', filename='default-avatar.png') }}" alt="avatar"
+             class="w-16 h-16 rounded-full object-cover border border-gray-200">
+      </div>
+
+      <!-- main info: username, registered date, send message -->
+      <div class="flex-1">
         <div class="text-xl font-bold text-gray-900">
           {% if username %}
             {{ username }}
@@ -32,20 +39,41 @@
             Unknown User
           {% endif %}
         </div>
-        
+
+        <div class="text-sm text-gray-500 mt-1">
+          {% if registered_at %}
+            {% if registered_at is string %}
+              Registered: {{ registered_at }}
+            {% else %}
+              Registered: {{ registered_at.strftime('%Y-%m-%d') }}
+            {% endif %}
+          {% endif %}
+        </div>
+
+        <div class="mt-4"> <!-- increased spacing before the button -->
+          {% if current_user.is_authenticated and (not username or current_user.get_id() != username) %}
+            <a href="#"
+               class="inline-block px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-500 text-sm">Send Message</a>
+          {% elif not current_user.is_authenticated %}
+            <a href="{{ url_for('auth.login') }}" class="inline-block px-3 py-1 bg-gray-200 text-gray-700 rounded text-sm">Login to message</a>
+          {% endif %}
+        </div>
       </div>
 
-      <!-- {% if current_user.is_authenticated and username and current_user.get_id() == username %}
-        <div>
-          <a href="{{ url_for('auth.logout') }}" class="px-3 py-1 bg-red-600 text-white rounded text-sm hover:bg-red-500">Logout</a>
-        </div>
-      {% endif %} -->
+      <!-- right: user signature / bio -->
+      <div class="w-64 text-right pl-4 hidden sm:block">
+        {% if signature %}
+          <div class="text-sm text-gray-600 italic break-words">{{ signature }}</div>
+        {% else %}
+          <div class="text-sm text-gray-400">No signature provided.</div>
+        {% endif %}
+      </div>
     </div>
   </div>
-
+  
   <!-- My bot list -->
   <!-- <h2 class="text-2xl font-bold mb-4">My bot list</h2> -->
-
+  
   {% if bots and bots|length > 0 %}
     <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
       {% for bot in bots %}
