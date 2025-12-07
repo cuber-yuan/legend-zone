@@ -1,10 +1,9 @@
-from flask import Blueprint, render_template, request, redirect, url_for, jsonify
+from flask import Blueprint, render_template, request, redirect, url_for, jsonify, abort
 from flask_login import login_required, current_user
 import pymysql
 import os
 from dotenv import load_dotenv
 import datetime
-
 load_dotenv()
 
 main_bp = Blueprint('main', __name__)
@@ -25,8 +24,41 @@ def games():
     return render_template('games.html')
 
 @main_bp.route('/profile')
-def profile():
-    return render_template('profile.html')
+def profile_root():
+    # redirect bare /profile to current user's profile if logged in
+    if current_user.is_authenticated:
+        return redirect(url_for('main.profile', username=current_user.id))
+    abort(404)
+
+@main_bp.route('/profile/<username>')
+def profile(username):
+    conn = None
+    try:
+        conn = pymysql.connect(
+            host=os.getenv('DB_HOST'),
+            user=os.getenv('DB_USER'),
+            password=os.getenv('DB_PASSWORD'),
+            database=os.getenv('DB_NAME'),
+            charset='utf8mb4',
+            cursorclass=pymysql.cursors.DictCursor
+        )
+        with conn.cursor() as cursor:
+            cursor.execute("SELECT id FROM users WHERE username = %s", (username,))
+            user_row = cursor.fetchone()
+            if not user_row:
+                # user not found
+                return render_template('profile.html', bots=None, user_not_found=True, username=username)
+            user_id = user_row['id']
+            cursor.execute("SELECT id, bot_name AS name, description FROM bots WHERE user_id = %s", (user_id,))
+            bots = cursor.fetchall()
+    except Exception as e:
+        # return empty list on error (or log the error)
+        bots = []
+    finally:
+        if conn:
+            conn.close()
+
+    return render_template('profile.html', bots=bots, user_not_found=False, username=username)
 
 @main_bp.route('/rating')
 def rating():
@@ -144,3 +176,28 @@ def catking():
 @main_bp.route('/injoker')
 def injoker():
     return render_template('injoker.html')
+
+@main_bp.route('/bot/<int:bot_id>')
+def bot_detail(bot_id):
+    conn = None
+    try:
+        conn = pymysql.connect(
+            host=os.getenv('DB_HOST'),
+            user=os.getenv('DB_USER'),
+            password=os.getenv('DB_PASSWORD'),
+            database=os.getenv('DB_NAME'),
+            charset='utf8mb4',
+            cursorclass=pymysql.cursors.DictCursor
+        )
+        with conn.cursor() as cursor:
+            cursor.execute("SELECT id, bot_name AS name, description, user_id, game FROM bots WHERE id = %s", (bot_id,))
+            bot = cursor.fetchone()
+            if not bot:
+                abort(404)
+    except Exception:
+        abort(500)
+    finally:
+        if conn:
+            conn.close()
+
+    return render_template('bot_detail.html', bot=bot)
