@@ -1,6 +1,10 @@
 {% extends 'base.html' %}
 
-{% block title %}Login{% endblock %}
+{% block title %}
+  {% if username %}
+            {{ username }}
+  {% endif %}
+{% endblock %}
 
 {% block sidebar_left %}
 {% endblock %}
@@ -28,14 +32,14 @@
             Unknown User
           {% endif %}
         </div>
-        <!-- <div class="text-sm text-gray-500">User ID</div> -->
+        
       </div>
 
-      {% if current_user.is_authenticated and username and current_user.get_id() == username %}
+      <!-- {% if current_user.is_authenticated and username and current_user.get_id() == username %}
         <div>
           <a href="{{ url_for('auth.logout') }}" class="px-3 py-1 bg-red-600 text-white rounded text-sm hover:bg-red-500">Logout</a>
         </div>
-      {% endif %}
+      {% endif %} -->
     </div>
   </div>
 

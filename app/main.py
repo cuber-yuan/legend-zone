@@ -46,8 +46,8 @@ def profile(username):
             cursor.execute("SELECT id FROM users WHERE username = %s", (username,))
             user_row = cursor.fetchone()
             if not user_row:
-                # user not found
-                return render_template('profile.html', bots=None, user_not_found=True, username=username)
+                # user not found -> redirect to home
+                return redirect(url_for('main.home'))
             user_id = user_row['id']
             cursor.execute("SELECT id, bot_name AS name, description FROM bots WHERE user_id = %s", (user_id,))
             bots = cursor.fetchall()
