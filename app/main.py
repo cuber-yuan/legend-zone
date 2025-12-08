@@ -127,7 +127,16 @@ def gomoku():
         charset='utf8mb4'
     )
     cursor = conn.cursor()
-    cursor.execute("SELECT id, bot_name FROM bots where game = 'Gomoku'")
+    # only keep the latest (max id) record for each bot_name within the game
+    cursor.execute("""
+        SELECT id, bot_name
+        FROM bots
+        WHERE game = %s
+          AND id IN (
+            SELECT MAX(id) FROM bots WHERE game = %s GROUP BY bot_name
+          )
+        ORDER BY bot_name
+    """, ('Gomoku', 'Gomoku'))
     bots = cursor.fetchall()
     conn.close()
 
@@ -143,7 +152,15 @@ def tank():
         charset='utf8mb4'
     )
     cursor = conn.cursor()
-    cursor.execute("SELECT id, bot_name FROM bots where game = 'Tank Battle'")
+    cursor.execute("""
+        SELECT id, bot_name
+        FROM bots
+        WHERE game = %s
+          AND id IN (
+            SELECT MAX(id) FROM bots WHERE game = %s GROUP BY bot_name
+          )
+        ORDER BY bot_name
+    """, ('Tank Battle', 'Tank Battle'))
     bots = cursor.fetchall()
     conn.close()
 
@@ -159,7 +176,15 @@ def snake():
         charset='utf8mb4'
     )
     cursor = conn.cursor()
-    cursor.execute("SELECT id, bot_name FROM bots where game = 'Snake'")
+    cursor.execute("""
+        SELECT id, bot_name
+        FROM bots
+        WHERE game = %s
+          AND id IN (
+            SELECT MAX(id) FROM bots WHERE game = %s GROUP BY bot_name
+          )
+        ORDER BY bot_name
+    """, ('Snake', 'Snake'))
     bots = cursor.fetchall()
     conn.close()
     return render_template('snake.html', bots=bots)
@@ -174,7 +199,15 @@ def msnake():
         charset='utf8mb4'
     )
     cursor = conn.cursor()
-    cursor.execute("SELECT id, bot_name FROM bots where game = 'Mini Snake'")
+    cursor.execute("""
+        SELECT id, bot_name
+        FROM bots
+        WHERE game = %s
+          AND id IN (
+            SELECT MAX(id) FROM bots WHERE game = %s GROUP BY bot_name
+          )
+        ORDER BY bot_name
+    """, ('Mini Snake', 'Mini Snake'))
     bots = cursor.fetchall()
     conn.close()
     return render_template('snake.html', bots=bots)
