@@ -10,12 +10,11 @@ load_dotenv()
 
 upload_bp = Blueprint('upload', __name__)
 
-# 文件上传目录
+
 UPLOAD_FOLDER = 'uploads/bots'
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 def get_user_id_by_username(username):
-    """通过用户名查询用户ID"""
     conn = pymysql.connect(
         host=os.getenv('DB_HOST'),
         user=os.getenv('DB_USER'),
@@ -30,7 +29,6 @@ def get_user_id_by_username(username):
     return result[0] if result else None
 
 def save_bot_to_db(user_id, bot_name, description, language, source_code=None, file_path=None, game=None):
-    """保存Bot信息到数据库"""
     conn = pymysql.connect(
         host=os.getenv('DB_HOST'),
         user=os.getenv('DB_USER'),
@@ -87,15 +85,22 @@ def upload_bot():
     )
     try:
         cursor = conn.cursor()
-        # If game provided, ensure bot_name is unique within that game across all users.
+        # If game provided, ensure bot_name is unique within that game across different users.
+        # Allow same user to upload same bot_name (versions).
         if game:
-            cursor.execute("SELECT COUNT(1) FROM bots WHERE bot_name = %s AND game = %s", (original_bot_name, game))
+            cursor.execute(
+                "SELECT COUNT(1) FROM bots WHERE bot_name = %s AND game = %s AND user_id != %s",
+                (original_bot_name, game, user_id)
+            )
         else:
             # If no game specified, treat NULL/empty as the same category.
-            cursor.execute("SELECT COUNT(1) FROM bots WHERE bot_name = %s AND (game IS NULL OR game = '')", (original_bot_name,))
+            cursor.execute(
+                "SELECT COUNT(1) FROM bots WHERE bot_name = %s AND (game IS NULL OR game = '') AND user_id != %s",
+                (original_bot_name, user_id)
+            )
         exists = cursor.fetchone()[0] > 0
         if exists:
-            return jsonify({"message": "Bot name already exists for this game."}), 409
+            return jsonify({"message": "Bot name already exists for this game (used by another user)."}), 409
     finally:
         conn.close()
 
