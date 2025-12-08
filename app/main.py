@@ -43,7 +43,6 @@ def profile(username):
             cursorclass=pymysql.cursors.DictCursor
         )
         with conn.cursor() as cursor:
-
             cursor.execute("SELECT id, created_at FROM users WHERE username = %s", (username,))
             user_row = cursor.fetchone()
             if not user_row:
@@ -51,7 +50,19 @@ def profile(username):
                 return redirect(url_for('main.home'))
             user_id = user_row['id']
             registered_at = user_row.get('created_at')
-            cursor.execute("SELECT id, bot_name AS name, description FROM bots WHERE user_id = %s", (user_id,))
+
+            # fetch unique bot names with version count and a representative id/description
+            cursor.execute("""
+                SELECT
+                    bot_name AS name,
+                    COUNT(*) AS versions,
+                    MIN(id) AS id,
+                    MAX(description) AS description
+                FROM bots
+                WHERE user_id = %s
+                GROUP BY bot_name
+                ORDER BY name
+            """, (user_id,))
             bots = cursor.fetchall()
     except Exception as e:
         # return empty list on error (or log the error)

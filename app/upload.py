@@ -3,6 +3,8 @@ from flask_login import login_required, current_user
 import os
 import pymysql
 from dotenv import load_dotenv
+import secrets
+from werkzeug.utils import secure_filename
 
 load_dotenv()
 
@@ -51,42 +53,65 @@ def save_bot_to_db(user_id, bot_name, description, language, source_code=None, f
 @upload_bp.route('/upload-bot', methods=['POST'])
 @login_required
 def upload_bot():
-    bot_name = request.form.get('botName')
+    # preserve original name but generate a unique bot_name to avoid duplicates on filesystem
+    original_bot_name = request.form.get('botName') or 'bot'
+    # use a short secure random suffix for storage folder only
+    suffix = secrets.token_urlsafe(6)
+    bot_name_unique = f"{secure_filename(original_bot_name)}-{suffix}"
     description = request.form.get('botDescription')
     language = request.form.get('language')
     source_code = request.form.get('sourceCode')
     bot_file = request.files.get('botFile')
     game = request.form.get('game')
-    
-    # username = request.form.get('username')  # 客户端传递的用户名
 
-    # 验证输入
-    if not bot_name or len(bot_name) < 4:
+    # validate input
+    if not original_bot_name or len(original_bot_name) < 4:
         return jsonify({"message": "Bot name must be at least 4 characters."}), 400
     if not description or len(description) < 4:
         return jsonify({"message": "Bot description must be at least 4 characters."}), 400
     if not source_code and not bot_file:
         return jsonify({"message": "Please upload a file or enter source code."}), 400
-    
 
-    # 查询用户ID
+    # lookup user id
     user_id = get_user_id_by_username(current_user.id)
     if not user_id:
         return jsonify({"message": "User not found."}), 404
 
-    # 保存文件或源代码
+    # check duplicate bot name for this game; if exists, reject upload
+    conn = pymysql.connect(
+        host=os.getenv('DB_HOST'),
+        user=os.getenv('DB_USER'),
+        password=os.getenv('DB_PASSWORD'),
+        database=os.getenv('DB_NAME'),
+        charset='utf8mb4'
+    )
+    try:
+        cursor = conn.cursor()
+        # If game provided, ensure bot_name is unique within that game across all users.
+        if game:
+            cursor.execute("SELECT COUNT(1) FROM bots WHERE bot_name = %s AND game = %s", (original_bot_name, game))
+        else:
+            # If no game specified, treat NULL/empty as the same category.
+            cursor.execute("SELECT COUNT(1) FROM bots WHERE bot_name = %s AND (game IS NULL OR game = '')", (original_bot_name,))
+        exists = cursor.fetchone()[0] > 0
+        if exists:
+            return jsonify({"message": "Bot name already exists for this game."}), 409
+    finally:
+        conn.close()
+
+    # save file or source code
     file_path = None
     if bot_file:
-        # 构建保存路径 bots/用户名/bot名/
-        user_dir = os.path.join(UPLOAD_FOLDER, str(current_user.id), bot_name)
+        # build storage path: uploads/bots/<user_id>/<unique_folder>/
+        user_dir = os.path.join(UPLOAD_FOLDER, str(current_user.id), bot_name_unique)
         os.makedirs(user_dir, exist_ok=True)
-        file_path = os.path.join(user_dir, bot_file.filename)
+        file_path = os.path.join(user_dir, secure_filename(bot_file.filename))
         bot_file.save(file_path)
 
-    # 保存到数据库
+    # save to database using the original bot name (not the storage suffix)
     save_bot_to_db(
         user_id=user_id,
-        bot_name=bot_name,
+        bot_name=original_bot_name,
         description=description,
         language=language,
         source_code=source_code if not bot_file else None,
