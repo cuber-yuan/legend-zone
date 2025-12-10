@@ -157,7 +157,7 @@ def register_gomoku_events(socketio):
                 print(f"Game ended after {turn + 1} turns. Winner: {game.winner}")
                 # update ratings
                 if player_1_type == 'bot' and player_2_type == 'bot':
-                    update_bot_ratings(player_1_id, player_2_id, game.winner)
+                    update_bot_ratings(player_1_id, player_2_id, game.winner - 1 ) # winner: 0 for P1 win, 1 for P2 win, -1 for draw
 
                 # --- Insert match record into database ---
                 try:
