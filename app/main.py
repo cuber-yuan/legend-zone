@@ -163,8 +163,8 @@ def chat_messages():
         } for msg in messages
     ])
 
-@main_bp.route('/gomoku')
-def gomoku():
+def get_latest_bots_for_game(game_name):
+    """Get latest record (max id) for each bot_name within a game."""
     conn = pymysql.connect(
         host=os.getenv('DB_HOST'),
         user=os.getenv('DB_USER'),
@@ -172,90 +172,39 @@ def gomoku():
         database=os.getenv('DB_NAME'),
         charset='utf8mb4'
     )
-    cursor = conn.cursor()
-    # only keep the latest (max id) record for each bot_name within the game
-    cursor.execute("""
-        SELECT id, bot_name
-        FROM bots
-        WHERE game = %s
-          AND id IN (
-            SELECT MAX(id) FROM bots WHERE game = %s GROUP BY bot_name
-          )
-        ORDER BY bot_name
-    """, ('Gomoku', 'Gomoku'))
-    bots = cursor.fetchall()
-    conn.close()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT id, bot_name
+            FROM bots
+            WHERE game = %s
+              AND id IN (
+                SELECT MAX(id) FROM bots WHERE game = %s GROUP BY bot_name
+              )
+            ORDER BY bot_name
+        """, (game_name, game_name))
+        return cursor.fetchall()
+    finally:
+        conn.close()
 
+@main_bp.route('/gomoku')
+def gomoku():
+    bots = get_latest_bots_for_game('Gomoku')
     return render_template('gomoku.html', bots=bots)
 
 @main_bp.route('/tank')
 def tank():
-    conn = pymysql.connect(
-        host=os.getenv('DB_HOST'),
-        user=os.getenv('DB_USER'),
-        password=os.getenv('DB_PASSWORD'),
-        database=os.getenv('DB_NAME'),
-        charset='utf8mb4'
-    )
-    cursor = conn.cursor()
-    cursor.execute("""
-        SELECT id, bot_name
-        FROM bots
-        WHERE game = %s
-          AND id IN (
-            SELECT MAX(id) FROM bots WHERE game = %s GROUP BY bot_name
-          )
-        ORDER BY bot_name
-    """, ('Tank Battle', 'Tank Battle'))
-    bots = cursor.fetchall()
-    conn.close()
-
+    bots = get_latest_bots_for_game('Tank Battle')
     return render_template('tank.html', bots=bots)
 
 @main_bp.route('/snake')
 def snake():
-    conn = pymysql.connect(
-        host=os.getenv('DB_HOST'),
-        user=os.getenv('DB_USER'),
-        password=os.getenv('DB_PASSWORD'),
-        database=os.getenv('DB_NAME'),
-        charset='utf8mb4'
-    )
-    cursor = conn.cursor()
-    cursor.execute("""
-        SELECT id, bot_name
-        FROM bots
-        WHERE game = %s
-          AND id IN (
-            SELECT MAX(id) FROM bots WHERE game = %s GROUP BY bot_name
-          )
-        ORDER BY bot_name
-    """, ('Snake', 'Snake'))
-    bots = cursor.fetchall()
-    conn.close()
+    bots = get_latest_bots_for_game('Snake')
     return render_template('snake.html', bots=bots)
 
 @main_bp.route('/msnake')
 def msnake():
-    conn = pymysql.connect(
-        host=os.getenv('DB_HOST'),
-        user=os.getenv('DB_USER'),
-        password=os.getenv('DB_PASSWORD'),
-        database=os.getenv('DB_NAME'),
-        charset='utf8mb4'
-    )
-    cursor = conn.cursor()
-    cursor.execute("""
-        SELECT id, bot_name
-        FROM bots
-        WHERE game = %s
-          AND id IN (
-            SELECT MAX(id) FROM bots WHERE game = %s GROUP BY bot_name
-          )
-        ORDER BY bot_name
-    """, ('Mini Snake', 'Mini Snake'))
-    bots = cursor.fetchall()
-    conn.close()
+    bots = get_latest_bots_for_game('Mini Snake')
     return render_template('snake.html', bots=bots)
 
 @main_bp.route('/yahtzee')
