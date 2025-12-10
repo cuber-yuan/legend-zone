@@ -48,23 +48,26 @@ def update_bot_ratings(player_1_id, player_2_id, winner):
     Fetches current ratings, calculates new ratings, and updates the database.
     player_1_id and player_2_id must be integers (bot IDs).
     """
+    p1_id_int = int(player_1_id) 
+    p2_id_int = int(player_2_id)
+    
     conn = None
     try:
         conn = get_db_connection()
         with conn.cursor() as cursor:
-            # 1. Fetch current ratings
-            # Use DEFAULT_RATING if the rating column is NULL
-            sql = "SELECT id, COALESCE(rating, %s) AS rating FROM bots WHERE id IN (%s, %s)"
-            print(sql)
+            # 1. Fetch current ratings. SQL query now uses explicit integers.
             cursor.execute("SELECT id, COALESCE(rating, %s) AS rating FROM bots WHERE id IN (%s, %s)",
-                           (DEFAULT_RATING, player_1_id, player_2_id))
-            bots_data = {row['id']: row['rating'] for row in cursor.fetchall()}
+                           (DEFAULT_RATING, p1_id_int, p2_id_int))
+            
+            # bots_data keys are guaranteed to be integers from row['id']
+            bots_data = {row['id']: row['rating'] for row in cursor.fetchall()} 
 
-            rating_1 = bots_data.get(player_1_id)
-            rating_2 = bots_data.get(player_2_id)
+            # 2. Use the guaranteed integer IDs for dictionary lookup
+            rating_1 = bots_data.get(p1_id_int) 
+            rating_2 = bots_data.get(p2_id_int)
 
             if rating_1 is None or rating_2 is None:
-                print("Error: Could not retrieve ratings for both bots.")
+                print("Error: Could not retrieve ratings for both bots. Check if IDs exist or match the returned type.")
                 return
 
             # 2. Calculate new ratings
