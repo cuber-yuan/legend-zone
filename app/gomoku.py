@@ -10,6 +10,7 @@ from .code_executor import CodeExecutor
 import uuid
 import pymysql
 from dotenv import load_dotenv
+from .services.rating_service import update_bot_ratings
 
 load_dotenv()
 
@@ -154,6 +155,10 @@ def register_gomoku_events(socketio):
             emit('update', response, room=sid)
             if game.winner != 0 or game.is_terminated:
                 print(f"Game ended after {turn + 1} turns. Winner: {game.winner}")
+                # update ratings
+                if player_1_type == 'bot' and player_2_type == 'bot':
+                    update_bot_ratings(player_1_id, player_2_id, game.winner)
+
                 # --- Insert match record into database ---
                 try:
                     conn = _get_db_connection()
