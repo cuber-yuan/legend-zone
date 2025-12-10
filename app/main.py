@@ -76,7 +76,53 @@ def profile(username):
 
 @main_bp.route('/rating')
 def rating():
-    return render_template('rating.html')
+    conn = None
+    ratings = {}
+    try:
+        conn = pymysql.connect(
+            host=os.getenv('DB_HOST'),
+            user=os.getenv('DB_USER'),
+            password=os.getenv('DB_PASSWORD'),
+            database=os.getenv('DB_NAME'),
+            charset='utf8mb4',
+            cursorclass=pymysql.cursors.DictCursor # Use DictCursor for easier processing
+        )
+        with conn.cursor() as cursor:
+            # 1. Get a list of all unique games in the bots table
+            cursor.execute("SELECT DISTINCT game FROM bots ORDER BY game")
+            games = [row['game'] for row in cursor.fetchall()]
+
+            # 2. For each game, fetch the latest version of each unique bot (MAX(id)) and its rating
+            for game in games:
+                cursor.execute("""
+                    SELECT
+                        b.id,
+                        b.bot_name AS name,
+                        b.rating,
+                        u.username AS owner
+                    FROM bots b
+                    JOIN users u ON b.user_id = u.id
+                    WHERE b.game = %s
+                      AND b.id IN (
+                        SELECT MAX(id) FROM bots WHERE game = %s GROUP BY bot_name
+                      )
+                    ORDER BY b.rating DESC, b.bot_name
+                """, (game, game))
+                
+                # Store the list of bots for the current game
+                ratings[game] = cursor.fetchall()
+            
+    except Exception as e:
+        # Log the error for debugging (you would typically use a proper logger)
+        print(f"Database error in /rating: {e}")
+        # On error, ratings remains an empty dictionary
+        
+    finally:
+        if conn:
+            conn.close()
+
+    # Pass the dictionary of ratings (grouped by game) to the template
+    return render_template('rating.html', ratings=ratings)
 
 @main_bp.route('/chat', methods=['GET', 'POST'])
 def chat():
