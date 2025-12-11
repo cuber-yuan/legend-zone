@@ -114,11 +114,11 @@ int main() {
     Json::Value input, output;
 
     // 假设输入 JSON 遵循 snake_judge 的结构，包含 'log' 字段
-    if (!reader.parse(str, input)) {
-        // 解析失败，输出错误
-        cerr << "JSON Parse Error" << endl;
-        return 1;
-    }
+    // if (!reader.parse(str, input)) {
+    //     // 解析失败，输出错误
+    //     cerr << "JSON Parse Error" << endl;
+    //     return 1;
+    // }
 
     // 初始化棋盘
     init_grid();
