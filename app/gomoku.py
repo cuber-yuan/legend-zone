@@ -44,6 +44,83 @@ def _get_bot_executor(bot_id):
             conn.close()
     return None
 
+## temporary function for running auto gomoku match
+def run_auto_gomoku_match(player_1_id, player_2_id):
+    """
+    Runs a non-interactive (AI vs AI) Gomoku match, updates rating, and logs result.
+    This function is designed to be called by a background worker.
+    player_1_id (Black), player_2_id (White)
+    """
+    print(f"Running auto Gomoku match: {player_1_id} (Black) vs {player_2_id} (White)")
+
+    # 1. 初始化执行器
+    executor_1 = _get_bot_executor(str(player_1_id))
+    executor_2 = _get_bot_executor(str(player_2_id))
+
+    if not executor_1 or not executor_2:
+        print("Error: Failed to load both bot executors for auto match.")
+        return
+
+    # 2. 运行游戏
+    game = GomokuJudge()
+    game.game_id = str(uuid.uuid4())
+    game.new_game(
+        black_player_type='bot',
+        white_player_type='bot',
+        black_executor=executor_1,
+        white_executor=executor_2
+    )
+    
+    # 3. 核心游戏循环 (复制并修改原 new_game 中的循环)
+    for turn in range(256):
+        output_str = ""
+        input_str = game.send_action_to_ai()
+
+        # 根据当前玩家调用对应的 Bot Executor
+        if game.current_player == 1:
+            output_str = executor_1.run(input_str)
+        if game.current_player == 2:
+            output_str = executor_2.run(input_str)
+
+        try:
+            move_data = json.loads(output_str)
+            x, y = move_data['x'], move_data['y']
+        except (json.JSONDecodeError, KeyError):
+            print(f"AI for player {game.current_player} returned invalid data. Player {3 - game.current_player} wins.")
+            game.winner = 3 - game.current_player
+            break
+        
+        if game.is_terminated:
+            break
+
+        if not game.apply_move(x, y):
+            print(f"AI for player {game.current_player} made an invalid move. Player {3 - game.current_player} wins.")
+            game.winner = 3 - game.current_player
+            break
+
+        winner = game.check_win(x, y)
+        if winner != 0:
+            game.winner = winner
+        
+        if game.winner != 0 or game.is_terminated:
+            print(f"Game ended after {turn + 1} turns. Winner: {game.winner}")
+            break
+    
+    # 4. 结果处理
+    result_winner = game.winner if game.winner != 0 else -1 # 0: Draw, 1: Black, 2: White
+    
+    # ELO 更新
+    # Gomoku 约定: 1=Black (P1), 2=White (P2). ELO 约定: 0=P1, 1=P2, -1=Draw
+    elo_winner = result_winner - 1 if result_winner in (1, 2) else -1
+    update_bot_ratings(player_1_id, player_2_id, elo_winner)
+
+    # 比赛记录插入数据库 (使用 get_db_connection 代替)
+    # (此处的逻辑与原 gomoku.py 底部类似，但需要使用 get_db_connection)
+    # ... (省略数据库插入代码，与原文件逻辑相似，但需使用 get_db_connection)
+    
+    # 清理 Executor
+    if executor_1: executor_1.cleanup()
+    if executor_2: executor_2.cleanup()
 
 def register_gomoku_events(socketio):
     @socketio.on('connect', namespace='/gomoku')

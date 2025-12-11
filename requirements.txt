@@ -4,3 +4,4 @@ flask-socketio
 flask-login
 pymysql
 python-dotenv
+apscheduler
