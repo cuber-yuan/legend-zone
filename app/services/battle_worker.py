@@ -6,20 +6,10 @@ import time
 
 import pymysql
 from ..gomoku import run_auto_gomoku_match # 导入解耦后的游戏运行函数
-# from .bot_utils import get_db_connection #, get_bot_executor
+from .utils import get_db_connection #, get_bot_executor
 
 
-## TODO : 这里可以考虑将 get_db_connection 提取到一个公共模块，以便 rating_service.py 也能使用
-def get_db_connection():
-    """Returns a connection to the MySQL database."""
-    return pymysql.connect(
-        host=os.getenv('DB_HOST'),
-        user=os.getenv('DB_USER'),
-        password=os.getenv('DB_PASSWORD'),
-        database=os.getenv('DB_NAME'),
-        charset='utf8mb4',
-        cursorclass=pymysql.cursors.DictCursor
-    )
+
 
 # ... (可以为其他游戏导入 run_auto_snake_match 等)
 

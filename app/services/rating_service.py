@@ -1,20 +1,13 @@
 import pymysql
 import os
 
+from .utils import get_db_connection
+
 # --- ELO Rating Constants ---
 K_FACTOR = 32
 DEFAULT_RATING = 1500
 
-def get_db_connection():
-    """Returns a connection to the MySQL database."""
-    return pymysql.connect(
-        host=os.getenv('DB_HOST'),
-        user=os.getenv('DB_USER'),
-        password=os.getenv('DB_PASSWORD'),
-        database=os.getenv('DB_NAME'),
-        charset='utf8mb4',
-        cursorclass=pymysql.cursors.DictCursor
-    )
+
 
 def _calculate_new_ratings(rating_1, rating_2, winner):
     """

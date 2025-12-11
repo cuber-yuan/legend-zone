@@ -1,192 +1,198 @@
-#include<cstdio>
-#include<cstdlib>
-#include<cstring>
-#include<iostream>
-#include<string>
-#include<list>
-#include<ctime>
-#include"jsoncpp/json.h" // 假设您有这个 JSON 库
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <iostream>
+#include <string>
+#include <ctime>
+#include "jsoncpp/json.h"
+
 using namespace std;
 
-// 棋盘大小，五子棋通常是 15x15
-const int SIZE = 15;
-// 定义四个方向的步进 (横、竖、两对角线)
-const int dx[4] = {1, 0, 1, 1};
-const int dy[4] = {0, 1, 1, -1};
+// Constant settings from gomoku_judge.txt
+const int SIZE = 15; // 
+int grid[SIZE][SIZE]; // -1: Empty, 0: Black, 1: White
 
-// 棋盘状态：0: 空, 1: 玩家1 (黑), 2: 玩家2 (白)
-int Grid[SIZE][SIZE];
-
-// 初始化棋盘
-void init_grid() {
-    for (int i = 0; i < SIZE; i++) {
-        for (int j = 0; j < SIZE; j++) {
-            Grid[i][j] = 0;
-        }
-    }
-}
-
-// 检查坐标是否在棋盘内
+// Helper to check bounds 
 bool inGrid(int x, int y) {
     return x >= 0 && x < SIZE && y >= 0 && y < SIZE;
 }
 
-// 检查棋盘是否已满 (平局条件)
+// Helper to check if board is full [cite: 4]
 bool gridFull() {
     for (int i = 0; i < SIZE; i++) {
         for (int j = 0; j < SIZE; j++) {
-            if (Grid[i][j] == 0) {
-                return false;
-            }
+            if (grid[i][j] == -1) return false;
         }
     }
     return true;
 }
 
-/**
- * 放置棋子
- * @param color 棋子颜色 (1 或 2)
- * @param x x 坐标 (0 到 SIZE-1)
- * @param y y 坐标 (0 到 SIZE-1)
- * @return true 放置成功，false 坐标无效或已被占用
- */
-bool placeAt(int color, int x, int y) {
-    // 原始 JavaScript 裁判代码使用的是 0 到 SIZE-1 的坐标
-    if (inGrid(x, y) && Grid[x][y] == 0) {
-        Grid[x][y] = color;
-        return true;
+// Logic to check win condition in specific direction
+// Based on JS logic: counts consecutive stones in + and - directions [cite: 8]
+int countConsecutive(int color, int x, int y, int dx, int dy) {
+    int count = 0;
+    // Check forward (including (x,y) at i=0)
+    int i;
+    for (i = 0; i < 5; i++) { // [cite: 9]
+        int nx = x + dx * i;
+        int ny = y + dy * i;
+        if (!inGrid(nx, ny) || grid[nx][ny] != color) break;
     }
+    
+    // Check backward (including (x,y) at j=0)
+    int j;
+    for (j = 0; j < 5; j++) {
+        int nx = x - dx * j;
+        int ny = y - dy * j;
+        if (!inGrid(nx, ny) || grid[nx][ny] != color) break;
+    }
+
+    // JS Logic returns i + j - 1 (because the center is counted in both loops) [cite: 13]
+    return i + j - 1;
+}
+
+// Check all 4 axes for a win [cite: 14]
+bool winAfterPlaceAt(int color, int x, int y) {
+    if (countConsecutive(color, x, y, 1, 0) >= 5) return true;  // Horizontal
+    if (countConsecutive(color, x, y, 0, 1) >= 5) return true;  // Vertical
+    if (countConsecutive(color, x, y, 1, 1) >= 5) return true;  // Diagonal
+    if (countConsecutive(color, x, y, 1, -1) >= 5) return true; // Anti-Diagonal
     return false;
 }
 
-/**
- * 检查在 (x, y) 放置 color 棋子后是否获胜 (五子连珠)
- * @param color 棋子颜色
- * @param x, y 放置的坐标
- * @return true 获胜, false 尚未获胜
- */
-bool checkWin(int color, int x, int y) {
-    for (int k = 0; k < 4; k++) {
-        int count = 1; // 已经包含当前放置的棋子
-        
-        // 检查一个方向
-        for (int i = 1; i < 5; i++) {
-            int nx = x + dx[k] * i;
-            int ny = y + dy[k] * i;
-            if (inGrid(nx, ny) && Grid[nx][ny] == color) {
-                count++;
-            } else {
-                break;
-            }
-        }
-
-        // 检查相反方向
-        for (int i = 1; i < 5; i++) {
-            int nx = x - dx[k] * i;
-            int ny = y - dy[k] * i;
-            if (inGrid(nx, ny) && Grid[nx][ny] == color) {
-                count++;
-            } else {
-                break;
-            }
-        }
-        
-        if (count >= 5) {
-            return true; // 发现五子连珠
-        }
-    }
-    return false;
+string playerString(int id) {
+    return id == 0 ? "0" : "1";
 }
 
-// 玩家 ID (0 或 1) 到颜色 (1 或 2) 的映射
-int playerIDToColor(int player_id) {
-    return player_id + 1; // 0 -> 1 (黑), 1 -> 2 (白)
+int otherPlayerID(int id) {
+    return 1 - id;
 }
 
 int main() {
-    // 确保与 snake_judge 的输入处理方式一致
+    // 1. Read all input (Standard Botzone/Judge method)
     string str;
-    string temps;
-    getline(cin, temps);
-    str += temps;
+	string temps;
+	getline(cin,temps);
+	str+=temps;
 
     Json::Reader reader;
     Json::Value input, output;
-
-    // 假设输入 JSON 遵循 snake_judge 的结构，包含 'log' 字段
-    // if (!reader.parse(str, input)) {
-    //     // 解析失败，输出错误
-    //     cerr << "JSON Parse Error" << endl;
-    //     return 1;
-    // }
-
-    // 初始化棋盘
-    init_grid();
-
-    Json::Value log = input["log"];
-
-    // 初始请求 (log 为空)
-    if (log.size() == 0) {
-        output["command"] = "request";
-        // 初始请求不需要内容，但为了兼容性可以发送一个空对象
-        output["content"] = Json::Value(Json::objectValue); 
-    } else {
-        // 遍历所有回合的输入
-        for (Json::Value::UInt i = 1; i < log.size(); i += 2) {
-            // Gomoku 玩家ID： 0: Black, 1: White
-            int player_id = (i - 1) / 2 % 2; 
-            int color = playerIDToColor(player_id); // 1: Black, 2: White
-            int other_player_id = 1 - player_id;
-            
-            // 响应应该在 i 处 (奇数索引)
-            Json::Value response = log[i][player_id]["response"];
-
-            if (response.isNull() || !response.isObject() || 
-                !response["x"].isInt() || !response["y"].isInt()) {
-                // 无效输入/格式错误
-                output["command"] = "finish";
-                output["display"]["winner"] = playerIDToColor(other_player_id);
-                output["display"]["error"] = "INVALID INPUT FORMAT";
-                break;
-            }
-
-            int x = response["x"].asInt();
-            int y = response["y"].asInt();
-
-            if (!placeAt(color, x, y)) {
-                // 放置失败 (无效坐标或已被占用)
-                output["command"] = "finish";
-                output["display"]["winner"] = playerIDToColor(other_player_id);
-                output["display"]["error"] = "INVALID MOVE";
-                break;
-            }
-
-            // 检查获胜
-            if (checkWin(color, x, y)) {
-                output["command"] = "finish";
-                output["display"]["winner"] = color;
-                break;
-            } 
-            
-            // 检查平局
-            if (gridFull()) {
-                output["command"] = "finish";
-                output["display"]["winner"] = -1; // -1 表示平局
-                break;
-            }
-
-            // 如果是最后一回合，准备请求下一个玩家的行动
-            if (i == log.size() - 1) {
-                output["command"] = "request";
-                // 发送上一个玩家的动作给下一个玩家
-                output["content"][other_player_id]["x"] = x;
-                output["content"][other_player_id]["y"] = y;
-            }
-        }
+    
+    // Parse input JSON
+    if (!reader.parse(str, input)) {
+        // Handle parse error or empty input safely
+        return 0; 
     }
 
+    // Initialize Grid (-1 for empty, matching "undefined" in JS) 
+    memset(grid, -1, sizeof(grid));
+
     Json::FastWriter writer;
-    cout << writer.write(output) << endl;
+    
+    // Access the game log
+    Json::Value log = input["log"];
+
+    // 2. Initial Request (If log is empty) [cite: 16]
+    if (log.size() == 0) {
+        output["command"] = "request";
+        output["content"]["0"]["x"] = -1; // Dummy values for first move
+        output["content"]["0"]["y"] = -1;
+        cout << writer.write(output) << endl;
+        return 0;
+    }
+
+    // 3. Replay the game history
+    // Iterate through responses (odd indices in the log) [cite: 17]
+    for (int i = 1; i < log.size(); i += 2) {
+        bool isLast = (i == log.size() - 1);
+        int color = ((i - 1) / 2) % 2; // 0: Black, 1: White [cite: 17]
+        string pStr = playerString(color);
+
+        // Extract response
+        Json::Value response = log[i][pStr]["response"];
+        if (response.isNull()) response = log[i][pStr]["content"]; // Fallback
+
+        // Validate Input Format
+        if (!response.isObject() || !response["x"].isInt() || !response["y"].isInt()) {
+             // Error: Invalid Input Format [cite: 18]
+            output["display"]["winner"] = playerString(otherPlayerID(color));
+            output["display"]["error"] = "INVALID INPUT";
+            output["command"] = "finish";
+            output["content"][playerString(color)] = 0;
+            output["content"][playerString(otherPlayerID(color))] = 2;
+            cout << writer.write(output) << endl;
+            return 0;
+        }
+
+        int x = response["x"].asInt();
+        int y = response["y"].asInt();
+
+        // Validate Logic (Bounds and Empty Cell) [cite: 6]
+        if (inGrid(x, y) && grid[x][y] == -1) {
+            // Valid Move: Place stone
+            grid[x][y] = color;
+
+            // Check Win/Draw
+            if (winAfterPlaceAt(color, x, y)) {
+                // Game Over: Win [cite: 21]
+                output["command"] = "finish";
+                output["display"]["winner"] = playerString(color);
+                output["content"][playerString(color)] = 2;
+                output["content"][playerString(otherPlayerID(color))] = 0;
+                // Add final move to display
+                output["display"]["color"] = color;
+                output["display"]["x"] = x;
+                output["display"]["y"] = y;
+                
+                // If this happened in history (not current turn), we continue loop? 
+                // Usually logic stops here, but for replay, we process until isLast.
+                // However, if someone won in history, the log shouldn't continue.
+                if (isLast) {
+                    cout << writer.write(output) << endl;
+                    return 0;
+                }
+            } 
+            else if (gridFull()) {
+                // Game Over: Draw [cite: 23]
+                output["command"] = "finish";
+                output["content"]["0"] = 1;
+                output["content"]["1"] = 1;
+                output["display"]["err"] = "Draw";
+                if (isLast) {
+                    cout << writer.write(output) << endl;
+                    return 0;
+                }
+            } 
+            else {
+                // Game Continues [cite: 24]
+                if (isLast) {
+                    output["command"] = "request";
+                    // Pass the just-placed move to the next player
+                    output["content"][playerString(otherPlayerID(color))]["x"] = x;
+                    output["content"][playerString(otherPlayerID(color))]["y"] = y;
+                    
+                    // Display update for real-time viewing [cite: 19]
+                    output["display"]["color"] = color;
+                    output["display"]["x"] = x;
+                    output["display"]["y"] = y;
+                    
+                    cout << writer.write(output) << endl;
+                    return 0;
+                }
+            }
+        } 
+        else {
+            // Invalid Move (Out of bounds or Occupied) [cite: 26]
+            output["display"]["winner"] = playerString(otherPlayerID(color));
+            output["display"]["error"] = "INVALID MOVE";
+            output["display"]["error_data"] = response;
+            output["command"] = "finish";
+            output["content"][playerString(color)] = 0;
+            output["content"][playerString(otherPlayerID(color))] = 2;
+            cout << writer.write(output) << endl;
+            return 0;
+        }
+    }
 
     return 0;
 }
