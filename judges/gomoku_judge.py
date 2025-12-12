@@ -3,6 +3,8 @@ import json
 
 BOARD_SIZE = 15
 
+## TODO： all judges should implement in same way
+
 class GomokuJudge:
     def __init__(self):
         # Coordinate system explanation:
