@@ -7,26 +7,18 @@ from uuid import uuid4
 import os
 import json
 import pymysql
-
+from .services.utils import get_db_connection
 
 tank_bp = Blueprint('tank', __name__)
 sessions = {}  # { user_id: { 'sid': ..., 'game': ... } }
 
-def _get_db_connection():
-    return pymysql.connect(
-        host=os.getenv('DB_HOST'),
-        user=os.getenv('DB_USER'),
-        password=os.getenv('DB_PASSWORD'),
-        database=os.getenv('DB_NAME'),
-        charset='utf8mb4',
-        cursorclass=pymysql.cursors.DictCursor
-    )
+
 
 def _get_bot_executor(bot_id):
     if not bot_id:
         return None
     try:
-        conn = _get_db_connection()
+        conn = get_db_connection()
         with conn.cursor() as cursor:
             cursor.execute("SELECT source_code, file_path, language FROM bots WHERE id = %s", (bot_id,))
             result = cursor.fetchone()
@@ -166,7 +158,7 @@ def register_tank_events(socketio):
                 winner = -2  # TODO: Determine winner from game_state_dict
                 # --- Insert match record into database ---
                 try:
-                    conn = _get_db_connection()
+                    conn = get_db_connection()
                     # 查 bots 表获取用户名
                     with conn.cursor() as cursor:
                         cursor.execute("SELECT bot_name FROM bots WHERE id = %s", (player_1_id,))

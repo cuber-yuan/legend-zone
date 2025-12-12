@@ -4,6 +4,8 @@ import pymysql
 import os
 from dotenv import load_dotenv
 import datetime
+from app.services.utils import get_db_connection
+
 load_dotenv()
 
 main_bp = Blueprint('main', __name__)
@@ -34,14 +36,7 @@ def profile_root():
 def profile(username):
     conn = None
     try:
-        conn = pymysql.connect(
-            host=os.getenv('DB_HOST'),
-            user=os.getenv('DB_USER'),
-            password=os.getenv('DB_PASSWORD'),
-            database=os.getenv('DB_NAME'),
-            charset='utf8mb4',
-            cursorclass=pymysql.cursors.DictCursor
-        )
+        conn = get_db_connection()
         with conn.cursor() as cursor:
             cursor.execute("SELECT id, created_at FROM users WHERE username = %s", (username,))
             user_row = cursor.fetchone()
@@ -79,14 +74,7 @@ def rating():
     conn = None
     ratings = {}
     try:
-        conn = pymysql.connect(
-            host=os.getenv('DB_HOST'),
-            user=os.getenv('DB_USER'),
-            password=os.getenv('DB_PASSWORD'),
-            database=os.getenv('DB_NAME'),
-            charset='utf8mb4',
-            cursorclass=pymysql.cursors.DictCursor # Use DictCursor for easier processing
-        )
+        conn = get_db_connection()
         with conn.cursor() as cursor:
             # 1. Get a list of all unique games in the bots table
             cursor.execute("SELECT DISTINCT game FROM bots ORDER BY game")
@@ -223,14 +211,7 @@ def injoker():
 def bot_detail(bot_id):
     conn = None
     try:
-        conn = pymysql.connect(
-            host=os.getenv('DB_HOST'),
-            user=os.getenv('DB_USER'),
-            password=os.getenv('DB_PASSWORD'),
-            database=os.getenv('DB_NAME'),
-            charset='utf8mb4',
-            cursorclass=pymysql.cursors.DictCursor
-        )
+        conn = get_db_connection()
         with conn.cursor() as cursor:
             cursor.execute("SELECT id, bot_name AS name, description, user_id, game FROM bots WHERE id = %s", (bot_id,))
             bot = cursor.fetchone()

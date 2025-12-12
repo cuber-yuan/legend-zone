@@ -16,6 +16,7 @@ import uuid
 import pymysql
 from dotenv import load_dotenv
 import datetime
+from app.services.utils import get_db_connection
 
 load_dotenv()
 
@@ -23,15 +24,6 @@ home_bp = Blueprint('home', __name__)
 
 sessions = {} 
 
-def _get_db_connection():
-    return pymysql.connect(
-        host=os.getenv('DB_HOST'),
-        user=os.getenv('DB_USER'),
-        password=os.getenv('DB_PASSWORD'),
-        database=os.getenv('DB_NAME'),
-        charset='utf8mb4',
-        cursorclass=pymysql.cursors.DictCursor
-    )
 
 def register_home_events(socketio):
     @socketio.on('connect', namespace='/')
@@ -41,7 +33,7 @@ def register_home_events(socketio):
 
         # Query matches table and send to user
         try:
-            conn = _get_db_connection()
+            conn = get_db_connection()
             with conn.cursor() as cursor:
                 cursor.execute("SELECT * FROM matches ORDER BY created_at DESC LIMIT 20")
                 matches = cursor.fetchall()
