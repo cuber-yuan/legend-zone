@@ -270,6 +270,7 @@ GAME_TEMPLATES = {
 }
 
 @main_bp.route('/api/matches', methods=['POST'])
+@login_required
 def api_create_match():
     data = request.get_json()
     game_id = data.get('game_id')

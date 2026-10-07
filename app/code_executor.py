@@ -28,69 +28,21 @@ class CodeExecutor:
 
     # 修改方法签名，接收 code_to_run 参数
     def _run_python(self, code_to_run: str, input_str: str) -> str:
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False, encoding='utf-8') as f:
-            # 直接使用传入的参数进行写入
-            f.write(code_to_run)
-            temp_path = f.name
+        with tempfile.TemporaryDirectory() as sandbox_dir:
+            temp_path = os.path.join(sandbox_dir, 'solution.py')
+            with open(temp_path, 'w', encoding='utf-8') as f:
+                f.write(code_to_run)
 
-        try:
-            result = subprocess.run(
-                [sys.executable, "-u", temp_path],
-                input=input_str.encode('utf-8'),
-                capture_output=True,
-                timeout=10, # 5-second timeout
-                check=True # This will raise CalledProcessError on non-zero exit codes
-            )
-            return result.stdout.decode('utf-8')
-        except subprocess.CalledProcessError as e:
-            # 修改这里，打印更详细的错误信息到服务器控制台
-            error_message = f"Bot code exited with error code {e.returncode}.\n" \
-                            f"--- STDOUT ---\n{e.stdout.decode('utf-8')}\n" \
-                            f"--- STDERR ---\n{e.stderr.decode('utf-8')}"
-            print(error_message) # 在服务器后台打印详细错误
-            raise RuntimeError(f"Bot execution failed. See server logs for details.")
-        except subprocess.TimeoutExpired as e:
-            raise RuntimeError("Python code execution timed out")
-        finally:
-            os.remove(temp_path)
-
-    # 修改方法签名以保持一致性（虽然逻辑不变）
-    def _run_cpp(self, code_to_run: str, input_json: str) -> str:
-        compiler = cpp_compiler.CppCompiler()
-        path = compiler.compile(code_to_run)
-
-
-        # 运行
-        result = subprocess.run(
-            [path],
-            input=input_json.encode(),
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            timeout=10
-        )
-
-        if result.returncode != 0:
-            raise RuntimeError(f"C++ runtime error: {result.stderr.decode()}")
-
-        return result.stdout.decode()
-
-
-    ## TODO modify this method to handle zip files
-    def _run_python_zip(self, zip_path: str, input_str: str) -> str:
-        with tempfile.TemporaryDirectory() as temp_dir:
-            # Extract zip to temp_dir
-            with zipfile.ZipFile(zip_path, 'r') as zip_ref:
-                zip_ref.extractall(temp_dir)
-            main_path = os.path.join(temp_dir, '__main__.py')
-            if not os.path.exists(main_path):
-                raise RuntimeError("__main__.py not found in zip archive")
             try:
+                env = self._get_sandbox_env()
                 result = subprocess.run(
-                    [sys.executable, "-u", main_path],
+                    [sys.executable, "-u", temp_path],
                     input=input_str.encode('utf-8'),
                     capture_output=True,
                     timeout=10,
-                    check=True
+                    check=True,
+                    cwd=sandbox_dir,
+                    env=env
                 )
                 return result.stdout.decode('utf-8')
             except subprocess.CalledProcessError as e:
@@ -101,3 +53,88 @@ class CodeExecutor:
                 raise RuntimeError(f"Bot execution failed. See server logs for details.")
             except subprocess.TimeoutExpired:
                 raise RuntimeError("Python code execution timed out")
+
+    # 修改方法签名以保持一致性（虽然逻辑不变）
+    def _run_cpp(self, code_to_run: str, input_json: str) -> str:
+        compiler = cpp_compiler.CppCompiler()
+        exec_path = compiler.compile(code_to_run)
+        
+        sandbox_dir = os.path.dirname(exec_path)
+        env = self._get_sandbox_env()
+
+        try:
+            result = subprocess.run(
+                [exec_path],
+                input=input_json.encode(),
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                timeout=10,
+                cwd=sandbox_dir,
+                env=env
+            )
+
+            if result.returncode != 0:
+                raise RuntimeError(f"C++ runtime error: {result.stderr.decode()}")
+
+            return result.stdout.decode()
+        except subprocess.TimeoutExpired:
+            raise RuntimeError("C++ execution timed out")
+        finally:
+            if os.path.exists(exec_path):
+                os.remove(exec_path)
+
+    def _get_sandbox_env(self) -> dict:
+        """Create a restricted environment for sandboxed execution."""
+        env = {
+            'PATH': os.environ.get('PATH', ''),
+            'PYTHONPATH': '',
+            'HOME': tempfile.gettempdir(),
+            'USERPROFILE': tempfile.gettempdir(),
+        }
+        return env
+
+
+    ## TODO modify this method to handle zip files
+    def _run_python_zip(self, zip_path: str, input_str: str) -> str:
+        with tempfile.TemporaryDirectory() as sandbox_dir:
+            extract_dir = os.path.join(sandbox_dir, 'extracted')
+            os.makedirs(extract_dir)
+            
+            with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+                self._safe_extract_zip(zip_ref, extract_dir)
+            
+            main_path = os.path.join(extract_dir, '__main__.py')
+            if not os.path.exists(main_path):
+                raise RuntimeError("__main__.py not found in zip archive")
+            
+            try:
+                env = self._get_sandbox_env()
+                result = subprocess.run(
+                    [sys.executable, "-u", main_path],
+                    input=input_str.encode('utf-8'),
+                    capture_output=True,
+                    timeout=10,
+                    check=True,
+                    cwd=extract_dir,
+                    env=env
+                )
+                return result.stdout.decode('utf-8')
+            except subprocess.CalledProcessError as e:
+                error_message = f"Bot code exited with error code {e.returncode}.\n" \
+                                f"--- STDOUT ---\n{e.stdout.decode('utf-8')}\n" \
+                                f"--- STDERR ---\n{e.stderr.decode('utf-8')}"
+                print(error_message)
+                raise RuntimeError(f"Bot execution failed. See server logs for details.")
+            except subprocess.TimeoutExpired:
+                raise RuntimeError("Python code execution timed out")
+
+    def _safe_extract_zip(self, zip_ref, extract_dir):
+        """Safely extract zip file, preventing Zip Slip attacks."""
+        extract_dir = os.path.realpath(extract_dir)
+        
+        for member in zip_ref.namelist():
+            member_path = os.path.realpath(os.path.join(extract_dir, member))
+            if not member_path.startswith(extract_dir):
+                raise ValueError(f"Zip Slip attack detected: {member}")
+        
+        zip_ref.extractall(extract_dir)

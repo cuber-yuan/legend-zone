@@ -1,8 +1,9 @@
 from flask import Blueprint, request
+from flask_login import current_user
 from . import socketio
 from judges.gomoku_judge import GomokuJudge
 from uuid import uuid4
-from flask_socketio import emit, join_room
+from flask_socketio import emit, join_room, disconnect
 import json
 import os
 from .code_executor import CodeExecutor
@@ -171,6 +172,9 @@ def run_auto_gomoku_match(player_1_id, player_2_id):
 def register_gomoku_events(socketio):
     @socketio.on('connect', namespace='/gomoku')
     def handle_connect():
+        if not current_user.is_authenticated:
+            disconnect()
+            return False
         user_id = str(uuid4())
         sessions[user_id] = {'sid': request.sid}
         join_room(request.sid)

@@ -1,8 +1,9 @@
 from flask import Blueprint, request
+from flask_login import current_user
 from . import socketio
 from .cpp_judge_executor import CppJudgeExecutor
 from .code_executor import CodeExecutor
-from flask_socketio import emit, join_room
+from flask_socketio import emit, join_room, disconnect
 from uuid import uuid4
 import os
 import json
@@ -86,6 +87,9 @@ class TankGameSession:
 def register_tank_events(socketio):
     @socketio.on('connect', namespace='/tank2')
     def handle_connect():
+        if not current_user.is_authenticated:
+            disconnect()
+            return False
         user_id = str(uuid4())
         sessions[user_id] = {'sid': request.sid}
         join_room(request.sid)

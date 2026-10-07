@@ -49,6 +49,13 @@
 <script>
     const socket = io('/');
 
+    // Escape HTML to prevent XSS
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
     socket.on('latest_matches', (data) => {
 
         const matches = data.matches;
@@ -65,7 +72,7 @@
             let playersStr = '';
             if (players && typeof players === 'object') {
                 playersStr = Object.values(players)
-                    .map((v, i) => `${v}`)
+                    .map((v, i) => escapeHtml(`${v}`))
                     .join(', ');
             }
 
@@ -85,12 +92,12 @@
 
             tbody.innerHTML += `
                 <tr>
-                    <td class="px-4 py-2 border-b">${match.game}</td>
+                    <td class="px-4 py-2 border-b">${escapeHtml(match.game)}</td>
                     <td class="px-4 py-2 border-b">${playersStr}</td>
                     
-                    <td class="px-4 py-2 border-b hidden sm:table-cell">${winner}</td>
+                    <td class="px-4 py-2 border-b hidden sm:table-cell">${escapeHtml(winner)}</td>
                     <td class="px-4 py-2 border-b hidden sm:table-cell">${replayLink}</td>
-                    <td class="px-4 py-2 border-b hidden sm:table-cell">${date}</td>
+                    <td class="px-4 py-2 border-b hidden sm:table-cell">${escapeHtml(date)}</td>
                 </tr>
             `;
         });
@@ -180,8 +187,14 @@
     const btnStartGame = document.getElementById('btn-start-game');
 
     let selectedGame = null;
+    const isAuthenticated = {{ 'true' if current_user.is_authenticated else 'false' }};
 
     btnCreate.addEventListener('click', async () => {
+        if (!isAuthenticated) {
+            alert('Please log in to create a game table.');
+            window.location.href = '/login';
+            return;
+        }
         modal.classList.remove('hidden');
         try {
             const resp = await fetch('/api/games');

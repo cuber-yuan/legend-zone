@@ -9,7 +9,34 @@ upload_bp = Blueprint('upload', __name__)
 
 
 UPLOAD_FOLDER = 'uploads/bots'
+MAX_CONTENT_LENGTH = 1 * 1024 * 1024  # 1MB max file size
+ALLOWED_EXTENSIONS = {'.py', '.zip'}
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+
+
+def allowed_file(filename):
+    """Check if file extension is allowed."""
+    return '.' in filename and \
+           filename.rsplit('.', 1)[1].lower() in {ext[1:] for ext in ALLOWED_EXTENSIONS}
+
+
+def validate_file_magic(file_stream):
+    """Validate file type by checking magic numbers."""
+    header = file_stream.read(8)
+    file_stream.seek(0)
+    
+    if not header:
+        raise ValueError("Empty file")
+    
+    if header.startswith(b'MZ'):
+        raise ValueError("Windows executable files are not allowed")
+    if header.startswith(b'\x7fELF'):
+        raise ValueError("Linux executable files are not allowed")
+    if header.startswith(b'#!'):
+        raise ValueError("Script files with shebang are not allowed")
+    
+    return True
+
 
 def save_bot_to_db(user_id, bot_name, description, language, source_code=None, file_path=None, game=None):
     conn = None
@@ -32,6 +59,9 @@ def save_bot_to_db(user_id, bot_name, description, language, source_code=None, f
 @upload_bp.route('/upload-bot', methods=['POST'])
 @login_required
 def upload_bot():
+    if request.content_length > MAX_CONTENT_LENGTH:
+        return jsonify({"message": f"File too large. Maximum size is {MAX_CONTENT_LENGTH // (1024*1024)}MB."}), 413
+    
     original_bot_name = request.form.get('botName') or 'bot'
     suffix = secrets.token_urlsafe(6)
     bot_name_unique = f"{secure_filename(original_bot_name)}-{suffix}"
@@ -73,6 +103,17 @@ def upload_bot():
 
     file_path = None
     if bot_file:
+        if not bot_file.filename:
+            return jsonify({"message": "No file selected."}), 400
+        
+        if not allowed_file(bot_file.filename):
+            return jsonify({"message": f"Invalid file type. Allowed types: {', '.join(ALLOWED_EXTENSIONS)}"}), 400
+        
+        try:
+            validate_file_magic(bot_file)
+        except ValueError as e:
+            return jsonify({"message": str(e)}), 400
+        
         user_dir = os.path.join(UPLOAD_FOLDER, str(current_user.id), bot_name_unique)
         os.makedirs(user_dir, exist_ok=True)
         file_path = os.path.join(user_dir, secure_filename(bot_file.filename))

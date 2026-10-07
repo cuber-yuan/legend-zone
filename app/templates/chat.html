@@ -46,6 +46,13 @@
     {% endif %}
 </div>
 <script>
+// Escape HTML to prevent XSS
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
 // Periodically fetch chat messages and update chat history
 function fetchMessages() {
     fetch('{{ url_for("main.chat_messages") }}')
@@ -66,7 +73,7 @@ function fetchMessages() {
                 {% else %}
                 msgDiv.className = 'p-2 rounded bg-gray-200';
                 {% endif %}
-                msgDiv.innerHTML = `<span class="font-semibold">${msg.user}</span>: <span>${msg.text}</span> <span class="text-xs text-gray-500 float-right">${msg.time}</span>`;
+                msgDiv.innerHTML = `<span class="font-semibold">${escapeHtml(msg.user)}</span>: <span>${escapeHtml(msg.text)}</span> <span class="text-xs text-gray-500 float-right">${escapeHtml(msg.time)}</span>`;
                 chatHistory.appendChild(msgDiv);
             });
             scrollChatToBottom();

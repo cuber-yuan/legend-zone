@@ -5,17 +5,20 @@ from flask_cors import CORS
 from apscheduler.schedulers.background import BackgroundScheduler
 import atexit
 import logging
+import os
 
 
 
-socketio = SocketIO(cors_allowed_origins="*")
+ALLOWED_ORIGINS = os.environ.get('ALLOWED_ORIGINS', 'http://localhost:5000,http://127.0.0.1:5000').split(',')
+socketio = SocketIO(cors_allowed_origins=ALLOWED_ORIGINS)
 login_manager = LoginManager()
 
 def create_app():
     app = Flask(__name__, template_folder='templates', static_folder='static')
-    app.config.from_object('config.Config')  
+    app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', os.urandom(32).hex())
+    app.debug = os.environ.get('FLASK_DEBUG', '0') == '1'
     
-    CORS(app)
+    CORS(app, origins=ALLOWED_ORIGINS)
     socketio.init_app(app)
     login_manager.init_app(app)
     login_manager.login_view = 'auth.login'

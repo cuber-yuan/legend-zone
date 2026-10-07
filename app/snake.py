@@ -4,7 +4,8 @@ from uuid import uuid4
 import concurrent.futures
 
 from flask import Blueprint, request
-from flask_socketio import emit, join_room
+from flask_login import current_user
+from flask_socketio import emit, join_room, disconnect
 
 from .code_executor import CodeExecutor
 from .cpp_judge_executor import CppJudgeExecutor
@@ -52,6 +53,9 @@ class SnakeGameSession:
 def register_snake_events(socketio):
     @socketio.on('connect', namespace='/snake')
     def handle_connect():
+        if not current_user.is_authenticated:
+            disconnect()
+            return False
         user_id = str(uuid4())
         sessions[user_id] = {'sid': request.sid}
         join_room(request.sid)
