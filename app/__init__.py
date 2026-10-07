@@ -63,11 +63,11 @@ def start_scheduler(app):
     # === 添加定时任务 ===
     # 任务: 定期运行所有游戏的自动对战
     # trigger="interval" 表示间隔执行
-    # minutes=5 表示每 5 分钟运行一次。您可以根据需求调整
+    # minutes=30 表示每 30 分钟运行一次。您可以根据需求调整
     scheduler.add_job(
         func=schedule_all_games,
         trigger="interval",
-        minutes=1, 
+        minutes=30, 
         id='auto_match_runner',
         name='Run Automated Game Matches'
     )
