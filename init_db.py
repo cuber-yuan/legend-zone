@@ -51,6 +51,7 @@ def init_db():
             players TEXT,
             winner INTEGER,
             displays TEXT,
+            move_history TEXT,
             status TEXT DEFAULT 'playing',
             created_at TEXT DEFAULT (datetime('now', 'localtime'))
         )

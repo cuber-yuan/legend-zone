@@ -8,6 +8,43 @@
 {% endblock %}
 
 {% block content %}
+<!-- Create Game Table Modal -->
+<div id="modal-create-table" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[100]">
+    <div class="bg-white rounded-lg shadow-xl p-6 w-96">
+        <h3 class="text-xl font-semibold mb-4">Create Game Table</h3>
+        <div class="mb-4">
+            <label class="block text-gray-700 mb-2">Select Game</label>
+            <select id="select-game" class="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <option value="">Loading...</option>
+            </select>
+        </div>
+        <div class="flex justify-end space-x-3">
+            <button id="btn-modal-cancel" class="px-4 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 transition-colors">Cancel</button>
+            <button id="btn-modal-create" class="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition-colors">Create</button>
+        </div>
+    </div>
+</div>
+
+<!-- Player Setup Modal -->
+<div id="modal-player-setup" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[100]">
+    <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-2xl">
+        <div class="flex items-center justify-between mb-4">
+            <h3 class="text-xl font-semibold">Player List</h3>
+            <button id="btn-close-player-modal" class="text-gray-400 hover:text-gray-600">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+            </button>
+        </div>
+        <div id="player-slots" class="space-y-3 mb-4">
+            <!-- Player slots will be generated here -->
+        </div>
+        <div class="flex justify-end">
+            <button id="btn-start-game" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors">Start Game</button>
+        </div>
+    </div>
+</div>
+
 <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
 <script>
     const socket = io('/');
@@ -37,14 +74,14 @@
 
             let date = match.created_at || '';
 
-            let displaysInfo = '';
-            try {
-                const displays = JSON.parse(match.displays);
-                displaysInfo = Array.isArray(displays) ? displays.length + ' rounds' : '';
-            } catch (e) {
-                displaysInfo = '';
+            let replayLink = '';
+            if (match.status === 'finished') {
+                replayLink = `<a href="/match/${match.id}" class="text-blue-600 hover:text-blue-800 underline">Watch</a>`;
+            } else if (match.status === 'playing') {
+                replayLink = `<a href="/match/${match.id}" class="text-green-600 hover:text-green-800 underline">Live</a>`;
+            } else {
+                replayLink = '-';
             }
-
 
             tbody.innerHTML += `
                 <tr>
@@ -52,7 +89,7 @@
                     <td class="px-4 py-2 border-b">${playersStr}</td>
                     
                     <td class="px-4 py-2 border-b hidden sm:table-cell">${winner}</td>
-                    <td class="px-4 py-2 border-b hidden sm:table-cell">${displaysInfo}</td>
+                    <td class="px-4 py-2 border-b hidden sm:table-cell">${replayLink}</td>
                     <td class="px-4 py-2 border-b hidden sm:table-cell">${date}</td>
                 </tr>
             `;
@@ -128,43 +165,6 @@
             </table>
         </div>
     </section>
-
-    <!-- Create Game Table Modal -->
-    <div id="modal-create-table" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-        <div class="bg-white rounded-lg shadow-xl p-6 w-96">
-            <h3 class="text-xl font-semibold mb-4">Create Game Table</h3>
-            <div class="mb-4">
-                <label class="block text-gray-700 mb-2">Select Game</label>
-                <select id="select-game" class="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
-                    <option value="">Loading...</option>
-                </select>
-            </div>
-            <div class="flex justify-end space-x-3">
-                <button id="btn-modal-cancel" class="px-4 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 transition-colors">Cancel</button>
-                <button id="btn-modal-create" class="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition-colors">Create</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Player Setup Modal -->
-    <div id="modal-player-setup" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-        <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-2xl">
-            <div class="flex items-center justify-between mb-4">
-                <h3 class="text-xl font-semibold">Player List</h3>
-                <button id="btn-close-player-modal" class="text-gray-400 hover:text-gray-600">
-                    <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                </button>
-            </div>
-            <div id="player-slots" class="space-y-3 mb-4">
-                <!-- Player slots will be generated here -->
-            </div>
-            <div class="flex justify-end">
-                <button id="btn-start-game" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors">Start Game</button>
-            </div>
-        </div>
-    </div>
 </div>
 
 <script>

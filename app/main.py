@@ -304,7 +304,7 @@ def match_view(match_id):
     try:
         conn = get_db_connection()
         with conn.cursor() as cursor:
-            cursor.execute("SELECT id, game, players, status FROM matches WHERE id = ?", (match_id,))
+            cursor.execute("SELECT id, game, players, status, winner, move_history FROM matches WHERE id = ?", (match_id,))
             match = cursor.fetchone()
             if not match:
                 abort(404)
@@ -314,11 +314,36 @@ def match_view(match_id):
             if not template:
                 abort(404)
 
+            match = dict(match)
+            if match.get('move_history'):
+                match['move_history'] = json.loads(match['move_history'])
+
             bots = get_latest_bots_for_game(game_name)
             return render_template(template, bots=bots, match_id=match_id, match=match)
     except Exception as e:
         print(f"Error loading match: {e}")
         abort(500)
+    finally:
+        if conn:
+            conn.close()
+
+@main_bp.route('/api/matches/<match_id>')
+def api_get_match(match_id):
+    conn = None
+    try:
+        conn = get_db_connection()
+        with conn.cursor() as cursor:
+            cursor.execute("SELECT id, game, players, status, winner, move_history FROM matches WHERE id = ?", (match_id,))
+            match = cursor.fetchone()
+            if not match:
+                return jsonify({'error': 'Match not found'}), 404
+            result = dict(match)
+            if result.get('move_history'):
+                result['move_history'] = json.loads(result['move_history'])
+            return jsonify(result)
+    except Exception as e:
+        print(f"Error fetching match: {e}")
+        return jsonify({'error': 'Failed to fetch match'}), 500
     finally:
         if conn:
             conn.close()
