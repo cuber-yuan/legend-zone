@@ -131,7 +131,8 @@ def register_gomoku_events(socketio):
         game.game_id = str(uuid.uuid4())
         
         sid = user_session['sid']
-        sessions[user_id] = {'sid': sid, game.game_id: game}
+        match_id = data.get('match_id')
+        sessions[user_id] = {'sid': sid, 'match_id': match_id, game.game_id: game}
 
         player_1_id = data.get('black_bot')
         player_2_id = data.get('white_bot')
@@ -222,7 +223,7 @@ def register_gomoku_events(socketio):
                 if player_1_type == 'bot' and player_2_type == 'bot':
                     update_bot_ratings(player_1_id, player_2_id, game.winner - 1 ) # winner: 0 for P1 win, 1 for P2 win, -1 for draw
 
-                # --- Insert match record into database ---
+                # --- Update match record in database ---
                 try:
                     conn = get_db_connection()
                     with conn.cursor() as cursor:
@@ -238,23 +239,23 @@ def register_gomoku_events(socketio):
                             username_2 = '<i>HUMAN</i>'
                     players = json.dumps({'player_1': username_1, 'player_2': username_2})
                     with conn.cursor() as cursor:
-                        sql = """
-                            INSERT INTO matches (game, players, winner, displays)
-                            VALUES (?, ?, ?, ?)
-                        """
-                        cursor.execute(sql, (
-                            'Gomoku',
-                            players,
-                            winner-1, # TODO set black as 0, white as 1
-                            json.dumps(response)
-                        ))
+                        if match_id:
+                            cursor.execute("""
+                                UPDATE matches SET players = ?, winner = ?, displays = ?, status = 'finished'
+                                WHERE id = ?
+                            """, (players, winner - 1, json.dumps(response), match_id))
+                        else:
+                            cursor.execute("""
+                                INSERT INTO matches (id, game, players, winner, displays, status)
+                                VALUES (?, ?, ?, ?, ?, 'finished')
+                            """, (uuid.uuid4().hex, 'Gomoku', players, winner - 1, json.dumps(response)))
                         conn.commit()
                 except Exception as e:
-                    print("Failed to insert match record:", e)
+                    print("Failed to update match record:", e)
                 finally:
                     if conn:
                         conn.close()
-                # --- End DB insert ---
+                # --- End DB update ---
                 break
 
                     

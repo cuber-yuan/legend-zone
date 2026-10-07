@@ -1,6 +1,8 @@
 from flask import Blueprint, render_template, request, redirect, url_for, jsonify, abort
 from flask_login import login_required, current_user
 import datetime
+import uuid
+import json
 from .db import get_db_connection
 
 main_bp = Blueprint('main', __name__)
@@ -208,6 +210,118 @@ def catking():
 @main_bp.route('/injoker')
 def injoker():
     return render_template('injoker.html')
+
+@main_bp.route('/api/games')
+def api_games():
+    conn = None
+    try:
+        conn = get_db_connection()
+        with conn.cursor() as cursor:
+            cursor.execute("SELECT id, name FROM games ORDER BY name")
+            games = cursor.fetchall()
+        return jsonify([{'id': g['id'], 'name': g['name']} for g in games])
+    except Exception as e:
+        print(f"Error fetching games: {e}")
+        return jsonify([])
+    finally:
+        if conn:
+            conn.close()
+
+@main_bp.route('/api/bots')
+def api_bots():
+    game_id = request.args.get('game_id')
+    if not game_id:
+        return jsonify([])
+    
+    conn = None
+    try:
+        conn = get_db_connection()
+        with conn.cursor() as cursor:
+            # Get game name from game_id
+            cursor.execute("SELECT name FROM games WHERE id = ?", (game_id,))
+            game = cursor.fetchone()
+            if not game:
+                return jsonify([])
+            
+            # Get latest bots for this game
+            cursor.execute("""
+                SELECT id, bot_name AS name
+                FROM bots
+                WHERE game = ?
+                  AND id IN (
+                    SELECT MAX(id) FROM bots WHERE game = ? GROUP BY bot_name
+                  )
+                ORDER BY bot_name
+            """, (game['name'], game['name']))
+            bots = cursor.fetchall()
+        return jsonify([{'id': b['id'], 'name': b['name']} for b in bots])
+    except Exception as e:
+        print(f"Error fetching bots: {e}")
+        return jsonify([])
+    finally:
+        if conn:
+            conn.close()
+
+GAME_TEMPLATES = {
+    'Gomoku': 'gomoku.html',
+    'Tank Battle': 'tank.html',
+    'Snake': 'snake.html',
+    'Mini Snake': 'snake.html',
+}
+
+@main_bp.route('/api/matches', methods=['POST'])
+def api_create_match():
+    data = request.get_json()
+    game_id = data.get('game_id')
+    players = data.get('players', [])
+
+    conn = None
+    try:
+        conn = get_db_connection()
+        with conn.cursor() as cursor:
+            cursor.execute("SELECT name FROM games WHERE id = ?", (game_id,))
+            game = cursor.fetchone()
+            if not game:
+                return jsonify({'error': 'Game not found'}), 404
+
+            match_id = uuid.uuid4().hex
+            cursor.execute(
+                "INSERT INTO matches (id, game, players, status) VALUES (?, ?, ?, ?)",
+                (match_id, game['name'], json.dumps(players), 'playing')
+            )
+            conn.commit()
+        return jsonify({'match_id': match_id, 'game_name': game['name']})
+    except Exception as e:
+        print(f"Error creating match: {e}")
+        return jsonify({'error': 'Failed to create match'}), 500
+    finally:
+        if conn:
+            conn.close()
+
+@main_bp.route('/match/<match_id>')
+def match_view(match_id):
+    conn = None
+    try:
+        conn = get_db_connection()
+        with conn.cursor() as cursor:
+            cursor.execute("SELECT id, game, players, status FROM matches WHERE id = ?", (match_id,))
+            match = cursor.fetchone()
+            if not match:
+                abort(404)
+
+            game_name = match['game']
+            template = GAME_TEMPLATES.get(game_name)
+            if not template:
+                abort(404)
+
+            bots = get_latest_bots_for_game(game_name)
+            return render_template(template, bots=bots, match_id=match_id, match=match)
+    except Exception as e:
+        print(f"Error loading match: {e}")
+        abort(500)
+    finally:
+        if conn:
+            conn.close()
 
 @main_bp.route('/bot/<int:bot_id>')
 def bot_detail(bot_id):

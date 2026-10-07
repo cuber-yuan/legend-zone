@@ -68,6 +68,36 @@
         <p class="text-lg">Your hub for AI, coding, and technology. Explore games, learn algorithms, and more!</p>
     </section>
 
+    <!-- Game Tables Section -->
+    <section class="bg-white p-6 rounded-lg shadow-md">
+        <div class="flex items-center justify-between mb-4">
+            <h2 class="text-2xl font-semibold">Game Tables</h2>
+            <div class="flex items-center space-x-3">
+                <div class="flex border border-gray-300 rounded overflow-hidden">
+                    <button class="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 transition-colors" title="List view">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 10h16M4 14h16M4 18h16" />
+                        </svg>
+                    </button>
+                    <button class="px-3 py-1.5 bg-white hover:bg-gray-100 transition-colors" title="Grid view">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M4 5a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM14 5a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1V5zM4 15a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1H5a1 1 0 01-1-1v-4zM14 15a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z" />
+                        </svg>
+                    </button>
+                </div>
+                <button id="btn-create-table" class="px-4 py-1.5 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors flex items-center space-x-1">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
+                    </svg>
+                    <span>Create</span>
+                </button>
+            </div>
+        </div>
+        <div class="border-t border-gray-200 pt-4">
+            <p class="text-gray-500 text-center py-8">No game tables yet. Create one to get started!</p>
+        </div>
+    </section>
+
     <!-- Placeholder Section 1 -->
     <section class="bg-white p-6 rounded-lg shadow-md">
         <h2 class="text-2xl font-semibold mb-4" style="margin-bottom:1em;">Legend's quotes</h2>
@@ -99,10 +129,175 @@
         </div>
     </section>
 
-    <!-- Placeholder Section 3 -->
-    <!-- <section class="bg-white p-6 rounded-lg shadow-md">
-        <h2 class="text-2xl font-semibold mb-4">Section</h2>
-        <p class="text-gray-700">Use this section for additional information, links, or anything else you'd like to showcase.</p>
-    </section> -->
+    <!-- Create Game Table Modal -->
+    <div id="modal-create-table" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div class="bg-white rounded-lg shadow-xl p-6 w-96">
+            <h3 class="text-xl font-semibold mb-4">Create Game Table</h3>
+            <div class="mb-4">
+                <label class="block text-gray-700 mb-2">Select Game</label>
+                <select id="select-game" class="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <option value="">Loading...</option>
+                </select>
+            </div>
+            <div class="flex justify-end space-x-3">
+                <button id="btn-modal-cancel" class="px-4 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 transition-colors">Cancel</button>
+                <button id="btn-modal-create" class="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition-colors">Create</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Player Setup Modal -->
+    <div id="modal-player-setup" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-2xl">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-xl font-semibold">Player List</h3>
+                <button id="btn-close-player-modal" class="text-gray-400 hover:text-gray-600">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
+            <div id="player-slots" class="space-y-3 mb-4">
+                <!-- Player slots will be generated here -->
+            </div>
+            <div class="flex justify-end">
+                <button id="btn-start-game" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors">Start Game</button>
+            </div>
+        </div>
+    </div>
 </div>
+
+<script>
+    // Modal logic
+    const modal = document.getElementById('modal-create-table');
+    const playerModal = document.getElementById('modal-player-setup');
+    const btnCreate = document.getElementById('btn-create-table');
+    const btnCancel = document.getElementById('btn-modal-cancel');
+    const btnModalCreate = document.getElementById('btn-modal-create');
+    const selectGame = document.getElementById('select-game');
+    const playerSlots = document.getElementById('player-slots');
+    const btnClosePlayerModal = document.getElementById('btn-close-player-modal');
+    const btnStartGame = document.getElementById('btn-start-game');
+
+    let selectedGame = null;
+
+    btnCreate.addEventListener('click', async () => {
+        modal.classList.remove('hidden');
+        try {
+            const resp = await fetch('/api/games');
+            const games = await resp.json();
+            selectGame.innerHTML = games.length 
+                ? games.map(g => `<option value="${g.id}" data-name="${g.name}">${g.name}</option>`).join('')
+                : '<option value="">No games available</option>';
+        } catch (e) {
+            selectGame.innerHTML = '<option value="">Failed to load</option>';
+        }
+    });
+
+    btnCancel.addEventListener('click', () => {
+        modal.classList.add('hidden');
+    });
+
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) modal.classList.add('hidden');
+    });
+
+    btnModalCreate.addEventListener('click', () => {
+        const gameId = selectGame.value;
+        if (!gameId) return;
+        
+        selectedGame = {
+            id: gameId,
+            name: selectGame.options[selectGame.selectedIndex].dataset.name
+        };
+        
+        modal.classList.add('hidden');
+        showPlayerSetup();
+    });
+
+    function showPlayerSetup() {
+        playerSlots.innerHTML = '';
+        
+        // Fetch bot list for the selected game
+        fetch(`/api/bots?game_id=${selectedGame.id}`)
+            .then(resp => resp.json())
+            .then(bots => {
+                const botOptions = bots.length 
+                    ? bots.map(b => `<option value="${b.id}">${b.name}</option>`).join('')
+                    : '<option value="">No bots available</option>';
+                
+                for (let i = 1; i <= 2; i++) {
+                    playerSlots.innerHTML += `
+                        <div class="flex items-center space-x-3 p-3 bg-gray-50 rounded border border-gray-200">
+                            <span class="text-gray-600 w-8">P${i}</span>
+                            <select class="player-type border border-gray-300 rounded px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                <option value="bot" selected>Bot</option>
+                                <option value="human">Human</option>
+                            </select>
+                            <select class="player-bot flex-1 border border-gray-300 rounded px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                ${botOptions}
+                            </select>
+                        </div>
+                    `;
+                }
+                playerModal.classList.remove('hidden');
+            })
+            .catch(err => {
+                console.error('Failed to load bots:', err);
+                for (let i = 1; i <= 2; i++) {
+                    playerSlots.innerHTML += `
+                        <div class="flex items-center space-x-3 p-3 bg-gray-50 rounded border border-gray-200">
+                            <span class="text-gray-600 w-8">P${i}</span>
+                            <select class="player-type border border-gray-300 rounded px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                <option value="bot" selected>Bot</option>
+                                <option value="human">Human</option>
+                            </select>
+                            <input type="text" class="player-name flex-1 border border-gray-300 rounded px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Player ${i} name">
+                        </div>
+                    `;
+                }
+                playerModal.classList.remove('hidden');
+            });
+    }
+
+    btnClosePlayerModal.addEventListener('click', () => {
+        playerModal.classList.add('hidden');
+    });
+
+    playerModal.addEventListener('click', (e) => {
+        if (e.target === playerModal) playerModal.classList.add('hidden');
+    });
+
+    btnStartGame.addEventListener('click', async () => {
+        const players = [];
+        document.querySelectorAll('#player-slots > div').forEach((slot, idx) => {
+            const type = slot.querySelector('.player-type').value;
+            let name, botId;
+            if (type === 'bot') {
+                const botSelect = slot.querySelector('.player-bot');
+                botId = botSelect.value;
+                name = botSelect.options[botSelect.selectedIndex]?.text || `Bot ${idx + 1}`;
+            } else {
+                name = slot.querySelector('.player-name')?.value || `Player ${idx + 1}`;
+            }
+            players.push({ type, name, botId: type === 'bot' ? botId : null });
+        });
+        
+        try {
+            const resp = await fetch('/api/matches', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ game_id: selectedGame.id, players })
+            });
+            const data = await resp.json();
+            if (data.match_id) {
+                window.location.href = `/match/${data.match_id}`;
+            } else {
+                alert('Failed to create match: ' + (data.error || 'Unknown error'));
+            }
+        } catch (e) {
+            alert('Failed to create match: ' + e.message);
+        }
+    });
+</script>
 {% endblock %}

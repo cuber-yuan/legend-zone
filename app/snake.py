@@ -205,10 +205,11 @@ def register_snake_events(socketio):
                     players = json.dumps({'player_1': username_1, 'player_2': username_2})
                     with conn.cursor() as cursor:
                         sql = """
-                            INSERT INTO matches (game, players, winner, displays)
-                            VALUES (?, ?, ?, ?)
+                            INSERT INTO matches (id, game, players, winner, displays)
+                            VALUES (?, ?, ?, ?, ?)
                         """
                         cursor.execute(sql, (
+                            uuid4().hex,
                             'Snake',
                             players,
                             winner,

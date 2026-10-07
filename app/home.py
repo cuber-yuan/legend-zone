@@ -25,7 +25,7 @@ def register_home_events(socketio):
         try:
             conn = get_db_connection()
             with conn.cursor() as cursor:
-                cursor.execute("SELECT * FROM matches ORDER BY created_at DESC LIMIT 20")
+                cursor.execute("SELECT * FROM matches WHERE status = 'finished' ORDER BY created_at DESC LIMIT 20")
                 matches = cursor.fetchall()
                 # Convert datetime fields to string
                 for match in matches:

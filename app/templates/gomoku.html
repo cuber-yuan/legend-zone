@@ -301,13 +301,19 @@ function newGame() {
   
   showPhaserMask("Starting new game..."); 
   
-  socket.emit('new_game', {
+  const payload = {
     user_id: userId,
     black_bot: blackBot,
     white_bot: whiteBot,
     black_is_human: blackisHuman, 
     white_is_human: whiteisHuman  
-  });
+  };
+
+  {% if match_id %}
+  payload.match_id = "{{ match_id }}";
+  {% endif %}
+
+  socket.emit('new_game', payload);
 }
 
 function sendPlayerMove(x, y) {
@@ -330,8 +336,6 @@ document.addEventListener('DOMContentLoaded', function() {
   const left = document.getElementById('left-checkbox');
   const right = document.getElementById('right-checkbox');
   
-  // 确保两个复选框的互斥逻辑是正确的
-  // 当前只允许一个人类玩家
   if (left && right) {
     left.addEventListener('change', () => { 
       if (left.checked) {
@@ -344,6 +348,59 @@ document.addEventListener('DOMContentLoaded', function() {
       }
     });
   }
+
+  // Auto-start game from match page
+  {% if match_id and match %}
+  const matchId = "{{ match_id }}";
+  let matchPlayers = [];
+  try {
+    matchPlayers = JSON.parse({{ match.players | tojson }});
+  } catch (e) {
+    console.error('Failed to parse match players:', e);
+  }
+
+  if (matchPlayers.length >= 2) {
+    const p1 = matchPlayers[0];
+    if (p1.type === 'bot') {
+      document.getElementById('aiSelectBlack').value = p1.botId;
+      left.checked = false;
+    } else {
+      left.checked = true;
+    }
+
+    const p2 = matchPlayers[1];
+    if (p2.type === 'bot') {
+      document.getElementById('aiSelectWhite').value = p2.botId;
+      right.checked = false;
+    } else {
+      right.checked = true;
+    }
+
+    const startMatch = () => {
+      socket.emit('new_game', {
+        user_id: userId,
+        black_bot: document.getElementById('aiSelectBlack').value,
+        white_bot: document.getElementById('aiSelectWhite').value,
+        black_is_human: left.checked,
+        white_is_human: right.checked,
+        match_id: matchId
+      });
+    };
+
+    setTimeout(() => {
+      if (userId) {
+        startMatch();
+      } else {
+        const checkUserId = setInterval(() => {
+          if (userId) {
+            clearInterval(checkUserId);
+            startMatch();
+          }
+        }, 100);
+      }
+    }, 500);
+  }
+  {% endif %}
 });
 </script>
 {% endblock %}
