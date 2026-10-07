@@ -1,12 +1,10 @@
 # app/services/battle_worker.py
 
-import os
 import random
 import time
 
-import pymysql
-from ..gomoku import run_auto_gomoku_match # 导入解耦后的游戏运行函数
-from .utils import get_db_connection #, get_bot_executor
+from ..gomoku import run_auto_gomoku_match
+from .utils import get_db_connection
 
 
 
@@ -34,9 +32,9 @@ def select_bots_for_game(game_name):
             cursor.execute("""
                 SELECT id
                 FROM bots
-                WHERE game = %s
+                WHERE game = ?
                   AND id IN (
-                    SELECT MAX(id) FROM bots WHERE game = %s GROUP BY bot_name
+                    SELECT MAX(id) FROM bots WHERE game = ? GROUP BY bot_name
                   )
             """, (game_name, game_name))
             
@@ -68,16 +66,14 @@ def schedule_all_games():
     
     for game in games_to_run:
         player_1_id, player_2_id = select_bots_for_game(game)
-        p1_id_int = int(player_1_id) 
+        if player_1_id is None or player_2_id is None:
+            continue
+        p1_id_int = int(player_1_id)
         p2_id_int = int(player_2_id)
         print(f"Scheduling match for {game} between Bot {player_1_id} and Bot {player_2_id}")
-        if player_1_id and player_2_id:
-            if game == 'Gomoku':
-                run_auto_gomoku_match(p1_id_int, p2_id_int)
-            # if game == 'Snake':
-            #     run_auto_snake_match(player_1_id, player_2_id)
+        if game == 'Gomoku':
+            run_auto_gomoku_match(p1_id_int, p2_id_int)
             
-        # 避免瞬间运行太多比赛，可以加入短暂的延迟
         time.sleep(1)
 
 # ... (在主应用启动文件 (app.py 或 __init__.py) 中设置 APScheduler 定期调用 schedule_all_games)

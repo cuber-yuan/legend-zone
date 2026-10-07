@@ -9,7 +9,7 @@
     <select id="aiSelectLeft"
       class="block w-full border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
       {% for bot in bots %}
-      <option value="{{ bot[0] }}">{{ bot[1] }}</option>
+      <option value="{{ bot.id }}">{{ bot.bot_name }}</option>
       {% endfor %}
     </select>
     <div style="margin-top:1.5rem;">
@@ -27,7 +27,7 @@
     <select id="aiSelectRight"
       class="block w-full border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
       {% for bot in bots %}
-      <option value="{{ bot[0] }}">{{ bot[1] }}</option>
+      <option value="{{ bot.id }}">{{ bot.bot_name }}</option>
       {% endfor %}
     </select>
     <div style="margin-top:1.5rem;">

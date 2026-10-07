@@ -100,8 +100,8 @@
                 <li class="flex items-center ml-4 mb-4 lg:ml-0 lg:mb-0">
                     <span class="text-sm text-gray-200">
                         Logged in as:
-                        <a href="{{ url_for('main.profile', username=current_user.id) }}"
-                           class="text-white font-semibold hover:underline ml-1">{{ current_user.id }}</a>
+                        <a href="{{ url_for('main.profile', username=current_user.username) }}"
+                           class="text-white font-semibold hover:underline ml-1">{{ current_user.username }}</a>
                     </span>
                 </li>
                 <li class="flex items-center ml-4 mb-4 lg:ml-0 lg:mb-0">

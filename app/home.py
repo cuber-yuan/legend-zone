@@ -3,22 +3,12 @@ from . import socketio
 from judges.gomoku_judge import GomokuJudge
 from uuid import uuid4
 from flask_socketio import emit, join_room
-import sys
 import json
-import io
-from unittest.mock import patch
-import contextlib
-import subprocess
-import tempfile
 import os
 from .code_executor import CodeExecutor
 import uuid
-import pymysql
-from dotenv import load_dotenv
 import datetime
-from app.services.utils import get_db_connection
-
-load_dotenv()
+from .db import get_db_connection
 
 home_bp = Blueprint('home', __name__)
 

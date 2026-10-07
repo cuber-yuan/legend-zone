@@ -1,16 +1,3 @@
+from ..db import get_db_connection
 
-
-import os
-import pymysql
-
-
-def get_db_connection():
-    """Returns a connection to the MySQL database."""
-    return pymysql.connect(
-        host=os.getenv('DB_HOST'),
-        user=os.getenv('DB_USER'),
-        password=os.getenv('DB_PASSWORD'),
-        database=os.getenv('DB_NAME'),
-        charset='utf8mb4',
-        cursorclass=pymysql.cursors.DictCursor
-    )
+__all__ = ['get_db_connection']

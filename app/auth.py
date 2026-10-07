@@ -3,55 +3,53 @@ from flask_login import login_user, logout_user, login_required, current_user
 from werkzeug.security import check_password_hash, generate_password_hash
 from .models import User
 from . import login_manager
-from dotenv import load_dotenv
-import os
-import pymysql
-
-load_dotenv()
+from .db import get_db_connection
 
 auth_bp = Blueprint('auth', __name__)
 
 def get_user_from_db(username):
-    conn = pymysql.connect(
-        host=os.getenv('DB_HOST'),
-        user=os.getenv('DB_USER'),
-        password=os.getenv('DB_PASSWORD'),
-        database=os.getenv('DB_NAME'),
-        charset='utf8mb4'
-    )
-    cursor = conn.cursor()
-    cursor.execute("SELECT username, password_hash FROM users WHERE username = %s", (username,))
-    row = cursor.fetchone()
-    conn.close()
-    if row:
-        return {'username': row[0], 'password_hash': row[1]}
-    return None
+    conn = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, username, password_hash FROM users WHERE username = ?", (username,))
+        row = cursor.fetchone()
+        if row:
+            return {'id': row['id'], 'username': row['username'], 'password_hash': row['password_hash']}
+        return None
+    finally:
+        if conn:
+            conn.close()
 
 def create_user_in_db(username, password, email):
     password_hash = generate_password_hash(password)
-    conn = pymysql.connect(
-        host=os.getenv('DB_HOST'),
-        user=os.getenv('DB_USER'),
-        password=os.getenv('DB_PASSWORD'),
-        database=os.getenv('DB_NAME'),
-        charset='utf8mb4'
-    )
-    cursor = conn.cursor()
+    conn = None
     try:
-        cursor.execute("INSERT INTO users (username, password_hash, email) VALUES (%s, %s, %s)", (username, password_hash, email))
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("INSERT INTO users (username, password_hash, email) VALUES (?, ?, ?)", (username, password_hash, email))
         conn.commit()
         return True
-    except pymysql.err.IntegrityError:
+    except Exception:
         return False
     finally:
-        conn.close()
+        if conn:
+            conn.close()
 
 @login_manager.user_loader
 def load_user(user_id):
-    user_data = get_user_from_db(user_id)
-    if user_data:
-        return User(user_data['username'])
-    return None
+    conn = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, username FROM users WHERE id = ?", (user_id,))
+        row = cursor.fetchone()
+        if row:
+            return User(row['id'], row['username'])
+        return None
+    finally:
+        if conn:
+            conn.close()
 
 @auth_bp.route('/login', methods=['GET', 'POST'])
 def login():
@@ -60,7 +58,7 @@ def login():
         password = request.form.get('password')
         user_data = get_user_from_db(username)
         if user_data and check_password_hash(user_data['password_hash'], password):
-            user = User(username)
+            user = User(user_data['id'], user_data['username'])
             login_user(user)
             return jsonify({"message": "Login successful"})
         else:

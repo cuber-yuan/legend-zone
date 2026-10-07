@@ -1,12 +1,7 @@
 from flask import Blueprint, render_template, request, redirect, url_for, jsonify, abort
 from flask_login import login_required, current_user
-import pymysql
-import os
-from dotenv import load_dotenv
 import datetime
-from app.services.utils import get_db_connection
-
-load_dotenv()
+from .db import get_db_connection
 
 main_bp = Blueprint('main', __name__)
 
@@ -14,7 +9,6 @@ messages = []
 
 def clean_expired_messages():
     now = datetime.datetime.now()
-    # Only keep messages within the last 24 hours
     messages[:] = [msg for msg in messages if (now - msg["dt"]).total_seconds() < 86400]
 
 @main_bp.route('/')
@@ -27,9 +21,18 @@ def games():
 
 @main_bp.route('/profile')
 def profile_root():
-    # redirect bare /profile to current user's profile if logged in
     if current_user.is_authenticated:
-        return redirect(url_for('main.profile', username=current_user.id))
+        conn = None
+        try:
+            conn = get_db_connection()
+            with conn.cursor() as cursor:
+                cursor.execute("SELECT username FROM users WHERE id = ?", (current_user.id,))
+                row = cursor.fetchone()
+                if row:
+                    return redirect(url_for('main.profile', username=row['username']))
+        finally:
+            if conn:
+                conn.close()
     abort(404)
 
 @main_bp.route('/profile/<username>')
@@ -38,15 +41,13 @@ def profile(username):
     try:
         conn = get_db_connection()
         with conn.cursor() as cursor:
-            cursor.execute("SELECT id, created_at FROM users WHERE username = %s", (username,))
+            cursor.execute("SELECT id, created_at FROM users WHERE username = ?", (username,))
             user_row = cursor.fetchone()
             if not user_row:
-                # user not found -> redirect to home
                 return redirect(url_for('main.home'))
             user_id = user_row['id']
             registered_at = user_row.get('created_at')
 
-            # fetch unique bot names with version count and a representative id/description
             cursor.execute("""
                 SELECT
                     bot_name AS name,
@@ -54,13 +55,12 @@ def profile(username):
                     MIN(id) AS id,
                     MAX(description) AS description
                 FROM bots
-                WHERE user_id = %s
+                WHERE user_id = ?
                 GROUP BY bot_name
                 ORDER BY name
             """, (user_id,))
             bots = cursor.fetchall()
-    except Exception as e:
-        # return empty list on error (or log the error)
+    except Exception:
         bots = []
         registered_at = None
     finally:
@@ -76,11 +76,9 @@ def rating():
     try:
         conn = get_db_connection()
         with conn.cursor() as cursor:
-            # 1. Get a list of all unique games in the bots table
             cursor.execute("SELECT DISTINCT game FROM bots ORDER BY game")
             games = [row['game'] for row in cursor.fetchall()]
 
-            # 2. For each game, fetch the latest version of each unique bot (MAX(id)) and its rating
             for game in games:
                 cursor.execute("""
                     SELECT
@@ -90,50 +88,58 @@ def rating():
                         u.username AS owner
                     FROM bots b
                     JOIN users u ON b.user_id = u.id
-                    WHERE b.game = %s
+                    WHERE b.game = ?
                       AND b.id IN (
-                        SELECT MAX(id) FROM bots WHERE game = %s GROUP BY bot_name
+                        SELECT MAX(id) FROM bots WHERE game = ? GROUP BY bot_name
                       )
                     ORDER BY b.rating DESC, b.bot_name
                 """, (game, game))
-                
-                # Store the list of bots for the current game
+
                 ratings[game] = cursor.fetchall()
-            
+
     except Exception as e:
-        # Log the error for debugging (you would typically use a proper logger)
         print(f"Database error in /rating: {e}")
-        # On error, ratings remains an empty dictionary
-        
+
     finally:
         if conn:
             conn.close()
 
-    # Pass the dictionary of ratings (grouped by game) to the template
     return render_template('rating.html', ratings=ratings)
 
 @main_bp.route('/chat', methods=['GET', 'POST'])
 def chat():
     if request.method == 'POST':
         if not current_user.is_authenticated:
-            # Prevent posting if not logged in
             return jsonify(success=False, error="Login required"), 401 if request.headers.get('X-Requested-With') == 'XMLHttpRequest' else redirect(url_for('main.chat'))
         message = request.form.get('message')
         if message:
             clean_expired_messages()
-            msg_obj = {
-                "user": current_user.get_id(),
-                "text": message,
-                "time": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                "dt": datetime.datetime.now()
-            }
-            messages.append(msg_obj)
-            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-                return jsonify(success=True, message={
-                    "user": msg_obj["user"],
-                    "text": msg_obj["text"],
-                    "time": msg_obj["time"]
-                })
+            conn = None
+            username = None
+            try:
+                conn = get_db_connection()
+                with conn.cursor() as cursor:
+                    cursor.execute("SELECT username FROM users WHERE id = ?", (current_user.id,))
+                    row = cursor.fetchone()
+                    if row:
+                        username = row['username']
+            finally:
+                if conn:
+                    conn.close()
+            if username:
+                msg_obj = {
+                    "user": username,
+                    "text": message,
+                    "time": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    "dt": datetime.datetime.now()
+                }
+                messages.append(msg_obj)
+                if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                    return jsonify(success=True, message={
+                        "user": msg_obj["user"],
+                        "text": msg_obj["text"],
+                        "time": msg_obj["time"]
+                    })
         if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
             return jsonify(success=False)
         return redirect(url_for('main.chat'))
@@ -153,27 +159,23 @@ def chat_messages():
 
 def get_latest_bots_for_game(game_name):
     """Get latest record (max id) for each bot_name within a game."""
-    conn = pymysql.connect(
-        host=os.getenv('DB_HOST'),
-        user=os.getenv('DB_USER'),
-        password=os.getenv('DB_PASSWORD'),
-        database=os.getenv('DB_NAME'),
-        charset='utf8mb4'
-    )
+    conn = None
     try:
+        conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute("""
             SELECT id, bot_name
             FROM bots
-            WHERE game = %s
+            WHERE game = ?
               AND id IN (
-                SELECT MAX(id) FROM bots WHERE game = %s GROUP BY bot_name
+                SELECT MAX(id) FROM bots WHERE game = ? GROUP BY bot_name
               )
             ORDER BY bot_name
         """, (game_name, game_name))
         return cursor.fetchall()
     finally:
-        conn.close()
+        if conn:
+            conn.close()
 
 @main_bp.route('/gomoku')
 def gomoku():
@@ -213,7 +215,7 @@ def bot_detail(bot_id):
     try:
         conn = get_db_connection()
         with conn.cursor() as cursor:
-            cursor.execute("SELECT id, bot_name AS name, description, user_id, game FROM bots WHERE id = %s", (bot_id,))
+            cursor.execute("SELECT id, bot_name AS name, description, user_id, game FROM bots WHERE id = ?", (bot_id,))
             bot = cursor.fetchone()
             if not bot:
                 abort(404)

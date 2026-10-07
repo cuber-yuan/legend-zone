@@ -8,7 +8,7 @@
     <h2 style="font-size: 1.25rem; font-weight: bold;">Top Player</h2>
     <select id="aiSelectTop" class="block w-full border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
       {% for bot in bots %}
-      <option value="{{ bot[0] }}">{{ bot[1] }}</option>
+      <option value="{{ bot.id }}">{{ bot.bot_name }}</option>
       {% endfor %}
     </select>
     <div style="margin-top:1.5rem;">
@@ -25,7 +25,7 @@
     <h2 style="font-size: 1.25rem; font-weight: bold;">Bottom Player</h2>
     <select id="aiSelectBottom" class="block w-full border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
       {% for bot in bots %}
-      <option value="{{ bot[0] }}">{{ bot[1] }}</option>
+      <option value="{{ bot.id }}">{{ bot.bot_name }}</option>
       {% endfor %}
     </select>
     <div style="margin-top:1.5rem;">

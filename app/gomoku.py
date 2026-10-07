@@ -4,38 +4,24 @@ from judges.gomoku_judge import GomokuJudge
 from uuid import uuid4
 from flask_socketio import emit, join_room
 import json
-from unittest.mock import patch
 import os
 from .code_executor import CodeExecutor
 import uuid
-import pymysql
-from dotenv import load_dotenv
+from .db import get_db_connection
 from .services.rating_service import update_bot_ratings
-
-load_dotenv()
 
 gomoku_bp = Blueprint('gomoku', __name__)
 
-sessions = {} 
+sessions = {}
 
-
-def _get_db_connection():
-    return pymysql.connect(
-        host=os.getenv('DB_HOST'),
-        user=os.getenv('DB_USER'),
-        password=os.getenv('DB_PASSWORD'),
-        database=os.getenv('DB_NAME'),
-        charset='utf8mb4',
-        cursorclass=pymysql.cursors.DictCursor
-    )
 
 def _get_bot_executor(bot_id):
     if not bot_id:
         return None
     try:
-        conn = _get_db_connection()
+        conn = get_db_connection()
         with conn.cursor() as cursor:
-            cursor.execute("SELECT source_code, file_path, language FROM bots WHERE id = %s", (bot_id,))
+            cursor.execute("SELECT source_code, file_path, language FROM bots WHERE id = ?", (bot_id,))
             result = cursor.fetchone()
         if result:
             return CodeExecutor(code=result['source_code'], language=result['language'], path=result['file_path'])
@@ -238,14 +224,14 @@ def register_gomoku_events(socketio):
 
                 # --- Insert match record into database ---
                 try:
-                    conn = _get_db_connection()
+                    conn = get_db_connection()
                     with conn.cursor() as cursor:
-                        cursor.execute("SELECT bot_name FROM bots WHERE id = %s", (player_1_id,))
+                        cursor.execute("SELECT bot_name FROM bots WHERE id = ?", (player_1_id,))
                         row1 = cursor.fetchone()
                         username_1 = row1['bot_name'] if row1 else str(player_1_id)
                         if player_1_type == 'human':
                             username_1 = '<i>HUMAN</i>'
-                        cursor.execute("SELECT bot_name FROM bots WHERE id = %s", (player_2_id,))
+                        cursor.execute("SELECT bot_name FROM bots WHERE id = ?", (player_2_id,))
                         row2 = cursor.fetchone()
                         username_2 = row2['bot_name'] if row2 else str(player_2_id)
                         if player_2_type == 'human':
@@ -254,7 +240,7 @@ def register_gomoku_events(socketio):
                     with conn.cursor() as cursor:
                         sql = """
                             INSERT INTO matches (game, players, winner, displays)
-                            VALUES (%s, %s, %s, %s)
+                            VALUES (?, ?, ?, ?)
                         """
                         cursor.execute(sql, (
                             'Gomoku',

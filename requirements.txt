@@ -5,3 +5,6 @@ flask-login
 pymysql
 python-dotenv
 apscheduler
+
+# SQLite is used for local development (no extra dependency needed)
+# To switch back to MySQL, install pymysql and set DB_TYPE=mysql in .env

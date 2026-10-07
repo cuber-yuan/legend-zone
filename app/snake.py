@@ -1,6 +1,5 @@
 import json
 import os
-import pymysql
 from uuid import uuid4
 import concurrent.futures
 
@@ -9,29 +8,20 @@ from flask_socketio import emit, join_room
 
 from .code_executor import CodeExecutor
 from .cpp_judge_executor import CppJudgeExecutor
+from .db import get_db_connection
 
 snake_bp = Blueprint('snake', __name__)
 sessions = {}  # { user_id: { 'sid': ..., 'game': ... } }
 
 
 
-def _get_db_connection():
-    return pymysql.connect(
-        host=os.getenv('DB_HOST'),
-        user=os.getenv('DB_USER'),
-        password=os.getenv('DB_PASSWORD'),
-        database=os.getenv('DB_NAME'),
-        charset='utf8mb4',
-        cursorclass=pymysql.cursors.DictCursor
-    )
-
 def _get_bot_executor(bot_id):
     if not bot_id:
         return None
     try:
-        conn = _get_db_connection()
+        conn = get_db_connection()
         with conn.cursor() as cursor:
-            cursor.execute("SELECT source_code, file_path, language FROM bots WHERE id = %s", (bot_id,))
+            cursor.execute("SELECT source_code, file_path, language FROM bots WHERE id = ?", (bot_id,))
             result = cursor.fetchone()
         if result:
             return CodeExecutor(code=result['source_code'], language=result['language'], path=result['file_path'])
@@ -191,7 +181,7 @@ def register_snake_events(socketio):
                 # --- Insert match record into database ---
                 conn = None
                 try:
-                    conn = _get_db_connection()
+                    conn = get_db_connection()
                     with conn.cursor() as cursor:
                         
                         # Get Bot Name or label as HUMAN
@@ -200,14 +190,14 @@ def register_snake_events(socketio):
 
                         username_1 = '<i>HUMAN</i>'
                         if p1_id_for_db:
-                            cursor.execute("SELECT bot_name FROM bots WHERE id = %s", (p1_id_for_db,))
+                            cursor.execute("SELECT bot_name FROM bots WHERE id = ?", (p1_id_for_db,))
                             row1 = cursor.fetchone()
                             if row1:
                                 username_1 = row1['bot_name']
 
                         username_2 = '<i>HUMAN</i>'
                         if p2_id_for_db:
-                            cursor.execute("SELECT bot_name FROM bots WHERE id = %s", (p2_id_for_db,))
+                            cursor.execute("SELECT bot_name FROM bots WHERE id = ?", (p2_id_for_db,))
                             row2 = cursor.fetchone()
                             if row2:
                                 username_2 = row2['bot_name']
@@ -216,7 +206,7 @@ def register_snake_events(socketio):
                     with conn.cursor() as cursor:
                         sql = """
                             INSERT INTO matches (game, players, winner, displays)
-                            VALUES (%s, %s, %s, %s)
+                            VALUES (?, ?, ?, ?)
                         """
                         cursor.execute(sql, (
                             'Snake',
