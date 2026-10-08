@@ -182,9 +182,6 @@ const socket = io('/snake');
 let isSpectator = false;
 let isReplayMode = false;
 let replayDisplays = [];
-let replayIndex = 0;
-let replayTimer = null;
-let isReplayPlaying = false;
 
 // --- Canvas Size Helpers ---
 function getCanvasSize() {
@@ -361,106 +358,37 @@ function autoStartMatch(playersJson) {
 }
 
 // --- Replay ---
-function startReplay(displays, winner) {
-    isReplayMode = true;
-    replayDisplays = displays;
-    replayIndex = 0;
-
-    const controls = document.getElementById('replayControls');
-    if (controls) controls.style.display = 'flex';
-
-    const slider = document.getElementById('replaySlider');
-    if (slider) {
-        slider.max = Math.max(0, displays.length - 1);
-        slider.value = 0;
-    }
-
-    updateReplayDisplay();
-    updateReplayButtons();
-
-    let msg = winner == 0 ? 'Blue wins!' : (winner == 1 ? 'Red wins!' : 'Draw!');
-    const statusEl = document.getElementById('replayStatus');
-    if (statusEl) statusEl.textContent = msg + ' (' + Math.max(0, displays.length - 1) + ' turns)';
-
-    startReplayPlay();
-}
-
-function updateReplayDisplay() {
+// 重建到第 index 帧：displays[0] 是初始状态，1..index 逐帧应用
+function renderReplayFrame(index) {
     if (!replayDisplays.length) return;
     const scene = phaserGame.scene.getScene('SnakeScene');
     if (!scene) return;
 
     scene.updateFromState(JSON.parse(JSON.stringify(replayDisplays[0])));
-    for (let i = 1; i <= replayIndex; i++) {
+    for (let i = 1; i <= index; i++) {
         const display = replayDisplays[i];
         if (display && display['0'] !== undefined && display['1'] !== undefined) {
             scene.updateFromState(display);
         }
     }
-
-    const counter = document.getElementById('turnCounter2');
-    if (counter) counter.textContent = replayIndex + ' / ' + Math.max(0, replayDisplays.length - 1);
-    const slider = document.getElementById('replaySlider');
-    if (slider) slider.value = replayIndex;
 }
 
-function updateReplayButtons() {
-    const maxIdx = Math.max(0, replayDisplays.length - 1);
-    document.getElementById('btnFirst').disabled = replayIndex <= 0;
-    document.getElementById('btnPrev').disabled = replayIndex <= 0;
-    document.getElementById('btnNext').disabled = replayIndex >= maxIdx;
-    document.getElementById('btnLast').disabled = replayIndex >= maxIdx;
-}
+const replayController = new ReplayController({
+    onRender: renderReplayFrame,
+    baseIntervalMs: 800
+});
 
-function replayStep(delta) {
-    const maxIdx = Math.max(0, replayDisplays.length - 1);
-    replayIndex = Math.max(0, Math.min(maxIdx, replayIndex + delta));
-    updateReplayDisplay();
-    updateReplayButtons();
-}
+function startReplay(displays, winner) {
+    isReplayMode = true;
+    replayDisplays = displays;
 
-function replayGoto(index) {
-    const maxIdx = Math.max(0, replayDisplays.length - 1);
-    replayIndex = Math.max(0, Math.min(maxIdx, index));
-    updateReplayDisplay();
-    updateReplayButtons();
-}
+    const controls = document.getElementById('replayControls');
+    if (controls) controls.style.display = 'flex';
 
-function toggleReplayPlay() {
-    if (isReplayPlaying) {
-        stopReplayPlay();
-    } else {
-        startReplayPlay();
-    }
-}
-
-function startReplayPlay() {
-    const maxIdx = Math.max(0, replayDisplays.length - 1);
-    if (replayIndex >= maxIdx) {
-        replayIndex = 0;
-        updateReplayDisplay();
-        updateReplayButtons();
-    }
-    isReplayPlaying = true;
-    const btn = document.getElementById('btnPlayPause');
-    if (btn) btn.innerHTML = '&#9646;&#9646;';
-    replayTimer = setInterval(() => {
-        if (replayIndex >= maxIdx) {
-            stopReplayPlay();
-            return;
-        }
-        replayStep(1);
-    }, 400);
-}
-
-function stopReplayPlay() {
-    isReplayPlaying = false;
-    const btn = document.getElementById('btnPlayPause');
-    if (btn) btn.innerHTML = '&#9654;';
-    if (replayTimer) {
-        clearInterval(replayTimer);
-        replayTimer = null;
-    }
+    let msg = winner == 0 ? 'Blue wins!' : (winner == 1 ? 'Red wins!' : 'Draw!');
+    replayController.load(Math.max(0, displays.length - 1));
+    replayController.setStatus(msg + ' (' + Math.max(0, displays.length - 1) + ' turns)');
+    replayController.play();
 }
 
 // --- Canvas Resize ---
@@ -575,20 +503,8 @@ function setupNormalPage() {
 }
 
 function setupMatchPage() {
-    // Wire replay controls
-    const btnFirst = document.getElementById('btnFirst');
-    const btnPrev = document.getElementById('btnPrev');
-    const btnPlayPause = document.getElementById('btnPlayPause');
-    const btnNext = document.getElementById('btnNext');
-    const btnLast = document.getElementById('btnLast');
-    const replaySlider = document.getElementById('replaySlider');
-
-    if (btnFirst) btnFirst.addEventListener('click', () => { stopReplayPlay(); replayGoto(0); });
-    if (btnPrev) btnPrev.addEventListener('click', () => { stopReplayPlay(); replayStep(-1); });
-    if (btnPlayPause) btnPlayPause.addEventListener('click', toggleReplayPlay);
-    if (btnNext) btnNext.addEventListener('click', () => { stopReplayPlay(); replayStep(1); });
-    if (btnLast) btnLast.addEventListener('click', () => { stopReplayPlay(); replayGoto(Math.max(0, replayDisplays.length - 1)); });
-    if (replaySlider) replaySlider.addEventListener('input', (e) => { stopReplayPlay(); replayGoto(parseInt(e.target.value)); });
+    // Wire replay controls (transport buttons, slider, speed selector)
+    replayController.attach();
 
     // Show player names
     showMatchPlayerNames();
@@ -651,119 +567,3 @@ function sendHumanDirection(dir) {
         move: JSON.stringify({ response: { direction: dir } })
     });
 }
-
-/**
- * WebGamePlayer: A generic Phaser-based web game replay player.
- * Usage:
- *   const player = new WebGamePlayer({
- *     phaserConfig: { ... }, // Phaser config
- *     mountId: 'phaser-container', // DOM id to mount
- *     createScene: () => new YourPhaserSceneClass(),
- *   });
- *   player.loadReplay(replayArray);
- *   player.play();
- *   player.pause();
- *   player.goto(turnIndex);
- *   player.onTurnChange = (turn) => { ... };
- */
-class WebGamePlayer {
-    constructor({ phaserConfig, mountId, createScene }) {
-        this.mountId = mountId;
-        this.createScene = createScene;
-        this.phaserConfig = Object.assign({}, phaserConfig, {
-            parent: mountId,
-            scene: [createScene()]
-        });
-        this.phaserGame = new Phaser.Game(this.phaserConfig);
-        this.replayArr = [];
-        this.turnIdx = 0;
-        this.timer = null;
-        this.playing = false;
-        this.onTurnChange = null;
-        this.maxTurn = 0;
-        this.scene = null;
-        this._initSceneReady();
-    }
-
-    _initSceneReady() {
-        // Wait for Phaser scene to be ready
-        this.phaserGame.events.on('ready', () => {
-            this.scene = this.phaserGame.scene.scenes[0];
-        });
-        // Fallback: try to get scene after short delay
-        setTimeout(() => {
-            if (!this.scene) {
-                this.scene = this.phaserGame.scene.scenes[0];
-            }
-        }, 500);
-    }
-
-    loadReplay(replayArr) {
-        this.replayArr = replayArr;
-        this.maxTurn = replayArr.length - 1;
-        this.turnIdx = 0;
-        if (this.scene && this.replayArr.length > 0) {
-            this._gotoTurn(0);
-        }
-    }
-
-    play() {
-        if (this.playing || !this.replayArr.length) return;
-        this.playing = true;
-        this._playLoop();
-    }
-
-    pause() {
-        this.playing = false;
-        if (this.timer) clearTimeout(this.timer);
-    }
-
-    goto(turnIdx) {
-        this.pause();
-        this._gotoTurn(turnIdx);
-    }
-
-    _gotoTurn(idx) {
-        idx = Math.max(0, Math.min(this.maxTurn, idx));
-        // Reset to initial state
-        if (!this.scene) return;
-        let initialState = JSON.parse(JSON.stringify(this.replayArr[0]));
-        this.scene.updateFromState(initialState);
-        // Apply actions incrementally
-        for (let i = 1; i <= idx; ++i) {
-            this.scene.updateFromState(this.replayArr[i]);
-        }
-        this.turnIdx = idx;
-        if (typeof this.onTurnChange === 'function') {
-            this.onTurnChange(idx);
-        }
-    }
-
-    _playLoop() {
-        if (!this.playing) return;
-        if (this.turnIdx < this.maxTurn) {
-            this.turnIdx++;
-            this._gotoTurn(this.turnIdx);
-            this.timer = setTimeout(() => this._playLoop(), 400);
-        } else {
-            this.pause();
-        }
-    }
-}
-
-// Example usage for Snake game (replace original replay logic):
-// const player = new WebGamePlayer({
-//     phaserConfig: {
-//         type: Phaser.AUTO,
-//         width: CANVAS_SIZE,
-//         height: CANVAS_SIZE,
-//     },
-//     mountId: 'phaser-container',
-//     createScene: () => new SnakeScene()
-// });
-// player.loadReplay(replayArr);
-// player.play();
-// player.pause();
-// player.goto(turnIdx);
-// player.onTurnChange = (idx) => { ... };
-

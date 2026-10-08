@@ -48,6 +48,7 @@
 
 {% block content %}
 <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
+<script src="{{ url_for('static', filename='replay-player.js') }}"></script>
 <link href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism.min.css" rel="stylesheet" />
 <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/prism.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-python.min.js"></script>
@@ -161,6 +162,12 @@
       <button id="btnPlayPause" title="Play/Pause">&#9654;</button>
       <button id="btnNext" title="Next step">&gt;</button>
       <button id="btnLast" title="Last move">&gt;|</button>
+      <select id="replaySpeed" title="Replay speed" style="padding:0.3rem;border:1px solid #ccc;border-radius:0.25rem;">
+        <option value="0.5">0.5x</option>
+        <option value="1" selected>1x</option>
+        <option value="2">2x</option>
+        <option value="4">4x</option>
+      </select>
       <div class="replay-progress">
         <span id="moveCounter">0 / 0</span>
         <input type="range" id="replaySlider" min="0" max="0" value="0" />
@@ -263,9 +270,6 @@ let graphics;
 let isSpectator = false;
 let isReplayMode = false;
 let replayMoves = [];
-let replayIndex = 0;
-let replayTimer = null;
-let isPlaying = false;
 
 const config = {
   type: Phaser.AUTO,
@@ -398,100 +402,34 @@ socket.on('match_finished', (data) => {
 });
 
 // --- Replay ---
+// 重建到第 index 帧：重放 replayMoves[0..index) 到空棋盘
+const replayController = new ReplayController({
+    counterId: 'moveCounter',
+    baseIntervalMs: 800,
+    onRender: (index) => {
+        board = Array.from({ length: SIZE }, () => Array(SIZE).fill(0));
+        lastMove = null;
+        for (let i = 0; i < index; i++) {
+            const m = replayMoves[i];
+            board[m.y][m.x] = m.player;
+            lastMove = { x: m.x, y: m.y };
+        }
+        drawBoard();
+    }
+});
+
 function startReplay(moves, winner) {
   isReplayMode = true;
   replayMoves = moves;
-  replayIndex = 0;
 
   const controls = document.getElementById('replayControls');
   controls.style.display = 'flex';
 
-  const slider = document.getElementById('replaySlider');
-  slider.max = moves.length;
-  slider.value = 0;
-
-  updateReplayDisplay();
-  updateReplayButtons();
-
   let msg = winner === 1 ? 'Black wins!' : (winner === 2 ? 'White wins!' : 'Draw!');
-  document.getElementById('replayStatus').textContent = msg + ' (' + moves.length + ' moves)';
-
-  startPlay();
+  replayController.load(moves.length);
+  replayController.setStatus(msg + ' (' + moves.length + ' moves)');
+  replayController.play();
 }
-
-function updateReplayDisplay() {
-  board = Array.from({ length: SIZE }, () => Array(SIZE).fill(0));
-  lastMove = null;
-  for (let i = 0; i < replayIndex; i++) {
-    const m = replayMoves[i];
-    board[m.y][m.x] = m.player;
-    lastMove = { x: m.x, y: m.y };
-  }
-  drawBoard();
-
-  document.getElementById('moveCounter').textContent = replayIndex + ' / ' + replayMoves.length;
-  document.getElementById('replaySlider').value = replayIndex;
-}
-
-function updateReplayButtons() {
-  document.getElementById('btnFirst').disabled = replayIndex <= 0;
-  document.getElementById('btnPrev').disabled = replayIndex <= 0;
-  document.getElementById('btnNext').disabled = replayIndex >= replayMoves.length;
-  document.getElementById('btnLast').disabled = replayIndex >= replayMoves.length;
-}
-
-function replayStep(delta) {
-  replayIndex = Math.max(0, Math.min(replayMoves.length, replayIndex + delta));
-  updateReplayDisplay();
-  updateReplayButtons();
-}
-
-function replayGoTo(index) {
-  replayIndex = Math.max(0, Math.min(replayMoves.length, index));
-  updateReplayDisplay();
-  updateReplayButtons();
-}
-
-function togglePlay() {
-  if (isPlaying) {
-    stopPlay();
-  } else {
-    startPlay();
-  }
-}
-
-function startPlay() {
-  if (replayIndex >= replayMoves.length) {
-    replayIndex = 0;
-    updateReplayDisplay();
-    updateReplayButtons();
-  }
-  isPlaying = true;
-  document.getElementById('btnPlayPause').innerHTML = '&#9646;&#9646;';
-  replayTimer = setInterval(() => {
-    if (replayIndex >= replayMoves.length) {
-      stopPlay();
-      return;
-    }
-    replayStep(1);
-  }, 500);
-}
-
-function stopPlay() {
-  isPlaying = false;
-  document.getElementById('btnPlayPause').innerHTML = '&#9654;';
-  if (replayTimer) {
-    clearInterval(replayTimer);
-    replayTimer = null;
-  }
-}
-
-document.getElementById('btnFirst').addEventListener('click', () => { stopPlay(); replayGoTo(0); });
-document.getElementById('btnPrev').addEventListener('click', () => { stopPlay(); replayStep(-1); });
-document.getElementById('btnPlayPause').addEventListener('click', togglePlay);
-document.getElementById('btnNext').addEventListener('click', () => { stopPlay(); replayStep(1); });
-document.getElementById('btnLast').addEventListener('click', () => { stopPlay(); replayGoTo(replayMoves.length); });
-document.getElementById('replaySlider').addEventListener('input', (e) => { stopPlay(); replayGoTo(parseInt(e.target.value)); });
 
 function autoStartMatch(playersJson) {
   let players = [];
@@ -556,6 +494,9 @@ window.addEventListener('resize', () => {
 
 // --- Init ---
 document.addEventListener('DOMContentLoaded', function() {
+  // Wire replay controls (transport buttons, slider, speed selector)
+  replayController.attach();
+
   {% if not match_id %}
   const left = document.getElementById('left-checkbox');
   const right = document.getElementById('right-checkbox');

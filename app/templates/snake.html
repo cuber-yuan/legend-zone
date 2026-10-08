@@ -79,6 +79,8 @@
 
 <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/phaser@3.55.2/dist/phaser.js"></script>
+<!-- 通用回放播放器 -->
+<script src="{{ url_for('static', filename='replay-player.js') }}"></script>
 <script src="{{ url_for('static', filename='snake/snake.js') }}"></script>
 <link rel="stylesheet" href="{{ url_for('static', filename='snake/snake.css') }}">
 <link href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism.min.css" rel="stylesheet" />
@@ -171,6 +173,12 @@
       <button id="btnPlayPause" title="Play/Pause">&#9654;</button>
       <button id="btnNext" title="Next turn">&gt;</button>
       <button id="btnLast" title="Last turn">&gt;|</button>
+      <select id="replaySpeed" title="Replay speed" style="padding:0.3rem;border:1px solid #ccc;border-radius:0.25rem;">
+        <option value="0.5">0.5x</option>
+        <option value="1" selected>1x</option>
+        <option value="2">2x</option>
+        <option value="4">4x</option>
+      </select>
       <div class="replay-progress">
         <span id="turnCounter2">0 / 0</span>
         <input type="range" id="replaySlider" min="0" max="0" value="0" />
