@@ -80,6 +80,15 @@
 
 <div class="bg-gray-100 py-10">
   <div class="max-w-screen-xl mx-auto">
+    <!-- Match page: player names -->
+    {% if match_id and match %}
+    <div style="display:flex;justify-content:space-between;max-width:600px;margin:0 auto 8px;">
+      <span id="bluePlayerName" style="font-weight:600;color:#2563eb;">Top Player</span>
+      <span id="spectatorBadge" style="display:none;background:#f59e0b;color:#fff;padding:2px 10px;border-radius:9999px;font-size:0.75rem;">Spectator</span>
+      <span id="redPlayerName" style="font-weight:600;color:#dc2626;">Bottom Player</span>
+    </div>
+    {% endif %}
+
     <!-- Game Canvas Section -->
     <div style="position:relative;width:100%;max-width:600px;height:auto;margin:auto;box-sizing:border-box;">
       <div id="phaser-container" style="width:100%;height:100%;"></div>
@@ -87,13 +96,37 @@
     <br>
     <div style="text-align:center;">
         <p id="turnCounter" class="mt-4 text-lg font-semibold">Turn: 1</p>
+        {% if not match_id %}
         <button id="newGameBtn" type="button" class="mt-4 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600">New Game</button>
+        {% endif %}
     </div>
+
+    <!-- Replay Controls (match page only) -->
+    {% if match_id %}
+    <div id="replayControls" style="display:none;justify-content:center;align-items:center;gap:8px;margin-top:12px;flex-wrap:wrap;">
+      <button id="btnFirst" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300 text-sm">|&lt;</button>
+      <button id="btnPrev" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300 text-sm">&lt;</button>
+      <button id="btnPlayPause" class="px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 text-sm">&#9654;</button>
+      <button id="btnNext" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300 text-sm">&gt;</button>
+      <button id="btnLast" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300 text-sm">&gt;|</button>
+      <input id="replaySlider" type="range" min="0" max="0" value="0" style="width:180px;">
+      <span id="turnCounter2" class="text-sm text-gray-600">0 / 0</span>
+      <span id="replayStatus" class="text-sm text-gray-600"></span>
+    </div>
+    {% endif %}
   </div>
 </div>
 
 <script>
-// --- Game Configuration & State ---
+const IS_MATCH_PAGE = {{ 'true' if match_id else 'false' }};
+const MATCH_ID = "{{ match_id or '' }}";
+const MATCH_STATUS = "{{ match.status if match_id and match else '' }}";
+const MATCH_GAME_NAME = "{{ match.game if match_id and match else '' }}";
+const MATCH_PLAYERS = {{ match.players | tojson if match_id and match else '""' }};
+</script>
+
+<script>
+// --- Core State ---
 let userId = null;
 let currentGameId = null;
 let gameOver = false;
@@ -101,21 +134,18 @@ const socket = io('/tank2');
 
 function getCanvasSize() {
   const padding = window.innerWidth < 600 ? 24 : 70;
-  return Math.min(window.innerWidth - padding, 600); // Simplified calculation
+  return Math.min(window.innerWidth - padding, 600);
 }
-
 let CANVAS_SIZE = getCanvasSize();
-let phaserGame; // Will be initialized in the Phaser config
+let phaserGame;
 
-// --- UI Mask Functions (from Gomoku) ---
+// --- UI Mask ---
 let maskRect = null;
 let maskText = null;
 
 function showPhaserMask(msg = "Waiting for new game...") {
-  // --- 修改开始: 使用 Phaser 的官方方法获取场景 ---
   const scene = phaserGame.scene.getScene('TankScene');
   if (!scene) return;
-  // --- 修改结束 ---
   hidePhaserMask();
   maskRect = scene.add.rectangle(CANVAS_SIZE / 2, CANVAS_SIZE / 2, CANVAS_SIZE, CANVAS_SIZE, 0x000000, 0.35).setDepth(1000);
   maskText = scene.add.text(CANVAS_SIZE / 2, CANVAS_SIZE / 2, msg, { fontSize: Math.floor(CANVAS_SIZE / 18) + 'px', color: '#fff', fontStyle: 'bold' }).setOrigin(0.5).setDepth(1001);
@@ -126,60 +156,252 @@ function hidePhaserMask() {
   if (maskText) { maskText.destroy(); maskText = null; }
 }
 
+// --- Match Page State ---
+let isSpectator = false;
+let isReplayMode = false;
+let replayDisplays = [];
+let replayIndex = 0;
+let replayTimer = null;
+let isReplayPlaying = false;
+
 // --- Game Logic & Server Communication ---
 socket.on('init', (data) => { userId = data.user_id; });
 
 socket.on('game_started', (data) => {
-    // --- DEBUG ---
-    console.log("--- [EVENT] game_started ---");
-    console.log("Received state object:", data.state);
-    // --- END DEBUG ---
-
     currentGameId = data.game_id;
     gameOver = false;
 
-    // --- 修改开始: 使用 Phaser 的官方方法获取场景 ---
     const scene = phaserGame.scene.getScene('TankScene');
     if (scene && typeof scene.updateFromState === 'function') {
-        console.log("Calling scene.updateFromState...");
-        // console.log(data.state.initdata);
         scene.updateFromState(data.state);
     } else {
         console.error("TankScene or its updateFromState method is not available!");
     }
-    // --- 修改结束 ---
-
-    // hidePhaserMask(); // --- Temporarily disabled
 });
 
 socket.on('update', (data) => {
-    if (!currentGameId || data.game_id !== currentGameId) {
-        console.log(`Ignoring update for irrelevant game: ${data.game_id}`);
-        return;
+    if (typeof IS_MATCH_PAGE !== 'undefined' && IS_MATCH_PAGE) {
+        if (data.match_id && data.match_id !== MATCH_ID) return;
+    } else {
+        if (!currentGameId || data.game_id !== currentGameId) {
+            console.log(`Ignoring update for irrelevant game: ${data.game_id}`);
+            return;
+        }
     }
-    // --- 修改开始: 使用 Phaser 的官方方法获取场景 ---
     const scene = phaserGame.scene.getScene('TankScene');
     if (scene && typeof scene.updateFromState === 'function') {
         scene.updateFromState(data.state);
     }
-    // --- 修改结束 ---
-    
-    if (data.winner) {
-        let msg = data.winner === 'draw' ? 'Draw!' : `${data.winner.charAt(0).toUpperCase() + data.winner.slice(1)} player wins!`;
-        // showPhaserMask(msg); // --- Temporarily disabled
-        gameOver = true;
+});
+
+socket.on('finish', (data) => {
+    if (typeof IS_MATCH_PAGE !== 'undefined' && IS_MATCH_PAGE) {
+        if (data.match_id && data.match_id !== MATCH_ID) return;
+    } else {
+        if (!currentGameId || data.game_id !== currentGameId) return;
+    }
+    gameOver = true;
+    let winner = data.winner;
+    if (winner == 0) {
+        showPhaserMask('Blue wins!');
+    } else if (winner == 1) {
+        showPhaserMask('Red wins!');
+    } else {
+        showPhaserMask('Draw!');
     }
 });
+
+socket.on('match_status', (data) => {
+    if (typeof IS_MATCH_PAGE === 'undefined' || !IS_MATCH_PAGE) return;
+    if (data.match_id !== MATCH_ID) return;
+
+    if (data.status === 'playing') {
+        isSpectator = true;
+        currentGameId = data.game_id;
+        gameOver = false;
+        hidePhaserMask();
+        document.getElementById('spectatorBadge').style.display = 'block';
+        if (data.latest_display) {
+            const scene = phaserGame.scene.getScene('TankScene');
+            if (scene) scene.updateFromState(data.latest_display);
+        }
+    } else if (data.status === 'finished') {
+        startReplay(data.displays || [], data.winner);
+    } else if (data.status === 'not_started') {
+        autoStartMatch(data.players);
+    }
+});
+
+socket.on('match_finished', (data) => {
+    if (typeof IS_MATCH_PAGE === 'undefined' || !IS_MATCH_PAGE) return;
+    if (data.match_id !== MATCH_ID) return;
+    isSpectator = false;
+    document.getElementById('spectatorBadge').style.display = 'none';
+    startReplay(data.displays || [], data.winner);
+});
+
+// --- Match Page: Auto Start ---
+function autoStartMatch(playersJson) {
+    let players = [];
+    try {
+        const parsed = typeof playersJson === 'string' ? JSON.parse(playersJson) : playersJson;
+        if (parsed && typeof parsed === 'object') {
+            if (parsed.player_1) {
+                players = [{ name: parsed.player_1 }, { name: parsed.player_2 }];
+            } else if (Array.isArray(parsed)) {
+                players = parsed;
+            }
+        }
+    } catch (e) {
+        console.error('Failed to parse match players:', e);
+        return;
+    }
+    if (players.length < 2) return;
+
+    socket.emit('new_game', {
+        user_id: userId,
+        p1_bot_id: players[0].botId || null,
+        p2_bot_id: players[1].botId || null,
+        p1_is_human: players[0].type !== 'bot',
+        p2_is_human: players[1].type !== 'bot',
+        match_id: MATCH_ID,
+        game_name: (typeof MATCH_GAME_NAME !== 'undefined' && MATCH_GAME_NAME) ? MATCH_GAME_NAME : 'Tank Battle'
+    });
+}
+
+// --- Replay ---
+function startReplay(displays, winner) {
+    isReplayMode = true;
+    replayDisplays = displays;
+    replayIndex = 0;
+
+    const controls = document.getElementById('replayControls');
+    if (controls) controls.style.display = 'flex';
+
+    const slider = document.getElementById('replaySlider');
+    if (slider) {
+        slider.max = Math.max(0, displays.length - 1);
+        slider.value = 0;
+    }
+
+    updateReplayDisplay();
+    updateReplayButtons();
+
+    let msg = winner == 0 ? 'Blue wins!' : (winner == 1 ? 'Red wins!' : 'Draw!');
+    const statusEl = document.getElementById('replayStatus');
+    if (statusEl) statusEl.textContent = msg + ' (' + Math.max(0, displays.length - 1) + ' turns)';
+
+    startReplayPlay();
+}
+
+function updateReplayDisplay() {
+    if (!replayDisplays.length) return;
+    const scene = phaserGame.scene.getScene('TankScene');
+    if (!scene) return;
+
+    scene.updateFromState(JSON.parse(JSON.stringify(replayDisplays[0])));
+    for (let i = 1; i <= replayIndex; i++) {
+        const display = replayDisplays[i];
+        if (display && display['0'] !== undefined && display['1'] !== undefined) {
+            scene.updateFromState(display);
+        }
+    }
+
+    const counter = document.getElementById('turnCounter2');
+    if (counter) counter.textContent = replayIndex + ' / ' + Math.max(0, replayDisplays.length - 1);
+    const slider = document.getElementById('replaySlider');
+    if (slider) slider.value = replayIndex;
+}
+
+function updateReplayButtons() {
+    const maxIdx = Math.max(0, replayDisplays.length - 1);
+    document.getElementById('btnFirst').disabled = replayIndex <= 0;
+    document.getElementById('btnPrev').disabled = replayIndex <= 0;
+    document.getElementById('btnNext').disabled = replayIndex >= maxIdx;
+    document.getElementById('btnLast').disabled = replayIndex >= maxIdx;
+}
+
+function replayStep(delta) {
+    const maxIdx = Math.max(0, replayDisplays.length - 1);
+    replayIndex = Math.max(0, Math.min(maxIdx, replayIndex + delta));
+    updateReplayDisplay();
+    updateReplayButtons();
+}
+
+function replayGoto(index) {
+    const maxIdx = Math.max(0, replayDisplays.length - 1);
+    replayIndex = Math.max(0, Math.min(maxIdx, index));
+    updateReplayDisplay();
+    updateReplayButtons();
+}
+
+function toggleReplayPlay() {
+    if (isReplayPlaying) {
+        stopReplayPlay();
+    } else {
+        startReplayPlay();
+    }
+}
+
+function startReplayPlay() {
+    const maxIdx = Math.max(0, replayDisplays.length - 1);
+    if (replayIndex >= maxIdx) {
+        replayIndex = 0;
+        updateReplayDisplay();
+        updateReplayButtons();
+    }
+    isReplayPlaying = true;
+    const btn = document.getElementById('btnPlayPause');
+    if (btn) btn.innerHTML = '&#9646;&#9646;';
+    replayTimer = setInterval(() => {
+        if (replayIndex >= maxIdx) {
+            stopReplayPlay();
+            return;
+        }
+        replayStep(1);
+    }, 400);
+}
+
+function stopReplayPlay() {
+    isReplayPlaying = false;
+    const btn = document.getElementById('btnPlayPause');
+    if (btn) btn.innerHTML = '&#9654;';
+    if (replayTimer) {
+        clearInterval(replayTimer);
+        replayTimer = null;
+    }
+}
+
+function showMatchPlayerNames() {
+    let players = [];
+    try {
+        const raw = (typeof MATCH_PLAYERS !== 'undefined') ? MATCH_PLAYERS : null;
+        if (!raw) return;
+        const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+        if (parsed && typeof parsed === 'object') {
+            if (parsed.player_1) {
+                players = [{ name: parsed.player_1 }, { name: parsed.player_2 }];
+            } else if (Array.isArray(parsed)) {
+                players = parsed;
+            }
+        }
+    } catch (e) {
+        console.error('Failed to parse match players:', e);
+        return;
+    }
+    if (players.length < 2) return;
+
+    const topEl = document.getElementById('bluePlayerName');
+    const bottomEl = document.getElementById('redPlayerName');
+    if (topEl) topEl.textContent = players[0].name || 'Top Player';
+    if (bottomEl) bottomEl.textContent = players[1].name || 'Bottom Player';
+}
 
 function newGame() {
   if (!userId) {
     alert("Not connected to server yet.");
     return;
   }
-  // showPhaserMask("Starting new game..."); // --- Temporarily disabled
-
-  // const topIsHuman = document.getElementById('top-is-human').checked;
-  // const bottomIsHuman = document.getElementById('bottom-is-human').checked;
 
   const topPlayerId = document.getElementById('aiSelectTop').value;
   const bottomPlayerId = document.getElementById('aiSelectBottom').value;
@@ -196,53 +418,63 @@ window.addEventListener('resize', () => {
   CANVAS_SIZE = getCanvasSize();
   if (phaserGame) {
     phaserGame.scale.resize(CANVAS_SIZE, CANVAS_SIZE);
-    // if (maskRect || maskText) { // --- Temporarily disabled
-    //   let msg = maskText ? maskText.text : "Waiting for new game...";
-    //   showPhaserMask(msg);
-    // }
   }
 });
 
 document.addEventListener('DOMContentLoaded', () => {
-    // Attach event listener for the new game button
-    document.getElementById('newGameBtn').addEventListener('click', newGame);
-
-    // Logic for human checkboxes (Temporarily disabled)
-    /*
-    const topCheckbox = document.getElementById('top-is-human');
-    const topSelect = document.getElementById('aiSelectTop');
-    topCheckbox.addEventListener('change', () => {
-        topSelect.disabled = topCheckbox.checked;
-        topSelect.classList.toggle('bg-gray-200', topCheckbox.checked);
-        topSelect.classList.toggle('cursor-not-allowed', topCheckbox.checked);
-    });
-
-    const bottomCheckbox = document.getElementById('bottom-is-human');
-    const bottomSelect = document.getElementById('aiSelectBottom');
-    bottomCheckbox.addEventListener('change', () => {
-        bottomSelect.disabled = bottomCheckbox.checked;
-        bottomSelect.classList.toggle('bg-gray-200', bottomCheckbox.checked);
-        bottomSelect.classList.toggle('cursor-not-allowed', bottomCheckbox.checked);
-    });
-    */
-
     // --- PHASER INITIALIZATION ---
     const config = {
         type: Phaser.AUTO,
         width: CANVAS_SIZE,
         height: CANVAS_SIZE,
         parent: 'phaser-container',
-        // 直接使用我们从 tank2.js 加载的场景类
         scene: [TankScene]
     };
     phaserGame = new Phaser.Game(config);
 
-    // Wait a brief moment for the scene to be ready, then show the initial mask.
-    // setTimeout(() => { // --- Temporarily disabled
-    //     if (window.showPhaserMask) {
-    //         showPhaserMask("Select players and start a new game.");
-    //     }
-    // }, 100);
+    // Match page vs normal page setup
+    if (typeof IS_MATCH_PAGE !== 'undefined' && IS_MATCH_PAGE) {
+        setupMatchPage();
+    } else {
+        setupNormalPage();
+    }
 });
+
+function setupNormalPage() {
+    const newGameBtn = document.getElementById('newGameBtn');
+    if (newGameBtn) {
+        newGameBtn.addEventListener('click', newGame);
+    }
+}
+
+function setupMatchPage() {
+    // Wire replay controls
+    const btnFirst = document.getElementById('btnFirst');
+    const btnPrev = document.getElementById('btnPrev');
+    const btnPlayPause = document.getElementById('btnPlayPause');
+    const btnNext = document.getElementById('btnNext');
+    const btnLast = document.getElementById('btnLast');
+    const replaySlider = document.getElementById('replaySlider');
+
+    if (btnFirst) btnFirst.addEventListener('click', () => { stopReplayPlay(); replayGoto(0); });
+    if (btnPrev) btnPrev.addEventListener('click', () => { stopReplayPlay(); replayStep(-1); });
+    if (btnPlayPause) btnPlayPause.addEventListener('click', toggleReplayPlay);
+    if (btnNext) btnNext.addEventListener('click', () => { stopReplayPlay(); replayStep(1); });
+    if (btnLast) btnLast.addEventListener('click', () => { stopReplayPlay(); replayGoto(Math.max(0, replayDisplays.length - 1)); });
+    if (replaySlider) replaySlider.addEventListener('input', (e) => { stopReplayPlay(); replayGoto(parseInt(e.target.value)); });
+
+    // Show player names
+    showMatchPlayerNames();
+
+    // Join match room after socket connects
+    const waitForSocket = () => {
+        if (socket.connected && userId) {
+            socket.emit('join_match', { match_id: MATCH_ID });
+        } else {
+            setTimeout(waitForSocket, 100);
+        }
+    };
+    waitForSocket();
+}
 </script>
 {% endblock %}

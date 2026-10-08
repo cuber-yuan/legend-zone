@@ -58,39 +58,50 @@ class CodeExecutor:
     def _run_cpp(self, code_to_run: str, input_json: str) -> str:
         compiler = cpp_compiler.CppCompiler()
         exec_path = compiler.compile(code_to_run)
-        
-        sandbox_dir = os.path.dirname(exec_path)
-        env = self._get_sandbox_env()
 
-        try:
-            result = subprocess.run(
-                [exec_path],
-                input=input_json.encode(),
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                timeout=10,
-                cwd=sandbox_dir,
-                env=env
-            )
+        # Copy to temp location to avoid Windows file locking issues
+        with tempfile.TemporaryDirectory() as sandbox_dir:
+            temp_exec = os.path.join(sandbox_dir, os.path.basename(exec_path))
+            shutil.copy2(exec_path, temp_exec)
 
-            if result.returncode != 0:
-                raise RuntimeError(f"C++ runtime error: {result.stderr.decode()}")
+            env = self._get_sandbox_env()
 
-            return result.stdout.decode()
-        except subprocess.TimeoutExpired:
-            raise RuntimeError("C++ execution timed out")
-        finally:
-            if os.path.exists(exec_path):
-                os.remove(exec_path)
+            try:
+                result = subprocess.run(
+                    [temp_exec],
+                    input=input_json.encode(),
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    timeout=10,
+                    cwd=sandbox_dir,
+                    env=env
+                )
+
+                if result.returncode != 0:
+                    raise RuntimeError(f"C++ runtime error: {result.stderr.decode()}")
+
+                return result.stdout.decode()
+            except subprocess.TimeoutExpired:
+                raise RuntimeError("C++ execution timed out")
 
     def _get_sandbox_env(self) -> dict:
-        """Create a restricted environment for sandboxed execution."""
-        env = {
-            'PATH': os.environ.get('PATH', ''),
-            'PYTHONPATH': '',
-            'HOME': tempfile.gettempdir(),
-            'USERPROFILE': tempfile.gettempdir(),
-        }
+        """Create a restricted environment for sandboxed execution.
+
+        Start from a clean copy of the parent environment so that installed
+        third-party packages (e.g. numpy) remain importable, then override the
+        entries that should be isolated. Setting PYTHONPATH to an empty string
+        would hide the site-packages directory and break `import numpy` and
+        friends, so it is deliberately left untouched here.
+        """
+        env = dict(os.environ)
+        env['PATH'] = os.environ.get('PATH', '')
+        env['HOME'] = tempfile.gettempdir()
+        env['USERPROFILE'] = tempfile.gettempdir()
+        # Force UTF-8 for the child Python's stdin/stdout/stderr so that bots
+        # running on Windows (where the default codec is GBK/cp936) still emit
+        # bytes that this server can decode. Without this, `print("中文")` and
+        # `print(json.dumps(..., ensure_ascii=False))` would crash the match.
+        env['PYTHONIOENCODING'] = 'utf-8'
         return env
 
 

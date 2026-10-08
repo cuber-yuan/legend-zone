@@ -31,8 +31,9 @@ class CppCompiler:
                 src_path = src_file.name
 
             base_dir = os.path.dirname(os.path.abspath(__file__))
+            judges_dir = os.path.join(os.path.dirname(base_dir), 'judges')
 
-            args = ['g++', '-std=c++17', src_path, f'-I{base_dir}', '-o', exe_path]
+            args = ['g++', '-std=c++17', src_path, f'-I{base_dir}', f'-I{judges_dir}', '-o', exe_path]
             if extra_args:
                 args.extend(extra_args)
 

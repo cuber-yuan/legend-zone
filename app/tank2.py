@@ -7,11 +7,12 @@ from flask_socketio import emit, join_room, disconnect
 from uuid import uuid4
 import os
 import json
+import concurrent.futures
 from .db import get_db_connection
 
 tank_bp = Blueprint('tank', __name__)
-sessions = {}  # { user_id: { 'sid': ..., 'game': ... } }
-
+sessions = {}
+active_matches = {}
 
 
 def _get_bot_executor(bot_id):
@@ -29,61 +30,16 @@ def _get_bot_executor(bot_id):
             conn.close()
     return None
 
+
 class TankGameSession:
-    def __init__(self, cpp_path, bot_top_code=None, bot_bottom_code=None):
+    def __init__(self, cpp_path):
         self.game_id = str(uuid4())
         self.cpp_judge = CppJudgeExecutor(cpp_path)
-        self.bot_top = CodeExecutor(code=bot_top_code) if bot_top_code else None
-        self.bot_bottom = CodeExecutor(code=bot_bottom_code) if bot_bottom_code else None
-        self.bot_top_type = 'bot' if bot_top_code else 'human'
-        self.bot_bottom_type = 'bot' if bot_bottom_code else 'human'
-        
-
-    def run_turn(self, judge_input_json):
-        if self.bot_top:
-            bot_input = self._make_bot_input(judge_input_json, side='top')
-            bot_output = self.bot_top.run(bot_input)
-            action = json.loads(bot_output)["response"]
-            # 补全responses最后一项
-            if len(judge_input_json["responses"]) < len(judge_input_json["requests"]) - 1:
-                judge_input_json["responses"].append(action)
-            else:
-                judge_input_json["responses"][-1] = action
-        if self.bot_bottom:
-            bot_input = self._make_bot_input(judge_input_json, side='bottom')
-            bot_output = self.bot_bottom.run(bot_input)
-            action = json.loads(bot_output)["response"]
-            # 补全requests最后一项
-            if len(judge_input_json["requests"]) < len(judge_input_json["responses"]) + 1:
-                judge_input_json["requests"].append(action)
-            else:
-                judge_input_json["requests"][-1] = action
-
-        # 2. 调用cpp裁判
-        judge_output = self.cpp_judge.run_raw_json(judge_input_json)
-        return judge_output
-
-    def _make_bot_input(self, judge_input_json, side):
-        # 生成bot输入格式，兼容bot协议
-        # side: 'top' or 'bottom'
-        side_idx = 0 if side == 'top' else 1
-        opponent = 'bottom' if side == 'top' else 'top'
-        # 取地图
-        map_obj = judge_input_json["requests"][0].copy()
-        map_obj["mySide"] = side_idx
-        # 取历史
-        my_history = judge_input_json["responses"]
-        opponent_history = judge_input_json["requests"][1:]
-        return json.dumps({
-            "requests": [map_obj] + opponent_history,
-            "responses": my_history
-        })
 
     def terminate(self):
-        if self.bot_top: self.bot_top.cleanup()
-        if self.bot_bottom: self.bot_bottom.cleanup()
+        pass
 
-# --- SocketIO事件注册 ---
+
 def register_tank_events(socketio):
     @socketio.on('connect', namespace='/tank2')
     def handle_connect():
@@ -95,124 +51,244 @@ def register_tank_events(socketio):
         join_room(request.sid)
         emit('init', {'user_id': user_id})
 
+    @socketio.on('join_match', namespace='/tank2')
+    def handle_join_match(data):
+        match_id = data.get('match_id')
+        if not match_id:
+            return
+        join_room(match_id)
+        print(f'{request.sid} joined tank match room {match_id}')
+
+        if match_id in active_matches:
+            match_info = active_matches[match_id]
+            emit('match_status', {
+                'match_id': match_id,
+                'status': 'playing',
+                'game_id': match_info['game_id'],
+                'latest_display': match_info.get('latest_display'),
+            }, room=request.sid)
+        else:
+            conn = None
+            try:
+                conn = get_db_connection()
+                with conn.cursor() as cursor:
+                    cursor.execute("SELECT status, displays, winner, players FROM matches WHERE id = ?", (match_id,))
+                    match = cursor.fetchone()
+                if match and match['status'] == 'finished':
+                    displays = json.loads(match['displays']) if match['displays'] else []
+                    emit('match_status', {
+                        'match_id': match_id,
+                        'status': 'finished',
+                        'winner': match['winner'],
+                        'displays': displays,
+                    }, room=request.sid)
+                elif match and match['status'] == 'playing':
+                    emit('match_status', {
+                        'match_id': match_id,
+                        'status': 'not_started',
+                        'players': match['players'],
+                    }, room=request.sid)
+            except Exception as e:
+                print("Error loading tank match status:", e)
+            finally:
+                if conn:
+                    conn.close()
+
     @socketio.on('new_game', namespace='/tank2')
     def new_game(data):
         user_id = data['user_id']
-        bot_top_code = data.get('bot_top_code')
-        bot_bottom_code = data.get('bot_bottom_code')
-        cpp_path = os.path.join(os.path.dirname(__file__), '../judges/tank_judge.exe')
-        game = TankGameSession(cpp_path, bot_top_code, bot_bottom_code)
-        sessions[user_id] = {'sid': request.sid, 'game': game}
+        if user_id in sessions:
+            sessions[user_id]['terminated'] = True
 
-        # Get player selections from the frontend.
-        # Assumes frontend sends 'top_player_id' and 'bottom_player_id'
-        # where the value is 'human' or a bot ID string.
-        player_1_id = data.get('top_player_id')
-        player_2_id = data.get('bottom_player_id')
+        match_id = data.get('match_id')
 
-        player_1_type = 'human' if player_1_id == 'human' else 'bot'
-        player_2_type = 'human' if player_2_id == 'human' else 'bot'
+        cpp_path = os.path.join(os.path.dirname(__file__), '../judges/tank2_judge.exe')
+        game = TankGameSession(cpp_path)
+        sid = request.sid
 
-        top_executor = _get_bot_executor(player_1_id) if player_1_type == 'bot' else None
-        bot_executor = _get_bot_executor(player_2_id) if player_2_type == 'bot' else None
+        player_1_id_str = data.get('top_player_id') or data.get('p1_bot_id')
+        player_2_id_str = data.get('bottom_player_id') or data.get('p2_bot_id')
+        player_1_type = 'human' if data.get('top_is_human') or data.get('p1_is_human') else 'bot'
+        player_2_type = 'human' if data.get('bottom_is_human') or data.get('p2_is_human') else 'bot'
 
-        game_state_dict = game.cpp_judge.run_raw_json({});
-        print(game_state_dict);
-        maxTurn = game_state_dict['initdata']['maxTurn']
-        judge_input_dict = {'log':[], 'initdata': game_state_dict['initdata']}
+        executor_1 = _get_bot_executor(player_1_id_str) if player_1_type == 'bot' else None
+        executor_2 = _get_bot_executor(player_2_id_str) if player_2_type == 'bot' else None
 
-        input_dict_1 = { "requests": [game_state_dict['content']['0']], "responses": [] }
-        input_dict_2 = { "requests": [game_state_dict['content']['1']], "responses": [] }
+        sessions[user_id] = {'sid': sid, 'match_id': match_id, 'game': game}
 
-        user_session = sessions.get(user_id)
-        sid = user_session['sid']
-        displays = []
-        emit('game_started', {
-            'state': game_state_dict['display'],
-            'game_id': game.game_id
-        }, room=sid)
-        displays.append(game_state_dict['display'])
+        broadcast_target = match_id if match_id else sid
 
-        for turn in range(maxTurn):
-            # time.sleep(1)
-            # print('this send to frontend', game_state_dict['display'])
-
-            input_str_1 = json.dumps(input_dict_1)
-            input_str_2 = json.dumps(input_dict_2)
-            # print(f"========== Turn {turn + 1} Input ==========\n {top_input_str}\n {bot_input_str}")
-
-            top_output = top_executor.run(input_str_1)
-            bot_output = bot_executor.run(input_str_2)
-            # print(f"========== Turn {turn + 1} Output ==========\n {top_output}\n {bot_output}")
-            
-            # 构造裁判输入
-            judge_input_dict['log'].append({}) # 奇数个元素留空
-            judge_input_dict['log'].append({"0": json.loads(top_output), "1": json.loads(bot_output)})
-            game_state_dict = game.cpp_judge.run_raw_json(judge_input_dict)
-            displays.append(game_state_dict['display'])
-            response = {
-                'state': game_state_dict['display'],
-                'game_id': game.game_id
+        if match_id:
+            active_matches[match_id] = {
+                'game': game,
+                'game_id': game.game_id,
+                'player_1_id': player_1_id_str,
+                'player_2_id': player_2_id_str,
+                'player_1_type': player_1_type,
+                'player_2_type': player_2_type,
+                'latest_display': None,
             }
-            emit('update', response, room=sid)
 
-            if game_state_dict['command'] == 'finish':
-                # print(game_state_dict)
-                winner = -2  # TODO: Determine winner from game_state_dict
-                # --- Insert match record into database ---
+        print(f"Starting tank game {game.game_id} (match={match_id}): "
+              f"{player_1_id_str} ({player_1_type}) vs {player_2_id_str} ({player_2_type})")
+
+        try:
+            game_state_dict = game.cpp_judge.run_raw_json({})
+
+            maxTurn = game_state_dict['initdata']['maxTurn']
+            judge_input_dict = {'log': [], 'initdata': game_state_dict['initdata']}
+            input_dict_1 = {"requests": [game_state_dict['content']['0']], "responses": []}
+            input_dict_2 = {"requests": [game_state_dict['content']['1']], "responses": []}
+
+            displays = []
+
+            emit('game_started', {
+                'state': game_state_dict['display'],
+                'game_id': game.game_id,
+                'match_id': match_id,
+            }, room=broadcast_target)
+            displays.append(game_state_dict['display'])
+
+            if match_id and match_id in active_matches:
+                active_matches[match_id]['latest_display'] = game_state_dict['display']
+
+            winner = None
+            for turn in range(maxTurn):
+                if user_id not in sessions or sessions[user_id].get('sid') != sid:
+                    print(f"User {user_id} disconnected, terminating tank game loop.")
+                    break
+
+                input_str_1 = json.dumps(input_dict_1)
+                input_str_2 = json.dumps(input_dict_2)
+
+                def get_output_1():
+                    if player_1_type == 'human':
+                        while 'pending_move' not in sessions[user_id]:
+                            if user_id not in sessions or sessions[user_id].get('sid') != sid:
+                                break
+                            socketio.sleep(0.05)
+                        return json.dumps(sessions[user_id].pop('pending_move'))
+                    else:
+                        return executor_1.run(input_str_1)
+
+                def get_output_2():
+                    if player_2_type == 'human':
+                        while 'pending_move' not in sessions[user_id]:
+                            if user_id not in sessions or sessions[user_id].get('sid') != sid:
+                                break
+                            socketio.sleep(0.05)
+                        return json.dumps(sessions[user_id].pop('pending_move'))
+                    else:
+                        return executor_2.run(input_str_2)
+
+                try:
+                    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
+                        future1 = pool.submit(get_output_1)
+                        future2 = pool.submit(get_output_2)
+                        output_1 = future1.result()
+                        output_2 = future2.result()
+                except Exception as e:
+                    print(f"Bot execution error on turn {turn + 1}: {e}")
+                    p1_failed = future1.done() and future1.exception() is not None
+                    p2_failed = future2.done() and future2.exception() is not None
+                    if p1_failed and p2_failed:
+                        winner = -1
+                    elif p1_failed:
+                        winner = 1
+                    else:
+                        winner = 0
+                    break
+
+                judge_input_dict['log'].append({})
+                judge_input_dict['log'].append({"0": json.loads(output_1), "1": json.loads(output_2)})
+                game_state_dict = game.cpp_judge.run_raw_json(judge_input_dict)
+                displays.append(game_state_dict['display'])
+
+                response = {
+                    'state': game_state_dict['display'],
+                    'game_id': game.game_id,
+                    'match_id': match_id,
+                }
+                emit('update', response, room=broadcast_target)
+
+                if match_id and match_id in active_matches:
+                    active_matches[match_id]['latest_display'] = game_state_dict['display']
+
+                if game_state_dict['command'] == 'finish':
+                    content = game_state_dict.get('content', {})
+                    result_0 = content.get('0', 1)
+                    result_1 = content.get('1', 1)
+                    if result_0 == 2:
+                        winner = 0
+                    elif result_1 == 2:
+                        winner = 1
+                    else:
+                        winner = -1
+                    break
+
+                input_dict_1['requests'].append(json.loads(output_2)['response'])
+                input_dict_1['responses'].append(json.loads(output_1)['response'])
+                input_dict_2['requests'].append(json.loads(output_1)['response'])
+                input_dict_2['responses'].append(json.loads(output_2)['response'])
+
+            if winner is not None:
+                emit('finish', {
+                    'winner': winner,
+                    'game_id': game.game_id,
+                    'match_id': match_id,
+                }, room=broadcast_target)
+
+                conn = None
                 try:
                     conn = get_db_connection()
-                    # 查 bots 表获取用户名
                     with conn.cursor() as cursor:
-                        cursor.execute("SELECT bot_name FROM bots WHERE id = ?", (player_1_id,))
-                        row1 = cursor.fetchone()
-                        username_1 = row1['bot_name'] if row1 else str(player_1_id)
-                        if player_1_type == 'human':
-                            username_1 = '<i>HUMAN</i>'
-                        cursor.execute("SELECT bot_name FROM bots WHERE id = ?", (player_2_id,))
-                        row2 = cursor.fetchone()
-                        username_2 = row2['bot_name'] if row2 else str(player_2_id)
-                        if player_2_type == 'human':
-                            username_2 = '<i>HUMAN</i>'
+                        username_1 = '<i>HUMAN</i>'
+                        if player_1_type == 'bot' and player_1_id_str:
+                            cursor.execute("SELECT bot_name FROM bots WHERE id = ?", (player_1_id_str,))
+                            row1 = cursor.fetchone()
+                            if row1:
+                                username_1 = row1['bot_name']
+
+                        username_2 = '<i>HUMAN</i>'
+                        if player_2_type == 'bot' and player_2_id_str:
+                            cursor.execute("SELECT bot_name FROM bots WHERE id = ?", (player_2_id_str,))
+                            row2 = cursor.fetchone()
+                            if row2:
+                                username_2 = row2['bot_name']
+
                     players = json.dumps({'player_1': username_1, 'player_2': username_2})
+
                     with conn.cursor() as cursor:
-                        sql = """
-                            INSERT INTO matches (id, game, players, winner, displays)
-                            VALUES (?, ?, ?, ?, ?)
-                        """
-                        cursor.execute(sql, (
-                            uuid4().hex,
-                            'Tank Battle',
-                            players,
-                            winner,
-                            json.dumps(displays)
-                        ))
+                        if match_id:
+                            cursor.execute("""
+                                UPDATE matches SET players = ?, winner = ?, displays = ?, status = 'finished'
+                                WHERE id = ?
+                            """, (players, winner, json.dumps(displays), match_id))
+                        else:
+                            cursor.execute("""
+                                INSERT INTO matches (id, game, players, winner, displays, status)
+                                VALUES (?, ?, ?, ?, ?, 'finished')
+                            """, (uuid4().hex, 'Tank Battle', players, winner, json.dumps(displays)))
                         conn.commit()
                 except Exception as e:
-                    print("Failed to insert match record:", e)
+                    print("Failed to save tank match record:", e)
                 finally:
                     if conn:
                         conn.close()
-                # --- End DB insert ---
-                print("Game finished by judge.")
-                break
-            input_dict_1['requests'].append(json.loads(bot_output)['response'])
-            input_dict_1['responses'].append(json.loads(top_output)['response'])
-            input_dict_2['requests'].append(json.loads(top_output)['response'])
-            input_dict_2['responses'].append(json.loads(bot_output)['response'])
 
-            
-            
+                if match_id:
+                    socketio.emit('match_finished', {
+                        'match_id': match_id,
+                        'winner': winner,
+                        'displays': displays,
+                    }, room=match_id)
 
-    @socketio.on('player_move', namespace='/tank2')
-    def handle_player_move(data):
-        user_id = data.get('user_id')
-        judge_input_json = data.get('judge_input_json')
-        if not user_id or not judge_input_json: return
-        game = sessions.get(user_id, {}).get('game')
-        if not game: return
-        judge_output = game.run_turn(judge_input_json)
-        emit('update', judge_output, room=sessions[user_id]['sid'])
+                print(f"Tank game finished (match={match_id}). Winner: {winner}")
+
+        finally:
+            if match_id:
+                active_matches.pop(match_id, None)
+            game.terminate()
 
     @socketio.on('disconnect', namespace='/tank2')
     def handle_disconnect():
@@ -225,3 +301,15 @@ def register_tank_events(socketio):
                 break
         if user_id_to_del:
             del sessions[user_id_to_del]
+
+    @socketio.on('player_move', namespace='/tank2')
+    def handle_player_move(data):
+        user_id = data.get('user_id')
+        game_id = data.get('game_id')
+        user_session = sessions.get(user_id)
+
+        if not user_id or not game_id or not user_session:
+            return
+
+        move = json.loads(data.get('move'))
+        sessions[user_id]['pending_move'] = move
