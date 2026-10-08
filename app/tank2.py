@@ -9,6 +9,7 @@ import os
 import json
 import concurrent.futures
 from .db import get_db_connection
+from .services.rating_service import update_bot_ratings
 
 tank_bp = Blueprint('tank', __name__)
 sessions = {}
@@ -313,3 +314,119 @@ def register_tank_events(socketio):
 
         move = json.loads(data.get('move'))
         sessions[user_id]['pending_move'] = move
+
+
+def run_auto_tank_match(player_1_id, player_2_id):
+    """
+    自动（AI vs AI）Tank Battle 对战。由 battle_worker 后台调用。
+    与 register_tank_events 里的对战循环同构，但：
+      - 不依赖 socket/human
+      - 创建 matches 记录并在结束后写回 winner / displays
+      - 调用 update_bot_ratings 更新 ELO
+    winner 语义：0=Top Player 胜, 1=Bottom Player 胜, -1=平局
+    """
+    print(f"Running auto Tank match: {player_1_id} (Top) vs {player_2_id} (Bottom)")
+
+    executor_1 = _get_bot_executor(str(player_1_id))
+    executor_2 = _get_bot_executor(str(player_2_id))
+    if not executor_1 or not executor_2:
+        print("Error: Failed to load both bot executors for auto Tank match.")
+        return
+
+    match_id = uuid4().hex
+
+    # 1) 创建 matches 记录
+    conn = None
+    try:
+        conn = get_db_connection()
+        with conn.cursor() as cursor:
+            cursor.execute("SELECT bot_name FROM bots WHERE id = ?", (player_1_id,))
+            name1 = cursor.fetchone()['bot_name']
+            cursor.execute("SELECT bot_name FROM bots WHERE id = ?", (player_2_id,))
+            name2 = cursor.fetchone()['bot_name']
+            players = json.dumps({'player_1': name1, 'player_2': name2})
+            cursor.execute(
+                "INSERT INTO matches (id, game, players, status) VALUES (?, ?, ?, 'playing')",
+                (match_id, 'Tank Battle', players),
+            )
+            conn.commit()
+    except Exception as e:
+        print("Failed to create auto Tank match record:", e)
+        if conn:
+            conn.close()
+        executor_1.cleanup()
+        executor_2.cleanup()
+        return
+    finally:
+        if conn:
+            conn.close()
+
+    # 2) 跑对战
+    cpp_path = os.path.join(os.path.dirname(__file__), '../judges/tank2_judge.exe')
+    cpp_judge = CppJudgeExecutor(cpp_path)
+
+    displays = []
+    winner = -1
+    try:
+        game_state_dict = cpp_judge.run_raw_json({})
+        max_turn = game_state_dict['initdata']['maxTurn']
+        judge_input = {'log': [], 'initdata': game_state_dict['initdata']}
+        input_1 = {"requests": [game_state_dict['content']['0']], "responses": []}
+        input_2 = {"requests": [game_state_dict['content']['1']], "responses": []}
+        displays.append(game_state_dict['display'])
+
+        for _ in range(max_turn):
+            out1 = executor_1.run(json.dumps(input_1))
+            out2 = executor_2.run(json.dumps(input_2))
+            judge_input['log'].append({})
+            judge_input['log'].append({"0": json.loads(out1), "1": json.loads(out2)})
+            game_state_dict = cpp_judge.run_raw_json(judge_input)
+            displays.append(game_state_dict['display'])
+
+            if game_state_dict['command'] == 'finish':
+                # Tank2 规则：content["0"] / content["1"] 是 1/2，2 表示该方失败
+                content = game_state_dict.get('content', {})
+                result_0 = content.get('0', 1)
+                result_1 = content.get('1', 1)
+                if result_0 == 2 and result_1 != 2:
+                    winner = 1  # 0 失败 → 1 胜
+                elif result_1 == 2 and result_0 != 2:
+                    winner = 0  # 1 失败 → 0 胜
+                else:
+                    winner = -1
+                break
+
+            r1 = json.loads(out1)['response']
+            r2 = json.loads(out2)['response']
+            input_1['requests'].append(r2)
+            input_1['responses'].append(r1)
+            input_2['requests'].append(r1)
+            input_2['responses'].append(r2)
+    except Exception as e:
+        print(f"Auto Tank match crashed: {e}")
+    finally:
+        executor_1.cleanup()
+        executor_2.cleanup()
+
+    # winner 标准化：0/1/-1
+    db_winner = winner if winner in (0, 1) else -1
+    elo_winner = winner if winner in (0, 1) else -1
+    update_bot_ratings(player_1_id, player_2_id, elo_winner)
+
+    # 3) 写回 matches
+    conn = None
+    try:
+        conn = get_db_connection()
+        with conn.cursor() as cursor:
+            cursor.execute("""
+                UPDATE matches SET winner = ?, displays = ?, status = 'finished'
+                WHERE id = ?
+            """, (db_winner, json.dumps(displays), match_id))
+            conn.commit()
+    except Exception as e:
+        print("Failed to update auto Tank match record:", e)
+    finally:
+        if conn:
+            conn.close()
+
+    print(f"Auto Tank match finished. Winner: {db_winner} (-1=draw, 0=Top, 1=Bottom)")

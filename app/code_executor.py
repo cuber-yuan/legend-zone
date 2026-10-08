@@ -14,6 +14,15 @@ class CodeExecutor:
         self.exec_file = None  # For C++
         self.path = path
 
+    def cleanup(self):
+        """释放 executor 占用的资源（缓存的 C++ 可执行文件、临时目录等）。
+
+        目前是占位：当前实现里 .run() 每次都在临时目录里 fork 子进程，
+        没有需要显式释放的句柄。后续若改为常驻 worker 进程，这里需要真正
+        实现 kill + 清理缓存。
+        """
+        pass
+
     def run(self, input_str: str) -> str:
         if self.language == 'python3':
             # If path is a .zip file, extract and run __main__.py

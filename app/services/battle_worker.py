@@ -4,6 +4,8 @@ import random
 import time
 
 from ..gomoku import run_auto_gomoku_match
+from ..snake import run_auto_snake_match
+from ..tank2 import run_auto_tank_match
 from .utils import get_db_connection
 
 
@@ -62,8 +64,14 @@ def select_bots_for_game(game_name):
 
 def schedule_all_games():
     """遍历所有游戏，并安排一场对战，供 APScheduler 调用。"""
-    games_to_run = ['Gomoku'] 
-    
+    games_to_run = ['Gomoku', 'Snake', 'Tank Battle']
+
+    auto_match_runners = {
+        'Gomoku': run_auto_gomoku_match,
+        'Snake': run_auto_snake_match,
+        'Tank Battle': run_auto_tank_match,
+    }
+
     for game in games_to_run:
         player_1_id, player_2_id = select_bots_for_game(game)
         if player_1_id is None or player_2_id is None:
@@ -71,9 +79,12 @@ def schedule_all_games():
         p1_id_int = int(player_1_id)
         p2_id_int = int(player_2_id)
         print(f"Scheduling match for {game} between Bot {player_1_id} and Bot {player_2_id}")
-        if game == 'Gomoku':
-            run_auto_gomoku_match(p1_id_int, p2_id_int)
-            
+        runner = auto_match_runners.get(game)
+        if runner is None:
+            print(f"No auto-match runner registered for {game}, skipping.")
+            continue
+        runner(p1_id_int, p2_id_int)
+
         time.sleep(1)
 
 # ... (在主应用启动文件 (app.py 或 __init__.py) 中设置 APScheduler 定期调用 schedule_all_games)

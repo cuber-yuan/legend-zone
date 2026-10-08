@@ -28,6 +28,9 @@ class TankScene extends Phaser.Scene {
         this.localTanks = [];
         this.localBases = [];
         this.turn = 1;
+
+        // 飞行中的子弹（用于切回合 / 重置时强制清理，避免残留）
+        this.activeBullets = [];
     }
 
     preload() {
@@ -63,6 +66,8 @@ class TankScene extends Phaser.Scene {
 
         // 初始化地图和本地状态（每次新游戏都要重置所有状态）
         if (state.brick && state.steel && state.water) {
+            // 新游戏：立刻清掉上一局的飞行中子弹，避免残留
+            this.clearAllBullets();
             this.mapDrawn = false; // 允许重新绘制地图
             this.drawMap(state.brick, state.water, state.steel);
             this.mapDrawn = true;
@@ -123,6 +128,10 @@ class TankScene extends Phaser.Scene {
 
     
     applyActions(actions0, actions1) {
+        // 切到下一回合：把上一回合没飞完的子弹立刻飞到终点并销毁，
+        // 这样本回合的子弹能在干净的画布上起飞，不会与旧子弹视觉叠加。
+        this.forceFinishAllBullets();
+
         // 坦克行动顺序：蓝0、蓝1、红0、红1
         const dx = [0, 1, 0, -1], dy = [-1, 0, 1, 0];
         const tanks = this.localTanks;
@@ -319,35 +328,86 @@ class TankScene extends Phaser.Scene {
 
     fireBullet(fromX, fromY, dir, toX, toY) {
         // dir: 0=上, 1=右, 2=下, 3=左
+        //
+        // 设计要点：
+        //  - 移动的是一个小方块（不是拉长的线段），后方跟一段固定长度的尾巴
+        //  - 同一回合所有子弹使用同一个固定 duration，add 到 tween 队列后
+        //    Phaser 会在同一时间轴上推进，因此所有子弹在同一刻同时到达终点
+        //  - 速度 = 距离 / duration：路径空 → 距离远 → 单位时间移动距离大 → 视觉上"快"；
+        //    路径短 / 被砖块挡 → 距离近 → 视觉上"慢"
         const startX = (fromX + 0.5) * this.CELL_SIZE;
         const startY = (fromY + 0.5) * this.CELL_SIZE;
         const endX = (toX + 0.5) * this.CELL_SIZE;
         const endY = (toY + 0.5) * this.CELL_SIZE;
-        const graphics = this.add.graphics();
-        // 设置一个较高的深度，确保子弹在所有地图元素之上
-        graphics.setDepth(10); 
-        graphics.lineStyle(this.CELL_SIZE * 0.2, 0xffff00, 1); // 黄色子弹
 
-        const duration = 200;
-        const bullet = { t: 0 };
-        this.tweens.add({
+        const cell = this.CELL_SIZE;
+        const bulletSize = cell * 0.28;
+        const trailLen = cell * 0.8; // 尾巴固定 0.8 格，不随距离拉长 → 没有"残留线"
+
+        // 子弹方块（黄）
+        const bullet = this.add.rectangle(startX, startY, bulletSize, bulletSize, 0xffeb3b);
+        bullet.setDepth(20);
+
+        // 尾巴 graphics（黄、半透明）
+        const trail = this.add.graphics();
+        trail.setDepth(19);
+        trail.lineStyle(bulletSize * 0.8, 0xffeb3b, 0.55);
+
+        // 方向单位向量（用于尾巴定位）
+        const ddx = endX - startX, ddy = endY - startY;
+        const dist = Math.hypot(ddx, ddy) || 1;
+        const ux = ddx / dist, uy = ddy / dist;
+
+        const BULLET_DURATION_MS = 200; // 同一回合所有子弹同步到达
+
+        const entry = { bullet, trail, tween: null };
+        this.activeBullets.push(entry);
+
+        entry.tween = this.tweens.add({
             targets: bullet,
-            t: 1,
-            duration: duration,
+            x: endX,
+            y: endY,
+            duration: BULLET_DURATION_MS,
+            ease: 'Linear',
             onUpdate: () => {
-                graphics.clear();
-                graphics.lineStyle(this.CELL_SIZE * 0.2, 0xffff00, 1);
-                graphics.beginPath();
-                graphics.moveTo(startX, startY);
-                graphics.lineTo(
-                    startX + (endX - startX) * bullet.t,
-                    startY + (endY - startY) * bullet.t
-                );
-                graphics.strokePath();
+                // 尾巴：从子弹位置往反方向延伸 trailLen
+                trail.clear();
+                trail.lineStyle(bulletSize * 0.8, 0xffeb3b, 0.55);
+                trail.beginPath();
+                trail.moveTo(bullet.x - ux * trailLen, bullet.y - uy * trailLen);
+                trail.lineTo(bullet.x, bullet.y);
+                trail.strokePath();
             },
             onComplete: () => {
-                graphics.destroy();
+                bullet.destroy();
+                trail.destroy();
+                const idx = this.activeBullets.indexOf(entry);
+                if (idx >= 0) this.activeBullets.splice(idx, 1);
             }
         });
+    }
+
+    forceFinishAllBullets() {
+        // 把所有飞行中的子弹立刻飞到终点并销毁（不等待 duration 走完）。
+        // 用于：切到下一回合、replay 跳步等场景，避免视觉叠加。
+        if (!this.activeBullets || this.activeBullets.length === 0) return;
+        // 拷贝，因为 tween.complete() 会触发 onComplete 修改 activeBullets
+        const list = this.activeBullets.slice();
+        for (const entry of list) {
+            if (entry.tween) entry.tween.complete();
+        }
+        // onComplete 已逐个 splice，但保险起见
+        this.activeBullets = [];
+    }
+
+    clearAllBullets() {
+        // 立即销毁所有飞行中的子弹，不等 tween 完成（用于新游戏 / 场景重置）。
+        if (!this.activeBullets) return;
+        for (const entry of this.activeBullets) {
+            if (entry.tween) entry.tween.remove();
+            if (entry.bullet && entry.bullet.scene) entry.bullet.destroy();
+            if (entry.trail && entry.trail.scene) entry.trail.destroy();
+        }
+        this.activeBullets = [];
     }
 }
