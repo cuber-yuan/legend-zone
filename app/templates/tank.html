@@ -109,6 +109,12 @@
       <button id="btnPlayPause" class="px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 text-sm">&#9654;</button>
       <button id="btnNext" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300 text-sm">&gt;</button>
       <button id="btnLast" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300 text-sm">&gt;|</button>
+      <select id="replaySpeed" class="px-2 py-1 border border-gray-300 rounded text-sm bg-white" title="Replay speed">
+        <option value="0.5">0.5x</option>
+        <option value="1" selected>1x</option>
+        <option value="2">2x</option>
+        <option value="4">4x</option>
+      </select>
       <input id="replaySlider" type="range" min="0" max="0" value="0" style="width:180px;">
       <span id="turnCounter2" class="text-sm text-gray-600">0 / 0</span>
       <span id="replayStatus" class="text-sm text-gray-600"></span>
@@ -353,13 +359,14 @@ function startReplayPlay() {
     isReplayPlaying = true;
     const btn = document.getElementById('btnPlayPause');
     if (btn) btn.innerHTML = '&#9646;&#9646;';
+    applyReplaySpeedToScene();
     replayTimer = setInterval(() => {
         if (replayIndex >= maxIdx) {
             stopReplayPlay();
             return;
         }
         replayStep(1);
-    }, 400);
+    }, getReplayInterval());
 }
 
 function stopReplayPlay() {
@@ -369,6 +376,24 @@ function stopReplayPlay() {
     if (replayTimer) {
         clearInterval(replayTimer);
         replayTimer = null;
+    }
+}
+
+// --- Replay Speed ---
+// 1x = 1 秒/回合（旧版固定 400ms，看起来太快）
+const REPLAY_BASE_INTERVAL_MS = 1000;
+let replaySpeed = 1;
+
+function getReplayInterval() {
+    return Math.max(150, Math.round(REPLAY_BASE_INTERVAL_MS / replaySpeed));
+}
+
+function applyReplaySpeedToScene() {
+    if (!phaserGame) return;
+    const scene = phaserGame.scene.getScene('TankScene');
+    if (scene && typeof scene.setBulletDuration === 'function') {
+        // 子弹飞行时长随回放速度伸缩：慢速看细节，快速不拖沓
+        scene.setBulletDuration(Math.min(500, Math.round(getReplayInterval() * 0.4)));
     }
 }
 
@@ -462,6 +487,20 @@ function setupMatchPage() {
     if (btnNext) btnNext.addEventListener('click', () => { stopReplayPlay(); replayStep(1); });
     if (btnLast) btnLast.addEventListener('click', () => { stopReplayPlay(); replayGoto(Math.max(0, replayDisplays.length - 1)); });
     if (replaySlider) replaySlider.addEventListener('input', (e) => { stopReplayPlay(); replayGoto(parseInt(e.target.value)); });
+
+    // 回放倍速切换：正在播放时重启定时器，暂停时只更新子弹时长
+    const replaySpeedSel = document.getElementById('replaySpeed');
+    if (replaySpeedSel) {
+        replaySpeedSel.addEventListener('change', (e) => {
+            replaySpeed = parseFloat(e.target.value) || 1;
+            if (isReplayPlaying) {
+                stopReplayPlay();
+                startReplayPlay();
+            } else {
+                applyReplaySpeedToScene();
+            }
+        });
+    }
 
     // Show player names
     showMatchPlayerNames();

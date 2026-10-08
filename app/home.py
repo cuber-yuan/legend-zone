@@ -31,6 +31,40 @@ def register_home_events(socketio):
                     for k, v in match.items():
                         if isinstance(v, datetime.datetime):
                             match[k] = v.strftime('%m-%d %H:%M')
+
+                # 收集所有玩家名，批量查每个 name 对应的最新 bot id
+                # （players JSON 字段里只存了名字，没存 id）
+                all_names = set()
+                for match in matches:
+                    try:
+                        p = json.loads(match['players']) if match['players'] else {}
+                    except (json.JSONDecodeError, TypeError):
+                        p = {}
+                    for name in p.values():
+                        if isinstance(name, str):
+                            all_names.add(name)
+
+                name_to_id = {}
+                if all_names:
+                    placeholders = ','.join('?' * len(all_names))
+                    params = list(all_names)
+                    # 拿每个 bot_name 的最新版本 id
+                    cursor.execute(f"""
+                        SELECT bot_name, id FROM bots
+                        WHERE bot_name IN ({placeholders})
+                          AND id IN (SELECT MAX(id) FROM bots WHERE bot_name IN ({placeholders}) GROUP BY bot_name)
+                    """, params + params)
+                    for row in cursor.fetchall():
+                        name_to_id[row['bot_name']] = row['id']
+
+                # 把 id 挂到每场 match 上（前端用 player_1_id / player_2_id 生成链接）
+                for match in matches:
+                    try:
+                        p = json.loads(match['players']) if match['players'] else {}
+                    except (json.JSONDecodeError, TypeError):
+                        p = {}
+                    match['player_1_id'] = name_to_id.get(p.get('player_1'))
+                    match['player_2_id'] = name_to_id.get(p.get('player_2'))
         except Exception as e:
             print("Failed to fetch matches:", e)
             matches = []

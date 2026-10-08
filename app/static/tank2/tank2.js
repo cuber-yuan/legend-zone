@@ -31,6 +31,10 @@ class TankScene extends Phaser.Scene {
 
         // 飞行中的子弹（用于切回合 / 重置时强制清理，避免残留）
         this.activeBullets = [];
+
+        // 子弹飞行时长（毫秒），同一回合所有子弹仍然同步到达。
+        // 回放时由 tank.html 按回放速度动态设置。
+        this.bulletDurationMs = 200;
     }
 
     preload() {
@@ -358,7 +362,9 @@ class TankScene extends Phaser.Scene {
         const dist = Math.hypot(ddx, ddy) || 1;
         const ux = ddx / dist, uy = ddy / dist;
 
-        const BULLET_DURATION_MS = 200; // 同一回合所有子弹同步到达
+        const BULLET_DURATION_MS = (typeof this.bulletDurationMs === 'number' && this.bulletDurationMs > 0)
+            ? this.bulletDurationMs
+            : 200;
 
         const entry = { bullet, trail, tween: null };
         this.activeBullets.push(entry);
@@ -385,6 +391,12 @@ class TankScene extends Phaser.Scene {
                 if (idx >= 0) this.activeBullets.splice(idx, 1);
             }
         });
+    }
+
+    setBulletDuration(ms) {
+        // 供回放速度控制调用：设置子弹飞行时长（毫秒）。
+        // 同一回合所有子弹仍然同步到达（所有 tween 用同一 duration）。
+        this.bulletDurationMs = Math.max(50, ms);
     }
 
     forceFinishAllBullets() {

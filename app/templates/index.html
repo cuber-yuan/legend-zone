@@ -68,13 +68,18 @@
                 players = JSON.parse(match.players);
             } catch (e) {}
 
-            // Convert players object to "p0,p1,..." string
-            let playersStr = '';
-            if (players && typeof players === 'object') {
-                playersStr = Object.values(players)
-                    .map((v, i) => escapeHtml(`${v}`))
-                    .join(', ');
-            }
+            // Convert players object to "name, name, ..." with bot name as a link
+            // to /bot/<id> when we have a matching bot id. Humans / deleted bots stay
+            // as plain text.
+            const p1Name = players.player_1;
+            const p2Name = players.player_2;
+            const p1Cell = match.player_1_id
+                ? `<a href="/bot/${match.player_1_id}" class="text-blue-600 hover:text-blue-800 underline" title="View bot">${escapeHtml(p1Name || '')}</a>`
+                : escapeHtml(p1Name || '');
+            const p2Cell = match.player_2_id
+                ? `<a href="/bot/${match.player_2_id}" class="text-blue-600 hover:text-blue-800 underline" title="View bot">${escapeHtml(p2Name || '')}</a>`
+                : escapeHtml(p2Name || '');
+            let playersStr = [p1Cell, p2Cell].filter(Boolean).join(', ');
 
             let winner = match.winner;
             if (winner === null || winner === undefined) winner = 'Draw';
@@ -83,11 +88,16 @@
 
             let replayLink = '';
             if (match.status === 'finished') {
-                replayLink = `<a href="/match/${match.id}" class="text-blue-600 hover:text-blue-800 underline">Watch</a>`;
+                replayLink = `<a href="/match/${match.id}" class="inline-flex items-center justify-center w-9 h-9 rounded bg-blue-100 hover:bg-blue-200 text-blue-700 transition-colors" title="Watch replay">
+                    <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+                </a>`;
             } else if (match.status === 'playing') {
-                replayLink = `<a href="/match/${match.id}" class="text-green-600 hover:text-green-800 underline">Live</a>`;
+                replayLink = `<a href="/match/${match.id}" class="inline-flex items-center justify-center w-9 h-9 rounded bg-green-100 hover:bg-green-200 text-green-700 transition-colors relative" title="Watch live">
+                    <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+                    <span class="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full border-2 border-white"></span>
+                </a>`;
             } else {
-                replayLink = '-';
+                replayLink = '<span class="text-gray-400">-</span>';
             }
 
             tbody.innerHTML += `
@@ -153,8 +163,6 @@
     <section class="bg-gray-100 p-6 rounded-lg shadow-md">
         <h2 class="text-2xl font-semibold mb-4" style="margin-bottom:1em;">Latest Matches</h2>
         <div class="overflow-x-auto">
-            <p class="text-gray-700" style="margin-bottom:1em;">This feature is under development...</p>
-            
             <table class="min-w-full text-left text-gray-700 border border-gray-300 rounded">
                 <thead>
                     <tr class="bg-gray-200">
