@@ -192,6 +192,7 @@
     btnCreate.addEventListener('click', async () => {
         if (!isAuthenticated) {
             alert('Please log in to create a game table.');
+            socket.disconnect();
             window.location.href = '/login';
             return;
         }

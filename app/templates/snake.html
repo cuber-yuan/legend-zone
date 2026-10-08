@@ -1,10 +1,14 @@
 {% extends "base.html" %}
 
-{% block title %}Snake{% endblock %}
+{% block title %}{% if match_id %}Match {{ match_id[:8] }}{% else %}Snake{% endif %}{% endblock %}
 
 {% block sidebar_left %}
 <aside class="sider-left">
   <div style="padding: 2rem;">
+    {% if match_id %}
+    <h2 style="font-size: 1.25rem; font-weight: bold;">Blue</h2>
+    <div id="bluePlayerName" style="margin-top: 0.5rem; font-size: 1rem; color: #555;">Loading...</div>
+    {% else %}
     <h2 style="font-size: 1.25rem; font-weight: bold;">Left Player</h2>
     <select id="aiSelectLeft"
       class="block w-full border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
@@ -16,6 +20,7 @@
       <input type="checkbox" id="left-is-human" />
       <label for="left-is-human" style="margin-left:0.5rem;">Human</label>
     </div>
+    {% endif %}
   </div>
 </aside>
 {% endblock %}
@@ -23,6 +28,10 @@
 {% block sidebar_right %}
 <aside class="sider-right">
   <div style="padding: 2rem;">
+    {% if match_id %}
+    <h2 style="font-size: 1.25rem; font-weight: bold;">Red</h2>
+    <div id="redPlayerName" style="margin-top: 0.5rem; font-size: 1rem; color: #555;">Loading...</div>
+    {% else %}
     <h2 style="font-size: 1.25rem; font-weight: bold;">Right Player</h2>
     <select id="aiSelectRight"
       class="block w-full border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
@@ -34,6 +43,7 @@
       <input type="checkbox" id="right-is-human" />
       <label for="right-is-human" style="margin-left:0.5rem;">Human</label>
     </div>
+    {% endif %}
   </div>
 </aside>
 {% endblock %}
@@ -75,6 +85,68 @@
 <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/prism.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-python.min.js"></script>
 
+<style>
+  .spectator-badge {
+    display: none;
+    text-align: center;
+    margin-top: 0.5rem;
+    padding: 0.3rem 0.8rem;
+    background: #fef3c7;
+    color: #92400e;
+    border-radius: 0.25rem;
+    font-size: 0.85rem;
+    max-width: 200px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+  .replay-controls {
+    display: none;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+    margin-top: 1rem;
+    padding: 0.75rem 1.5rem;
+    background: #fff;
+    border-radius: 0.5rem;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    max-width: 600px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+  .replay-controls button {
+    padding: 0.4rem 0.8rem;
+    border: 1px solid #ccc;
+    border-radius: 0.25rem;
+    background: #f9f9f9;
+    cursor: pointer;
+    font-size: 0.9rem;
+    min-width: 2.5rem;
+  }
+  .replay-controls button:hover {
+    background: #e9e9e9;
+  }
+  .replay-controls button:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+  .replay-progress {
+    flex: 1;
+    max-width: 300px;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  .replay-progress input[type="range"] {
+    flex: 1;
+  }
+  .replay-status {
+    text-align: center;
+    margin-top: 0.5rem;
+    font-size: 0.85rem;
+    color: #666;
+  }
+</style>
+
 <div class="bg-gray-100 py-10">
   <div class="max-w-screen-xl mx-auto">
     <!-- Game Canvas Section -->
@@ -84,50 +156,51 @@
       </div>
     </div>
     <br>
+
+    {% if not match_id %}
     <div style="text-align:center;">
       <p id="turnCounter" class="mt-4 text-lg font-semibold">Turn: 0</p>
-      <button id="newGameBtn" type="button" class="mt-4 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600">New
-        Game</button>
-      <!-- Turn progress control (moved here) -->
-      <div id="turn-progress-control" class="flex items-center justify-center mt-6 mb-2 select-none gap-6">
-        <button id="turn-play-btn" class="bg-gray-200 rounded-full p-2 hover:bg-blue-200 transition flex items-center justify-center shadow">
-          <span id="turn-play-icon" class="text-2xl text-blue-600">&#9654;</span>
-          <span id="turn-pause-icon" class="text-2xl text-blue-600" style="display:none;">&#10073;&#10073;</span>
-        </button>
-        <div id="turn-progress-bar" class="relative flex items-center" style="width:520px; height:32px; cursor:pointer;">
-          <div class="bg-gray-300 rounded-full" style="height:16px; width:100%; position:absolute; left:0; top:8px;"></div>
-          <div id="turn-progress-fill" class="bg-blue-500 rounded-full transition-all" style="height:16px; width:0%; position:absolute; left:0; top:8px;"></div>
-          <div id="turn-progress-knob" class="bg-blue-500 border-4 border-white rounded-full shadow-lg transition-all" style="width:32px; height:32px; position:absolute; left:0; top:0; transform:translateX(-16px);"></div>
-        </div>
-        <span id="turn-progress-label" class="ml-2 text-base text-gray-700 font-mono min-w-[40px] text-center">0</span>
+    </div>
+    {% endif %}
+
+    <div id="spectatorBadge" class="spectator-badge">Spectating</div>
+
+    <div id="replayControls" class="replay-controls">
+      <button id="btnFirst" title="First turn">|&lt;</button>
+      <button id="btnPrev" title="Previous turn">&lt;</button>
+      <button id="btnPlayPause" title="Play/Pause">&#9654;</button>
+      <button id="btnNext" title="Next turn">&gt;</button>
+      <button id="btnLast" title="Last turn">&gt;|</button>
+      <div class="replay-progress">
+        <span id="turnCounter2">0 / 0</span>
+        <input type="range" id="replaySlider" min="0" max="0" value="0" />
       </div>
     </div>
-  </div>
+    <div id="replayStatus" class="replay-status"></div>
 
-  
+    {% if not match_id %}
+    <details class="bg-white p-6 rounded-lg shadow-md hidden xl:block" style="margin-top: 2rem;">
+      <summary class="text-xl font-bold mb-4 list-none cursor-pointer flex justify-between items-center">
+          <span>How to Play as Human</span>
+          <span class="transition-transform duration-200 transform group-open:rotate-180">&#9662;</span>
+      </summary>
+      <div class="mt-4">
+          <div class="prose max-w-none" style="line-height:1.8; margin-bottom: 1.5rem;">
+            <p></strong> Use <b>W</b> (up), <b>S</b> (down), <b>A</b> (left), <b>D</b> (right) keys on your keyboard to control
+        your snake's direction each turn.</p>
+          </div>
+      </div>
+    </details>
 
-  <details class="bg-white p-6 rounded-lg shadow-md hidden xl:block" style="margin-top: 2rem;">
-    <summary class="text-xl font-bold mb-4 list-none cursor-pointer flex justify-between items-center">
-        <span>How to Play as Human</span>
+    <!-- Sample Bot Code Section (Collapsible with HTML/Tailwind only) -->
+    <details class="sample-bot-section bg-white p-6 rounded-lg shadow-md mb-8 hidden xl:block" style="margin-top: 2rem;">
+      <summary class="text-xl font-bold mb-4 list-none cursor-pointer flex justify-between items-center">
+        <span>Sample Bot Code (Python)</span>
         <span class="transition-transform duration-200 transform group-open:rotate-180">&#9662;</span>
-    </summary>
-    <div class="mt-4">
-        <div class="prose max-w-none" style="line-height:1.8; margin-bottom: 1.5rem;">
-          <p></strong> Use <b>W</b> (up), <b>S</b> (down), <b>A</b> (left), <b>D</b> (right) keys on your keyboard to control
-      your snake's direction each turn.</p>
-        </div>
-    </div>
-  </details>
-
-  <!-- Sample Bot Code Section (Collapsible with HTML/Tailwind only) -->
-  <details class="sample-bot-section bg-white p-6 rounded-lg shadow-md mb-8 hidden xl:block" style="margin-top: 2rem;">
-    <summary class="text-xl font-bold mb-4 list-none cursor-pointer flex justify-between items-center">
-      <span>Sample Bot Code (Python)</span>
-      <span class="transition-transform duration-200 transform group-open:rotate-180">&#9662;</span>
-    </summary>
-    <div class="mt-4">
-        <pre class="bg-gray-100 p-4 rounded-lg border border-gray-300"
-          style="white-space: pre-wrap; word-break: break-word;"><code class="language-python">import sys
+      </summary>
+      <div class="mt-4">
+          <pre class="bg-gray-100 p-4 rounded-lg border border-gray-300"
+            style="white-space: pre-wrap; word-break: break-word;"><code class="language-python">import sys
 import json
 import random
 from collections import deque
@@ -219,17 +292,17 @@ def main():
 if __name__ == '__main__':
     import time
     main()</code></pre>
-    </div>
-  </details>
+      </div>
+    </details>
 
-  <details class="I/O-section bg-white p-6 rounded-lg shadow-md hidden xl:block" style="margin-top: 2rem;">
-    <summary class="text-xl font-bold mb-4 list-none cursor-pointer flex justify-between items-center">
-        <span>I/O Format Specification</span>
-        <span class="transition-transform duration-200 transform group-open:rotate-180">&#9662;</span>
-    </summary>
-    <div class="mt-4">
-        <div class="prose max-w-none" style="line-height:1.8; margin-bottom: 1.5rem;">
-          <pre class="bg-gray-100 p-2 rounded"><code class="language-json">{
+    <details class="I/O-section bg-white p-6 rounded-lg shadow-md hidden xl:block" style="margin-top: 2rem;">
+      <summary class="text-xl font-bold mb-4 list-none cursor-pointer flex justify-between items-center">
+          <span>I/O Format Specification</span>
+          <span class="transition-transform duration-200 transform group-open:rotate-180">&#9662;</span>
+      </summary>
+      <div class="mt-4">
+          <div class="prose max-w-none" style="line-height:1.8; margin-bottom: 1.5rem;">
+            <pre class="bg-gray-100 p-2 rounded"><code class="language-json">{
 	"requests": [{
 		"height": 10,
 		"obstacle": [{
@@ -277,70 +350,80 @@ if __name__ == '__main__':
 		"direction": 2
 	}]
 }</code></pre>
-          
-          
-          <pre class="bg-gray-100 p-2 rounded"><code class="language-json">{"response":{"direction":0}}</code></pre>
-          <p style="margin-bottom:1em;">
-             The directions 0, 1, 2, and 3 correspond to up, down, left, and right.
-          </p>
-        </div>
-    </div>
-  </details>
+            
+            
+            <pre class="bg-gray-100 p-2 rounded"><code class="language-json">{"response":{"direction":0}}</code></pre>
+            <p style="margin-bottom:1em;">
+               The directions 0, 1, 2, and 3 correspond to up, down, left, and right.
+            </p>
+          </div>
+      </div>
+    </details>
 
-  <details class="regulation-section bg-white p-6 rounded-lg shadow-md hidden xl:block" style="margin-top: 2rem;">
-    <summary class="text-xl font-bold mb-4 list-none cursor-pointer flex justify-between items-center">
-        <span>Regulations</span>
-        <span class="transition-transform duration-200 transform group-open:rotate-180">&#9662;</span>
-    </summary>
-    <div class="mt-4">
-        <div class="prose max-w-none" style="line-height:1.8; margin-bottom: 1.5rem;">
-          <p style="margin-bottom:1em;">Unlike the traditional single-player Snake game, this version is a two-player
-            competitive game where both
-            players simultaneously make decisions each turn to control their own snake.</p>
-          <p style="margin-bottom:1em;"></p>
-          <p style="margin-bottom:1em;">Players control a snake on an n*m grid. A snake is defined as a finite, ordered
-            sequence of unique
-            coordinates, where each adjacent pair of coordinates in the sequence are also adjacent on the grid (i.e., they
-            differ by one unit in either the x or y direction). The first coordinate in the sequence represents the snake's
-            head. Players can only control the direction of the snake's head (East, South, West, or North). The snake moves
-            at a constant speed: each move inserts a new head coordinate in the current direction and removes the last
-            coordinate (tail) of the sequence.</p>
-          <p style="margin-bottom:1em;"></p>
-          <p style="margin-bottom:1em;">The initial positions of the snakes are at the top-left corner ([1,1]) and the
-            bottom-right corner ([n,m]) of
-            the grid, respectively. Each snake starts with a length of 1. Unlike the traditional version, <b>there are no
-              food
-              pellets on the map</b>. Instead, <b>the snake grows automatically</b>: for the first 25 turns, the snake grows
-            by one unit
-            per turn (i.e., the tail is not removed), and <b>from turn 26 onwards, it grows by one unit every 3 turns</b>.
-          </p>
-          <p style="margin-bottom:1em;"></p>
-          <p style="margin-bottom:1em;">The map consists of an h*w grid made up of 1*1 grass tiles and obstacles. The map is
-            centrally symmetric.</p>
-          <p style="margin-bottom:1em;"></p>
-          <p style="margin-bottom:1em;">A snake is considered dead if its head moves into an invalid position or if the
-            input/output format is
-            incorrect. Invalid positions include: out of bounds, an obstacle tile, the body of its own snake (excluding the
-            head), or the body of the opponent's snake. The game ends immediately when any snake dies. If both snakes die at
-            the same time, the game is a draw. Otherwise, the first to die loses, and the other wins.</p>
-          <p style="margin-bottom:1em;"></p>
-          <p style="margin-bottom:1em;">The values of h and w are randomly chosen: h is an integer in the range [10, 13],
-            and w is in [11, 17]. Player
-            programs must handle all valid combinations of h and w. The game guarantees that h + w is always an odd number.
-          </p>
-        </div>
-    </div>
-  </details>
+    <details class="regulation-section bg-white p-6 rounded-lg shadow-md hidden xl:block" style="margin-top: 2rem;">
+      <summary class="text-xl font-bold mb-4 list-none cursor-pointer flex justify-between items-center">
+          <span>Regulations</span>
+          <span class="transition-transform duration-200 transform group-open:rotate-180">&#9662;</span>
+      </summary>
+      <div class="mt-4">
+          <div class="prose max-w-none" style="line-height:1.8; margin-bottom: 1.5rem;">
+            <p style="margin-bottom:1em;">Unlike the traditional single-player Snake game, this version is a two-player
+              competitive game where both
+              players simultaneously make decisions each turn to control their own snake.</p>
+            <p style="margin-bottom:1em;"></p>
+            <p style="margin-bottom:1em;">Players control a snake on an n*m grid. A snake is defined as a finite, ordered
+              sequence of unique
+              coordinates, where each adjacent pair of coordinates in the sequence are also adjacent on the grid (i.e., they
+              differ by one unit in either the x or y direction). The first coordinate in the sequence represents the snake's
+              head. Players can only control the direction of the snake's head (East, South, West, or North). The snake moves
+              at a constant speed: each move inserts a new head coordinate in the current direction and removes the last
+              coordinate (tail) of the sequence.</p>
+            <p style="margin-bottom:1em;"></p>
+            <p style="margin-bottom:1em;">The initial positions of the snakes are at the top-left corner ([1,1]) and the
+              bottom-right corner ([n,m]) of
+              the grid, respectively. Each snake starts with a length of 1. Unlike the traditional version, <b>there are no
+                food
+                pellets on the map</b>. Instead, <b>the snake grows automatically</b>: for the first 25 turns, the snake grows
+              by one unit
+              per turn (i.e., the tail is not removed), and <b>from turn 26 onwards, it grows by one unit every 3 turns</b>.
+            </p>
+            <p style="margin-bottom:1em;"></p>
+            <p style="margin-bottom:1em;">The map consists of an h*w grid made up of 1*1 grass tiles and obstacles. The map is
+              centrally symmetric.</p>
+            <p style="margin-bottom:1em;"></p>
+            <p style="margin-bottom:1em;">A snake is considered dead if its head moves into an invalid position or if the
+              input/output format is
+              incorrect. Invalid positions include: out of bounds, an obstacle tile, the body of its own snake (excluding the
+              head), or the body of the opponent's snake. The game ends immediately when any snake dies. If both snakes die at
+              the same time, the game is a draw. Otherwise, the first to die loses, and the other wins.</p>
+            <p style="margin-bottom:1em;"></p>
+            <p style="margin-bottom:1em;">The values of h and w are randomly chosen: h is an integer in the range [10, 13],
+              and w is in [11, 17]. Player
+              programs must handle all valid combinations of h and w. The game guarantees that h + w is always an odd number.
+            </p>
+          </div>
+      </div>
+    </details>
+    {% endif %}
+  </div>
 </div>
 
 <script>
+const IS_MATCH_PAGE = {{ 'true' if match_id else 'false' }};
+const MATCH_ID = "{{ match_id or '' }}";
+const MATCH_STATUS = "{{ match.status if match_id and match else '' }}";
+const MATCH_GAME_NAME = "{{ match.game if match_id and match else '' }}";
+const MATCH_PLAYERS = {{ match.players | tojson if match_id and match else '""' }};
+</script>
+
+{% if not match_id %}
+<script>
   // Control parameters
-  let maxTurn = 100; // Max turn, can be set dynamically
+  let maxTurn = 100;
   let currentTurn = 0;
   let playing = false;
   let playInterval = null;
 
-  // DOM elements
   const playBtn = document.getElementById('turn-play-btn');
   const playIcon = document.getElementById('turn-play-icon');
   const pauseIcon = document.getElementById('turn-pause-icon');
@@ -349,7 +432,6 @@ if __name__ == '__main__':
   const progressKnob = document.getElementById('turn-progress-knob');
   const progressLabel = document.getElementById('turn-progress-label');
 
-  // Update progress bar UI
   function updateProgressBar() {
     const percent = (currentTurn / maxTurn) * 100;
     progressFill.style.width = percent + '%';
@@ -358,7 +440,6 @@ if __name__ == '__main__':
   }
   updateProgressBar();
 
-  // Play/Pause button logic
   playBtn.onclick = function() {
     playing = !playing;
     playIcon.style.display = playing ? 'none' : '';
@@ -368,7 +449,6 @@ if __name__ == '__main__':
         if (currentTurn < maxTurn) {
           currentTurn++;
           updateProgressBar();
-          // TODO: trigger turn change event
         } else {
           playing = false;
           playIcon.style.display = '';
@@ -381,17 +461,14 @@ if __name__ == '__main__':
     }
   };
 
-  // Click progress bar to set turn
   progressBar.onclick = function(e) {
     const rect = progressBar.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const percent = Math.max(0, Math.min(1, x / rect.width));
     currentTurn = Math.round(percent * maxTurn);
     updateProgressBar();
-    // TODO: trigger turn change event
   };
 
-  // Optional: expose API for external set/get
   window.setTurnProgressMax = function(n) {
     maxTurn = n;
     updateProgressBar();
@@ -404,4 +481,5 @@ if __name__ == '__main__':
     return currentTurn;
   };
 </script>
+{% endif %}
 {% endblock %}

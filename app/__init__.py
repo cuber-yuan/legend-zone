@@ -10,7 +10,12 @@ import os
 
 
 ALLOWED_ORIGINS = os.environ.get('ALLOWED_ORIGINS', 'http://localhost:5000,http://127.0.0.1:5000').split(',')
-socketio = SocketIO(cors_allowed_origins=ALLOWED_ORIGINS)
+# The Werkzeug dev server's WebSocket upgrade (via simple-websocket) raises a
+# ConnectionError and logs a spurious 500 traceback whenever a client that was
+# upgraded to WebSocket disconnects abruptly (e.g. navigating away from a page
+# with an open socket). Disable the polling->WebSocket upgrade so clients stay
+# on long-polling, which already works reliably here.
+socketio = SocketIO(cors_allowed_origins=ALLOWED_ORIGINS, allow_upgrades=False)
 login_manager = LoginManager()
 
 def create_app():

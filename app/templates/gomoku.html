@@ -571,7 +571,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
   let matchPlayers = [];
   try {
-    const parsed = JSON.parse({{ match.players | tojson }});
+    const parsed = {{ match.players | tojson }};
     if (Array.isArray(parsed)) {
       matchPlayers = parsed;
     } else if (parsed.player_1) {

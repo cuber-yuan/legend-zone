@@ -1,0 +1,95 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ bot.name }}{% endblock %}
+
+{% block sidebar_left %}
+{% endblock %}
+{% block sidebar_right %}
+{% endblock %}
+
+{% block content %}
+<div class="max-w-screen-lg mx-auto">
+
+  <!-- Bot summary -->
+  <div class="bg-white p-5 rounded-lg shadow mb-6">
+    <div class="flex flex-wrap items-start justify-between gap-4">
+      <div class="min-w-0">
+        <h1 class="text-2xl font-bold text-gray-900 break-words">{{ bot.name }}</h1>
+        <div class="text-sm text-gray-500 mt-1">
+          by
+          {% if bot.owner %}
+            <a href="{{ url_for('main.profile', username=bot.owner) }}" class="text-indigo-600 hover:underline">{{ bot.owner }}</a>
+          {% else %}
+            <span class="text-gray-400">unknown</span>
+          {% endif %}
+          {% if bot.created_at %} &middot; created {{ bot.created_at }}{% endif %}
+        </div>
+      </div>
+      <div class="flex items-center gap-2 shrink-0">
+        {% if bot.game %}
+          <span class="px-3 py-1 rounded-full bg-indigo-100 text-indigo-700 text-sm font-medium">{{ bot.game }}</span>
+        {% endif %}
+        <span class="px-3 py-1 rounded-full bg-gray-100 text-gray-700 text-sm font-medium">
+          {{ bot.language or 'unknown' }}
+        </span>
+        <span class="px-3 py-1 rounded-full bg-green-100 text-green-800 text-sm font-bold">
+          {% if bot.rating is not none %}{{ bot.rating | round(2) }}{% else %}Unrated{% endif %}
+        </span>
+      </div>
+    </div>
+
+    {% if bot.description %}
+      <p class="mt-4 text-gray-700 whitespace-pre-wrap break-words">{{ bot.description }}</p>
+    {% endif %}
+  </div>
+
+  <!-- Source code -->
+  <div class="bg-white rounded-lg shadow overflow-hidden">
+    <div class="flex items-center justify-between bg-gray-800 px-4 py-2">
+      <h2 class="text-white font-semibold">Source code</h2>
+      {% if bot.source_code %}
+        <button type="button" id="copy-code"
+                class="px-3 py-1 rounded bg-gray-600 text-white text-sm hover:bg-gray-500 transition-colors duration-200">
+          Copy
+        </button>
+      {% endif %}
+    </div>
+
+    {% if bot.source_code %}
+      <pre class="p-4 overflow-x-auto text-sm leading-relaxed bg-gray-50 text-gray-800"><code id="bot-source">{{ bot.source_code }}</code></pre>
+    {% elif bot.file_path %}
+      <div class="p-6 text-gray-600 text-sm">
+        This bot was uploaded as a file rather than as source text:
+        <span class="font-mono text-gray-800">{{ bot.file_path.replace('\\', '/').split('/')[-1] }}</span>
+      </div>
+    {% else %}
+      <div class="p-6 text-gray-500 text-sm">No source code is available for this bot.</div>
+    {% endif %}
+  </div>
+
+  <div class="mt-6">
+    <a href="{{ url_for('main.rating') }}" class="text-sm text-indigo-600 hover:underline">&larr; Back to ratings</a>
+  </div>
+</div>
+
+{% if bot.source_code %}
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    const button = document.getElementById('copy-code');
+    const source = document.getElementById('bot-source');
+    if (!button || !source) return;
+
+    button.addEventListener('click', function () {
+      const text = source.textContent;
+      const done = function () {
+        button.textContent = 'Copied!';
+        setTimeout(function () { button.textContent = 'Copy'; }, 1500);
+      };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(done, function () { /* clipboard unavailable */ });
+      }
+    });
+  });
+</script>
+{% endif %}
+{% endblock %}

@@ -305,7 +305,7 @@ def match_view(match_id):
     try:
         conn = get_db_connection()
         with conn.cursor() as cursor:
-            cursor.execute("SELECT id, game, players, status, winner, move_history FROM matches WHERE id = ?", (match_id,))
+            cursor.execute("SELECT id, game, players, status, winner, move_history, displays FROM matches WHERE id = ?", (match_id,))
             match = cursor.fetchone()
             if not match:
                 abort(404)
@@ -318,6 +318,10 @@ def match_view(match_id):
             match = dict(match)
             if match.get('move_history'):
                 match['move_history'] = json.loads(match['move_history'])
+            if match.get('displays'):
+                match['displays'] = json.loads(match['displays'])
+            if match.get('players'):
+                match['players'] = json.loads(match['players'])
 
             bots = get_latest_bots_for_game(game_name)
             return render_template(template, bots=bots, match_id=match_id, match=match)
@@ -334,13 +338,15 @@ def api_get_match(match_id):
     try:
         conn = get_db_connection()
         with conn.cursor() as cursor:
-            cursor.execute("SELECT id, game, players, status, winner, move_history FROM matches WHERE id = ?", (match_id,))
+            cursor.execute("SELECT id, game, players, status, winner, move_history, displays FROM matches WHERE id = ?", (match_id,))
             match = cursor.fetchone()
             if not match:
                 return jsonify({'error': 'Match not found'}), 404
             result = dict(match)
             if result.get('move_history'):
                 result['move_history'] = json.loads(result['move_history'])
+            if result.get('displays'):
+                result['displays'] = json.loads(result['displays'])
             return jsonify(result)
     except Exception as e:
         print(f"Error fetching match: {e}")
@@ -352,17 +358,37 @@ def api_get_match(match_id):
 @main_bp.route('/bot/<int:bot_id>')
 def bot_detail(bot_id):
     conn = None
+    bot = None
     try:
         conn = get_db_connection()
         with conn.cursor() as cursor:
-            cursor.execute("SELECT id, bot_name AS name, description, user_id, game FROM bots WHERE id = ?", (bot_id,))
+            cursor.execute("""
+                SELECT
+                    b.id,
+                    b.bot_name AS name,
+                    b.description,
+                    b.game,
+                    b.language,
+                    b.rating,
+                    b.created_at,
+                    b.source_code,
+                    b.file_path,
+                    b.user_id,
+                    u.username AS owner
+                FROM bots b
+                LEFT JOIN users u ON b.user_id = u.id
+                WHERE b.id = ?
+            """, (bot_id,))
             bot = cursor.fetchone()
-            if not bot:
-                abort(404)
-    except Exception:
+    except Exception as e:
+        print(f"Error loading bot {bot_id}: {e}")
         abort(500)
     finally:
         if conn:
             conn.close()
+
+    # Checked outside the try block so this HTTPException is not swallowed into a 500.
+    if not bot:
+        abort(404)
 
     return render_template('bot_detail.html', bot=bot)

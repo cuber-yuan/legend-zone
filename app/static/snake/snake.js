@@ -178,6 +178,14 @@ let currentGameId = null;
 let gameOver = false;
 const socket = io('/snake');
 
+// --- Match Page State ---
+let isSpectator = false;
+let isReplayMode = false;
+let replayDisplays = [];
+let replayIndex = 0;
+let replayTimer = null;
+let isReplayPlaying = false;
+
 // --- Canvas Size Helpers ---
 function getCanvasSize() {
     // const padding = window.innerWidth < 600 ? 24 : 70;
@@ -219,7 +227,10 @@ socket.on('game_started', (data) => {
     const scene = phaserGame.scene.getScene('SnakeScene');
     if (scene && typeof scene.updateFromState === 'function') {
         scene.updateFromState(data.state);
-        document.getElementById('floating-corner').classList.remove('hidden');
+        const fc = document.getElementById('floating-corner');
+        if (fc && !(typeof IS_MATCH_PAGE !== 'undefined' && IS_MATCH_PAGE)) {
+            fc.classList.remove('hidden');
+        }
         gameoverAudio.pause();
         gameoverAudio.currentTime = 0;
         bgmAudio.currentTime = 0;
@@ -230,22 +241,31 @@ socket.on('game_started', (data) => {
 });
 
 socket.on('update', (data) => {
-    if (!currentGameId || data.game_id !== currentGameId) {
-        console.log(`Ignoring update for irrelevant game: ${data.game_id}`);
-        return;
+    if (typeof IS_MATCH_PAGE !== 'undefined' && IS_MATCH_PAGE) {
+        if (data.match_id && data.match_id !== MATCH_ID) return;
+    } else {
+        if (!currentGameId || data.game_id !== currentGameId) {
+            console.log(`Ignoring update for irrelevant game: ${data.game_id}`);
+            return;
+        }
     }
     const scene = phaserGame.scene.getScene('SnakeScene');
     if (scene && typeof scene.updateFromState === 'function') {
         scene.updateFromState(data.state);
     }
-    document.getElementById('floating-corner').classList.remove('hidden');
+    const fc = document.getElementById('floating-corner');
+    if (fc) fc.classList.remove('hidden');
     moveAudio.play();
 });
 
 socket.on('finish', (data) => {
-    if (!currentGameId || data.game_id !== currentGameId) {
-        console.log(`Ignoring finish for irrelevant game: ${data.game_id}`);
-        return;
+    if (typeof IS_MATCH_PAGE !== 'undefined' && IS_MATCH_PAGE) {
+        if (data.match_id && data.match_id !== MATCH_ID) return;
+    } else {
+        if (!currentGameId || data.game_id !== currentGameId) {
+            console.log(`Ignoring finish for irrelevant game: ${data.game_id}`);
+            return;
+        }
     }
     if (bgmAudio) {
         bgmAudio.pause();
@@ -264,6 +284,35 @@ socket.on('finish', (data) => {
     gameOver = true;
 });
 
+socket.on('match_status', (data) => {
+    if (typeof IS_MATCH_PAGE === 'undefined' || !IS_MATCH_PAGE) return;
+    if (data.match_id !== MATCH_ID) return;
+
+    if (data.status === 'playing') {
+        isSpectator = true;
+        currentGameId = data.game_id;
+        gameOver = false;
+        hidePhaserMask();
+        document.getElementById('spectatorBadge').style.display = 'block';
+        if (data.latest_display) {
+            const scene = phaserGame.scene.getScene('SnakeScene');
+            if (scene) scene.updateFromState(data.latest_display);
+        }
+    } else if (data.status === 'finished') {
+        startReplay(data.displays || [], data.winner);
+    } else if (data.status === 'not_started') {
+        autoStartMatch(data.players);
+    }
+});
+
+socket.on('match_finished', (data) => {
+    if (typeof IS_MATCH_PAGE === 'undefined' || !IS_MATCH_PAGE) return;
+    if (data.match_id !== MATCH_ID) return;
+    isSpectator = false;
+    document.getElementById('spectatorBadge').style.display = 'none';
+    startReplay(data.displays || [], data.winner);
+});
+
 // --- Game Control Functions ---
 function newGame() {
     if (!userId) {
@@ -280,6 +329,138 @@ function newGame() {
         right_is_human: document.getElementById('right-is-human').checked,
         page_path: window.location.pathname
     });
+}
+
+// --- Match Page: Auto Start ---
+function autoStartMatch(playersJson) {
+    let players = [];
+    try {
+        const parsed = typeof playersJson === 'string' ? JSON.parse(playersJson) : playersJson;
+        if (parsed && typeof parsed === 'object') {
+            if (parsed.player_1) {
+                players = [{ name: parsed.player_1 }, { name: parsed.player_2 }];
+            } else if (Array.isArray(parsed)) {
+                players = parsed;
+            }
+        }
+    } catch (e) {
+        console.error('Failed to parse match players:', e);
+        return;
+    }
+    if (players.length < 2) return;
+
+    socket.emit('new_game', {
+        user_id: userId,
+        p1_bot_id: players[0].botId || null,
+        p2_bot_id: players[1].botId || null,
+        p1_is_human: players[0].type !== 'bot',
+        p2_is_human: players[1].type !== 'bot',
+        match_id: MATCH_ID,
+        game_name: (typeof MATCH_GAME_NAME !== 'undefined' && MATCH_GAME_NAME) ? MATCH_GAME_NAME : 'Snake'
+    });
+}
+
+// --- Replay ---
+function startReplay(displays, winner) {
+    isReplayMode = true;
+    replayDisplays = displays;
+    replayIndex = 0;
+
+    const controls = document.getElementById('replayControls');
+    if (controls) controls.style.display = 'flex';
+
+    const slider = document.getElementById('replaySlider');
+    if (slider) {
+        slider.max = Math.max(0, displays.length - 1);
+        slider.value = 0;
+    }
+
+    updateReplayDisplay();
+    updateReplayButtons();
+
+    let msg = winner == 0 ? 'Blue wins!' : (winner == 1 ? 'Red wins!' : 'Draw!');
+    const statusEl = document.getElementById('replayStatus');
+    if (statusEl) statusEl.textContent = msg + ' (' + Math.max(0, displays.length - 1) + ' turns)';
+
+    startReplayPlay();
+}
+
+function updateReplayDisplay() {
+    if (!replayDisplays.length) return;
+    const scene = phaserGame.scene.getScene('SnakeScene');
+    if (!scene) return;
+
+    scene.updateFromState(JSON.parse(JSON.stringify(replayDisplays[0])));
+    for (let i = 1; i <= replayIndex; i++) {
+        const display = replayDisplays[i];
+        if (display && display['0'] !== undefined && display['1'] !== undefined) {
+            scene.updateFromState(display);
+        }
+    }
+
+    const counter = document.getElementById('turnCounter2');
+    if (counter) counter.textContent = replayIndex + ' / ' + Math.max(0, replayDisplays.length - 1);
+    const slider = document.getElementById('replaySlider');
+    if (slider) slider.value = replayIndex;
+}
+
+function updateReplayButtons() {
+    const maxIdx = Math.max(0, replayDisplays.length - 1);
+    document.getElementById('btnFirst').disabled = replayIndex <= 0;
+    document.getElementById('btnPrev').disabled = replayIndex <= 0;
+    document.getElementById('btnNext').disabled = replayIndex >= maxIdx;
+    document.getElementById('btnLast').disabled = replayIndex >= maxIdx;
+}
+
+function replayStep(delta) {
+    const maxIdx = Math.max(0, replayDisplays.length - 1);
+    replayIndex = Math.max(0, Math.min(maxIdx, replayIndex + delta));
+    updateReplayDisplay();
+    updateReplayButtons();
+}
+
+function replayGoto(index) {
+    const maxIdx = Math.max(0, replayDisplays.length - 1);
+    replayIndex = Math.max(0, Math.min(maxIdx, index));
+    updateReplayDisplay();
+    updateReplayButtons();
+}
+
+function toggleReplayPlay() {
+    if (isReplayPlaying) {
+        stopReplayPlay();
+    } else {
+        startReplayPlay();
+    }
+}
+
+function startReplayPlay() {
+    const maxIdx = Math.max(0, replayDisplays.length - 1);
+    if (replayIndex >= maxIdx) {
+        replayIndex = 0;
+        updateReplayDisplay();
+        updateReplayButtons();
+    }
+    isReplayPlaying = true;
+    const btn = document.getElementById('btnPlayPause');
+    if (btn) btn.innerHTML = '&#9646;&#9646;';
+    replayTimer = setInterval(() => {
+        if (replayIndex >= maxIdx) {
+            stopReplayPlay();
+            return;
+        }
+        replayStep(1);
+    }, 400);
+}
+
+function stopReplayPlay() {
+    isReplayPlaying = false;
+    const btn = document.getElementById('btnPlayPause');
+    if (btn) btn.innerHTML = '&#9654;';
+    if (replayTimer) {
+        clearInterval(replayTimer);
+        replayTimer = null;
+    }
 }
 
 // --- Canvas Resize ---
@@ -308,11 +489,6 @@ window.addEventListener('resize', () => {
 });
 
 document.addEventListener('DOMContentLoaded', () => {
-    // New Game button
-    document.getElementById('newGameBtn').addEventListener('click', () => {
-        newGame();
-    });
-
     // Phaser initialization
     const config = {
         type: Phaser.AUTO,
@@ -323,47 +499,15 @@ document.addEventListener('DOMContentLoaded', () => {
     };
     phaserGame = new Phaser.Game(config);
 
-    // Only one human checkbox can be checked at a time
-    const leftCheckbox = document.getElementById('left-is-human');
-    const rightCheckbox = document.getElementById('right-is-human');
-    const leftSelect = document.getElementById('aiSelectLeft');
-    const rightSelect = document.getElementById('aiSelectRight');
-
-    leftCheckbox.addEventListener('change', () => {
-        if (leftCheckbox.checked) {
-            rightCheckbox.checked = false;
-            rightSelect.disabled = false;
-            rightSelect.classList.remove('bg-gray-200', 'cursor-not-allowed');
-        }
-        leftSelect.disabled = leftCheckbox.checked;
-        leftSelect.classList.toggle('bg-gray-200', leftCheckbox.checked);
-        leftSelect.classList.toggle('cursor-not-allowed', leftCheckbox.checked);
-    });
-
-    rightCheckbox.addEventListener('change', () => {
-        if (rightCheckbox.checked) {
-            leftCheckbox.checked = false;
-            leftSelect.disabled = false;
-            leftSelect.classList.remove('bg-gray-200', 'cursor-not-allowed');
-        }
-        rightSelect.disabled = rightCheckbox.checked;
-        rightSelect.classList.toggle('bg-gray-200', rightCheckbox.checked);
-        rightSelect.classList.toggle('cursor-not-allowed', rightCheckbox.checked);
-    });
-
     // Arrow button events
-    document.getElementById('arrow-left').onclick = function () {
-        sendHumanDirection(3);
-    };
-    document.getElementById('arrow-down').onclick = function () {
-        sendHumanDirection(2);
-    };
-    document.getElementById('arrow-right').onclick = function () {
-        sendHumanDirection(1);
-    };
-    document.getElementById('arrow-up').onclick = function () {
-        sendHumanDirection(0);
-    };
+    const arrowLeft = document.getElementById('arrow-left');
+    const arrowDown = document.getElementById('arrow-down');
+    const arrowRight = document.getElementById('arrow-right');
+    const arrowUp = document.getElementById('arrow-up');
+    if (arrowLeft) arrowLeft.onclick = function () { sendHumanDirection(3); };
+    if (arrowDown) arrowDown.onclick = function () { sendHumanDirection(2); };
+    if (arrowRight) arrowRight.onclick = function () { sendHumanDirection(1); };
+    if (arrowUp) arrowUp.onclick = function () { sendHumanDirection(0); };
 
     // Preload audio files for caching
     const audioFiles = [
@@ -376,11 +520,118 @@ document.addEventListener('DOMContentLoaded', () => {
         fetch(url, { method: 'GET', cache: 'force-cache' }).catch(() => {});
     });
 
-    
+    // Match page vs normal page setup
+    if (typeof IS_MATCH_PAGE !== 'undefined' && IS_MATCH_PAGE) {
+        setupMatchPage();
+    } else {
+        setupNormalPage();
+    }
 });
+
+function setupNormalPage() {
+    const newGameBtn = document.getElementById('newGameBtn');
+    if (newGameBtn) {
+        newGameBtn.addEventListener('click', () => { newGame(); });
+    }
+
+    const leftCheckbox = document.getElementById('left-is-human');
+    const rightCheckbox = document.getElementById('right-is-human');
+    const leftSelect = document.getElementById('aiSelectLeft');
+    const rightSelect = document.getElementById('aiSelectRight');
+
+    if (leftCheckbox) {
+        leftCheckbox.addEventListener('change', () => {
+            if (leftCheckbox.checked) {
+                if (rightCheckbox) rightCheckbox.checked = false;
+                if (rightSelect) {
+                    rightSelect.disabled = false;
+                    rightSelect.classList.remove('bg-gray-200', 'cursor-not-allowed');
+                }
+            }
+            if (leftSelect) {
+                leftSelect.disabled = leftCheckbox.checked;
+                leftSelect.classList.toggle('bg-gray-200', leftCheckbox.checked);
+                leftSelect.classList.toggle('cursor-not-allowed', leftCheckbox.checked);
+            }
+        });
+    }
+
+    if (rightCheckbox) {
+        rightCheckbox.addEventListener('change', () => {
+            if (rightCheckbox.checked) {
+                if (leftCheckbox) leftCheckbox.checked = false;
+                if (leftSelect) {
+                    leftSelect.disabled = false;
+                    leftSelect.classList.remove('bg-gray-200', 'cursor-not-allowed');
+                }
+            }
+            if (rightSelect) {
+                rightSelect.disabled = rightCheckbox.checked;
+                rightSelect.classList.toggle('bg-gray-200', rightCheckbox.checked);
+                rightSelect.classList.toggle('cursor-not-allowed', rightCheckbox.checked);
+            }
+        });
+    }
+}
+
+function setupMatchPage() {
+    // Wire replay controls
+    const btnFirst = document.getElementById('btnFirst');
+    const btnPrev = document.getElementById('btnPrev');
+    const btnPlayPause = document.getElementById('btnPlayPause');
+    const btnNext = document.getElementById('btnNext');
+    const btnLast = document.getElementById('btnLast');
+    const replaySlider = document.getElementById('replaySlider');
+
+    if (btnFirst) btnFirst.addEventListener('click', () => { stopReplayPlay(); replayGoto(0); });
+    if (btnPrev) btnPrev.addEventListener('click', () => { stopReplayPlay(); replayStep(-1); });
+    if (btnPlayPause) btnPlayPause.addEventListener('click', toggleReplayPlay);
+    if (btnNext) btnNext.addEventListener('click', () => { stopReplayPlay(); replayStep(1); });
+    if (btnLast) btnLast.addEventListener('click', () => { stopReplayPlay(); replayGoto(Math.max(0, replayDisplays.length - 1)); });
+    if (replaySlider) replaySlider.addEventListener('input', (e) => { stopReplayPlay(); replayGoto(parseInt(e.target.value)); });
+
+    // Show player names
+    showMatchPlayerNames();
+
+    // Join match room after socket connects
+    const waitForSocket = () => {
+        if (socket.connected && userId) {
+            socket.emit('join_match', { match_id: MATCH_ID });
+        } else {
+            setTimeout(waitForSocket, 100);
+        }
+    };
+    waitForSocket();
+}
+
+function showMatchPlayerNames() {
+    let players = [];
+    try {
+        const raw = (typeof MATCH_PLAYERS !== 'undefined') ? MATCH_PLAYERS : null;
+        if (!raw) return;
+        const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+        if (parsed && typeof parsed === 'object') {
+            if (parsed.player_1) {
+                players = [{ name: parsed.player_1 }, { name: parsed.player_2 }];
+            } else if (Array.isArray(parsed)) {
+                players = parsed;
+            }
+        }
+    } catch (e) {
+        console.error('Failed to parse match players:', e);
+        return;
+    }
+    if (players.length < 2) return;
+
+    const blueEl = document.getElementById('bluePlayerName');
+    const redEl = document.getElementById('redPlayerName');
+    if (blueEl) blueEl.textContent = players[0].name || 'Player 1';
+    if (redEl) redEl.textContent = players[1].name || 'Player 2';
+}
 
 // Keyboard control for human player (WASD)
 document.addEventListener('keydown', (e) => {
+    if (typeof IS_MATCH_PAGE !== 'undefined' && IS_MATCH_PAGE) return;
     let dir = null;
     if (e.key === 'a' || e.key === 'A') dir = 3;
     else if (e.key === 's' || e.key === 'S') dir = 2;

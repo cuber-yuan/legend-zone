@@ -83,11 +83,16 @@ def init_db():
     
     cursor.execute("SELECT COUNT(*) FROM games")
     if cursor.fetchone()[0] == 0:
-        cursor.execute(
-            "INSERT INTO games (name, description, author_id, min_players, max_players) VALUES (?, ?, ?, ?, ?)",
-            ('Gomoku', 'Five in a row', 1, 2, 2)
-        )
-        print("Inserted test game: Gomoku")
+        default_games = [
+            ('Gomoku', 'Five in a row', 1, 2, 2),
+            ('Snake', 'Snake battle game', 1, 2, 2),
+        ]
+        for game in default_games:
+            cursor.execute(
+                "INSERT INTO games (name, description, author_id, min_players, max_players) VALUES (?, ?, ?, ?, ?)",
+                game
+            )
+        print(f"Inserted {len(default_games)} default games: {[g[0] for g in default_games]}")
     
     conn.commit()
     conn.close()

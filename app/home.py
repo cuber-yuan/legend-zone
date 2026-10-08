@@ -19,7 +19,6 @@ def register_home_events(socketio):
     @socketio.on('connect', namespace='/')
     def handle_connect():
         user_id = str(uuid4())
-        print(f'new home user connected: {user_id}')
 
         # Query matches table and send to user
         try:

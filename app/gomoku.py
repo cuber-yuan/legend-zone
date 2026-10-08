@@ -179,7 +179,6 @@ def register_gomoku_events(socketio):
         sessions[user_id] = {'sid': request.sid}
         join_room(request.sid)
         emit('init', {'user_id': user_id}, room=request.sid)
-        print(f'new gomoku user connected: {user_id}')
 
     @socketio.on('join_match', namespace='/gomoku')
     def handle_join_match(data):
