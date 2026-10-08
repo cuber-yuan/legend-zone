@@ -57,7 +57,7 @@ def register_home_events(socketio):
                     for row in cursor.fetchall():
                         name_to_id[row['bot_name']] = row['id']
 
-                # 把 id 挂到每场 match 上（前端用 player_1_id / player_2_id 生成链接）
+                # 把 id 挂到每场 match 上（前端用它把名片渲染成指向 /bot/<id> 的链接）
                 for match in matches:
                     try:
                         p = json.loads(match['players']) if match['players'] else {}
