@@ -47,6 +47,32 @@ class CppCompiler:
 
         return exe_path
 
+    def compile_file(self, src_path: str, extra_args=None) -> str:
+        """Compile a bot's source file in-place. Cache key includes mtime so
+        editing a bot's file invalidates the previous build."""
+        stat = os.stat(src_path)
+        key = f"{os.path.abspath(src_path)}:{stat.st_mtime_ns}:{stat.st_size}"
+        cache_hash = hashlib.sha256(key.encode('utf-8')).hexdigest()
+        exe_path = os.path.join(self.cache_dir, f"cpp_{cache_hash}.exe")
+
+        if os.path.exists(exe_path):
+            return exe_path
+
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        judges_dir = os.path.join(os.path.dirname(base_dir), 'judges')
+        src_dir = os.path.dirname(os.path.abspath(src_path))
+
+        args = ['g++', '-std=c++17', src_path,
+                f'-I{base_dir}', f'-I{judges_dir}', f'-I{src_dir}',
+                '-o', exe_path]
+        if extra_args:
+            args.extend(extra_args)
+
+        result = subprocess.run(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        if result.returncode != 0:
+            raise RuntimeError(f"C++ compile error:\n{result.stderr.decode()}")
+        return exe_path
+
     def run(self, exe_path: str, input_str: str = "", timeout=10) -> str:
         """
         运行已编译的可执行文件，返回输出。

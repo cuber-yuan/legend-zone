@@ -11,6 +11,7 @@ from .code_executor import CodeExecutor
 from .cpp_judge_executor import CppJudgeExecutor
 from .db import get_db_connection
 from .services.rating_service import update_bot_ratings
+from .services.bot_service import load_latest_version, player_json_for_bot, player_json_for_human
 
 snake_bp = Blueprint('snake', __name__)
 sessions = {}
@@ -18,33 +19,19 @@ active_matches = {}
 
 
 def _get_bot_executor(bot_id):
-    if not bot_id:
+    rec = load_latest_version(bot_id)
+    if not rec:
         return None
-    try:
-        conn = get_db_connection()
-        with conn.cursor() as cursor:
-            cursor.execute("SELECT source_code, file_path, language FROM bots WHERE id = ?", (bot_id,))
-            result = cursor.fetchone()
-        if result:
-            return CodeExecutor(code=result['source_code'], language=result['language'], path=result['file_path'])
-    finally:
-        if conn:
-            conn.close()
-    return None
+    return CodeExecutor(workdir=rec['file_path'], language=rec['language'])
 
 
 class SnakeGameSession:
-    def __init__(self, cpp_path, bot_1_code=None, bot_2_code=None):
+    def __init__(self, cpp_path):
         self.game_id = str(uuid4())
         self.cpp_judge = CppJudgeExecutor(cpp_path)
-        self.bot_1 = CodeExecutor(code=bot_1_code) if bot_1_code else None
-        self.bot_2 = CodeExecutor(code=bot_2_code) if bot_2_code else None
-        self.bot_1_type = 'bot' if bot_1_code else 'human'
-        self.bot_2_type = 'bot' if bot_2_code else 'human'
 
     def terminate(self):
-        if self.bot_1: self.bot_1.cleanup()
-        if self.bot_2: self.bot_2.cleanup()
+        pass
 
 
 def register_snake_events(socketio):
@@ -214,7 +201,7 @@ def register_snake_events(socketio):
 
                 if game_state_dict['command'] == 'finish':
                     if 'winner' in game_state_dict.get('display', {}):
-                        winner = game_state_dict['display']['winner']
+                        winner = int(game_state_dict['display']['winner'])
                     else:
                         winner = -1
 
@@ -227,22 +214,9 @@ def register_snake_events(socketio):
                     conn = None
                     try:
                         conn = get_db_connection()
-                        with conn.cursor() as cursor:
-                            username_1 = '<i>HUMAN</i>'
-                            if player_1_type == 'bot' and player_1_id_str:
-                                cursor.execute("SELECT bot_name FROM bots WHERE id = ?", (player_1_id_str,))
-                                row1 = cursor.fetchone()
-                                if row1:
-                                    username_1 = row1['bot_name']
-
-                            username_2 = '<i>HUMAN</i>'
-                            if player_2_type == 'bot' and player_2_id_str:
-                                cursor.execute("SELECT bot_name FROM bots WHERE id = ?", (player_2_id_str,))
-                                row2 = cursor.fetchone()
-                                if row2:
-                                    username_2 = row2['bot_name']
-
-                        players = json.dumps({'player_1': username_1, 'player_2': username_2})
+                        p1_json = player_json_for_bot(player_1_id_str) if player_1_type == 'bot' else player_json_for_human()
+                        p2_json = player_json_for_bot(player_2_id_str) if player_2_type == 'bot' else player_json_for_human()
+                        players = json.dumps({'player_1': p1_json, 'player_2': p2_json})
 
                         with conn.cursor() as cursor:
                             if match_id:
@@ -261,6 +235,9 @@ def register_snake_events(socketio):
                     finally:
                         if conn:
                             conn.close()
+
+                    if player_1_type == 'bot' and player_2_type == 'bot':
+                        update_bot_ratings(player_1_id_str, player_2_id_str, winner if winner in (0, 1) else -1)
 
                     if match_id:
                         socketio.emit('match_finished', {
@@ -329,12 +306,11 @@ def run_auto_snake_match(player_1_id, player_2_id):
     conn = None
     try:
         conn = get_db_connection()
+        players = json.dumps({
+            'player_1': player_json_for_bot(player_1_id),
+            'player_2': player_json_for_bot(player_2_id),
+        })
         with conn.cursor() as cursor:
-            cursor.execute("SELECT bot_name FROM bots WHERE id = ?", (player_1_id,))
-            name1 = cursor.fetchone()['bot_name']
-            cursor.execute("SELECT bot_name FROM bots WHERE id = ?", (player_2_id,))
-            name2 = cursor.fetchone()['bot_name']
-            players = json.dumps({'player_1': name1, 'player_2': name2})
             cursor.execute(
                 "INSERT INTO matches (id, game, players, status) VALUES (?, ?, ?, 'playing')",
                 (match_id, 'Snake', players),
@@ -375,7 +351,7 @@ def run_auto_snake_match(player_1_id, player_2_id):
 
             if game_state_dict['command'] == 'finish':
                 if 'winner' in game_state_dict.get('display', {}):
-                    winner = game_state_dict['display']['winner']
+                    winner = int(game_state_dict['display']['winner'])
                 else:
                     winner = -1
                 break

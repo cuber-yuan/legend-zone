@@ -16,6 +16,14 @@ class DictLiteCursor:
             self._cursor.execute(query, params)
         return self
 
+    @property
+    def lastrowid(self):
+        return self._cursor.lastrowid
+
+    @property
+    def rowcount(self):
+        return self._cursor.rowcount
+
     def fetchone(self):
         row = self._cursor.fetchone()
         if row is None:
@@ -48,6 +56,9 @@ class DictLiteConnection:
 
     def commit(self):
         self._conn.commit()
+
+    def rollback(self):
+        self._conn.rollback()
 
     def close(self):
         self._conn.close()

@@ -12,7 +12,20 @@ from .db import get_db_connection
 
 home_bp = Blueprint('home', __name__)
 
-sessions = {} 
+sessions = {}
+
+
+def _player_entry(payload):
+    """Return (name, bot_id, version) from one players-JSON slot.
+
+    Old rows stored a bare string; new rows store {name, bot_id, version}.
+    Accept both so pre-versioning matches don't disappear from the homepage.
+    """
+    if isinstance(payload, str):
+        return payload, None, None
+    if isinstance(payload, dict):
+        return payload.get('name'), payload.get('bot_id'), payload.get('version')
+    return None, None, None
 
 
 def register_home_events(socketio):
@@ -20,58 +33,33 @@ def register_home_events(socketio):
     def handle_connect():
         user_id = str(uuid4())
 
-        # Query matches table and send to user
         try:
             conn = get_db_connection()
             with conn.cursor() as cursor:
                 cursor.execute("SELECT * FROM matches WHERE status = 'finished' ORDER BY created_at DESC LIMIT 20")
                 matches = cursor.fetchall()
-                # Convert datetime fields to string
                 for match in matches:
                     for k, v in match.items():
                         if isinstance(v, datetime.datetime):
                             match[k] = v.strftime('%m-%d %H:%M')
 
-                # 收集所有玩家名，批量查每个 name 对应的最新 bot id
-                # （players JSON 字段里只存了名字，没存 id）
-                all_names = set()
                 for match in matches:
                     try:
                         p = json.loads(match['players']) if match['players'] else {}
                     except (json.JSONDecodeError, TypeError):
                         p = {}
-                    for name in p.values():
-                        if isinstance(name, str):
-                            all_names.add(name)
-
-                name_to_id = {}
-                if all_names:
-                    placeholders = ','.join('?' * len(all_names))
-                    params = list(all_names)
-                    # 拿每个 bot_name 的最新版本 id
-                    cursor.execute(f"""
-                        SELECT bot_name, id FROM bots
-                        WHERE bot_name IN ({placeholders})
-                          AND id IN (SELECT MAX(id) FROM bots WHERE bot_name IN ({placeholders}) GROUP BY bot_name)
-                    """, params + params)
-                    for row in cursor.fetchall():
-                        name_to_id[row['bot_name']] = row['id']
-
-                # 把 id 挂到每场 match 上（前端用它把名片渲染成指向 /bot/<id> 的链接）
-                for match in matches:
-                    try:
-                        p = json.loads(match['players']) if match['players'] else {}
-                    except (json.JSONDecodeError, TypeError):
-                        p = {}
-                    match['player_1_id'] = name_to_id.get(p.get('player_1'))
-                    match['player_2_id'] = name_to_id.get(p.get('player_2'))
+                    p1_name, p1_bot, p1_ver = _player_entry(p.get('player_1'))
+                    p2_name, p2_bot, p2_ver = _player_entry(p.get('player_2'))
+                    match['player_1'] = p1_name
+                    match['player_2'] = p2_name
+                    match['player_1_id'] = p1_bot
+                    match['player_2_id'] = p2_bot
+                    match['player_1_version'] = p1_ver
+                    match['player_2_version'] = p2_ver
         except Exception as e:
             print("Failed to fetch matches:", e)
             matches = []
         finally:
             if conn:
                 conn.close()
-        # print(matches)
         emit('latest_matches', {"matches": matches})
-
-

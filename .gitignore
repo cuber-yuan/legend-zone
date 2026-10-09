@@ -32,3 +32,5 @@ test.py
 bots/
 
 *.db
+
+AGENTS.md

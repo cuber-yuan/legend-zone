@@ -81,20 +81,17 @@
 
         const matches = data.matches;
         const tbody = document.querySelector('#latest-matches-tbody');
-        tbody.innerHTML = ''; 
+        tbody.innerHTML = '';
 
         matches.forEach(match => {
-            let players = {};
-            try {
-                players = JSON.parse(match.players);
-            } catch (e) {}
-
-            // Render each player as a compact name card (no links).
-            // winner: 0 = player 1 won, 1 = player 2 won, -1/null = draw/ongoing.
-            const p1Name = players.player_1;
-            const p2Name = players.player_2;
-            const p1Card = playerCard(p1Name, match.winner === 0, 'purple', match.player_1_id);
-            const p2Card = playerCard(p2Name, match.winner === 1, 'purple', match.player_2_id);
+            // home.py already flattened match.player_1 / player_2 into
+            // name strings plus player_1_id / player_1_version fields.
+            const p1Name = match.player_1;
+            const p2Name = match.player_2;
+            const p1Label = match.player_1_version ? `${p1Name} v${match.player_1_version}` : p1Name;
+            const p2Label = match.player_2_version ? `${p2Name} v${match.player_2_version}` : p2Name;
+            const p1Card = playerCard(p1Label, match.winner === 0, 'purple', match.player_1_id);
+            const p2Card = playerCard(p2Label, match.winner === 1, 'purple', match.player_2_id);
             const cards = [p1Card, p2Card].filter(Boolean);
             const playersStr = cards.join('<span class="mx-1.5 text-xs text-gray-400"></span>');
 

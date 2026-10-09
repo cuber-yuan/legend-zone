@@ -35,12 +35,24 @@ def init_db():
             user_id INTEGER NOT NULL,
             bot_name TEXT NOT NULL,
             game TEXT NOT NULL,
+            language TEXT NOT NULL DEFAULT 'cpp',
+            created_at TEXT DEFAULT (datetime('now', 'localtime')),
+            UNIQUE (bot_name, game)
+        )
+    """)
+
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS bot_versions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            bot_id INTEGER NOT NULL,
+            version_number INTEGER NOT NULL,
             description TEXT,
             source_code TEXT,
             file_path TEXT,
-            language TEXT DEFAULT 'cpp',
-            rating INTEGER DEFAULT 1500,
-            created_at TEXT DEFAULT (datetime('now', 'localtime'))
+            rating REAL DEFAULT 1500,
+            created_at TEXT DEFAULT (datetime('now', 'localtime')),
+            FOREIGN KEY (bot_id) REFERENCES bots(id) ON DELETE CASCADE,
+            UNIQUE (bot_id, version_number)
         )
     """)
 

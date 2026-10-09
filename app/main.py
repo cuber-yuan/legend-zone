@@ -4,6 +4,7 @@ import datetime
 import uuid
 import json
 from .db import get_db_connection
+from .services.bot_service import player_json_for_bot, player_json_for_human
 
 main_bp = Blueprint('main', __name__)
 
@@ -40,6 +41,7 @@ def profile_root():
 @main_bp.route('/profile/<username>')
 def profile(username):
     conn = None
+    is_owner = False
     try:
         conn = get_db_connection()
         with conn.cursor() as cursor:
@@ -49,17 +51,24 @@ def profile(username):
                 return redirect(url_for('main.home'))
             user_id = user_row['id']
             registered_at = user_row.get('created_at')
+            is_owner = bool(current_user.is_authenticated and current_user.id == user_id)
 
             cursor.execute("""
                 SELECT
-                    bot_name AS name,
-                    COUNT(*) AS versions,
-                    MIN(id) AS id,
-                    MAX(description) AS description
-                FROM bots
-                WHERE user_id = ?
-                GROUP BY bot_name
-                ORDER BY name
+                    b.id,
+                    b.bot_name AS name,
+                    b.game,
+                    b.language,
+                    lv.version_number AS latest_version,
+                    lv.rating         AS latest_rating,
+                    lv.description    AS latest_description,
+                    (SELECT COUNT(*) FROM bot_versions WHERE bot_id = b.id) AS versions
+                FROM bots b
+                LEFT JOIN bot_versions lv
+                       ON lv.bot_id = b.id
+                      AND lv.version_number = (SELECT MAX(version_number) FROM bot_versions WHERE bot_id = b.id)
+                WHERE b.user_id = ?
+                ORDER BY b.bot_name
             """, (user_id,))
             bots = cursor.fetchall()
     except Exception:
@@ -69,7 +78,7 @@ def profile(username):
         if conn:
             conn.close()
 
-    return render_template('profile.html', bots=bots, user_not_found=False, username=username, registered_at=registered_at)
+    return render_template('profile.html', bots=bots, user_not_found=False, username=username, registered_at=registered_at, is_owner=is_owner)
 
 @main_bp.route('/rating')
 def rating():
@@ -86,16 +95,17 @@ def rating():
                     SELECT
                         b.id,
                         b.bot_name AS name,
-                        b.rating,
+                        lv.version_number AS version,
+                        lv.rating,
                         u.username AS owner
                     FROM bots b
+                    JOIN bot_versions lv
+                      ON lv.bot_id = b.id
+                     AND lv.version_number = (SELECT MAX(version_number) FROM bot_versions WHERE bot_id = b.id)
                     JOIN users u ON b.user_id = u.id
                     WHERE b.game = ?
-                      AND b.id IN (
-                        SELECT MAX(id) FROM bots WHERE game = ? GROUP BY bot_name
-                      )
-                    ORDER BY b.rating DESC, b.bot_name
-                """, (game, game))
+                    ORDER BY lv.rating DESC, b.bot_name
+                """, (game,))
 
                 ratings[game] = cursor.fetchall()
 
@@ -160,7 +170,8 @@ def chat_messages():
     ])
 
 def get_latest_bots_for_game(game_name):
-    """Get latest record (max id) for each bot_name within a game."""
+    """Return one row per logical bot for the game; versions are collapsed at
+    the DB layer so callers don't need the old MAX(id)-per-name hack."""
     conn = None
     try:
         conn = get_db_connection()
@@ -169,11 +180,8 @@ def get_latest_bots_for_game(game_name):
             SELECT id, bot_name
             FROM bots
             WHERE game = ?
-              AND id IN (
-                SELECT MAX(id) FROM bots WHERE game = ? GROUP BY bot_name
-              )
             ORDER BY bot_name
-        """, (game_name, game_name))
+        """, (game_name,))
         return cursor.fetchall()
     finally:
         if conn:
@@ -243,16 +251,14 @@ def api_bots():
             if not game:
                 return jsonify([])
             
-            # Get latest bots for this game
+            # Get latest bots for this game (one row per logical bot; the
+            # game runner always plays against the newest version)
             cursor.execute("""
                 SELECT id, bot_name AS name
                 FROM bots
                 WHERE game = ?
-                  AND id IN (
-                    SELECT MAX(id) FROM bots WHERE game = ? GROUP BY bot_name
-                  )
                 ORDER BY bot_name
-            """, (game['name'], game['name']))
+            """, (game['name'],))
             bots = cursor.fetchall()
         return jsonify([{'id': b['id'], 'name': b['name']} for b in bots])
     except Exception as e:
@@ -285,10 +291,19 @@ def api_create_match():
             if not game:
                 return jsonify({'error': 'Game not found'}), 404
 
-            match_id = uuid.uuid4().hex
+        players_map = {}
+        for idx, player in enumerate(players, start=1):
+            if player.get('type') == 'bot' and player.get('botId'):
+                players_map[f"player_{idx}"] = player_json_for_bot(player['botId'])
+            else:
+                players_map[f"player_{idx}"] = player_json_for_human(player.get('name') or f"Player {idx}")
+
+        match_id = uuid.uuid4().hex
+        conn = get_db_connection()
+        with conn.cursor() as cursor:
             cursor.execute(
                 "INSERT INTO matches (id, game, players, status) VALUES (?, ?, ?, ?)",
-                (match_id, game['name'], json.dumps(players), 'playing')
+                (match_id, game['name'], json.dumps(players_map), 'playing')
             )
             conn.commit()
         return jsonify({'match_id': match_id, 'game_name': game['name']})
@@ -359,6 +374,7 @@ def api_get_match(match_id):
 def bot_detail(bot_id):
     conn = None
     bot = None
+    versions = []
     try:
         conn = get_db_connection()
         with conn.cursor() as cursor:
@@ -366,13 +382,9 @@ def bot_detail(bot_id):
                 SELECT
                     b.id,
                     b.bot_name AS name,
-                    b.description,
                     b.game,
                     b.language,
-                    b.rating,
                     b.created_at,
-                    b.source_code,
-                    b.file_path,
                     b.user_id,
                     u.username AS owner
                 FROM bots b
@@ -380,6 +392,23 @@ def bot_detail(bot_id):
                 WHERE b.id = ?
             """, (bot_id,))
             bot = cursor.fetchone()
+
+            if bot:
+                cursor.execute("""
+                    SELECT id, version_number, description, source_code, file_path, rating, created_at
+                    FROM bot_versions
+                    WHERE bot_id = ?
+                    ORDER BY version_number DESC
+                """, (bot_id,))
+                versions = cursor.fetchall()
+                if versions:
+                    latest = versions[0]
+                    bot = dict(bot)
+                    bot['latest_version'] = latest['version_number']
+                    bot['rating'] = latest['rating']
+                    bot['description'] = latest['description']
+                    bot['source_code'] = latest['source_code']
+                    bot['file_path'] = latest['file_path']
     except Exception as e:
         print(f"Error loading bot {bot_id}: {e}")
         abort(500)
@@ -387,8 +416,7 @@ def bot_detail(bot_id):
         if conn:
             conn.close()
 
-    # Checked outside the try block so this HTTPException is not swallowed into a 500.
     if not bot:
         abort(404)
 
-    return render_template('bot_detail.html', bot=bot)
+    return render_template('bot_detail.html', bot=bot, versions=versions)

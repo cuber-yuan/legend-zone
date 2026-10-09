@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}{% if match_id %}Match {{ match_id[:8] }}{% else %}Gomoku{% endif %}{% endblock %}
+{% block title %}{% if match_id %}Watch Match{% else %}Gomoku{% endif %}{% endblock %}
 
 {% block sidebar_left %}
 <aside class="sider-left">
@@ -435,7 +435,12 @@ function autoStartMatch(playersJson) {
   let players = [];
   try {
     const parsed = typeof playersJson === 'string' ? JSON.parse(playersJson) : playersJson;
-    players = Array.isArray(parsed) ? parsed : [];
+    const normalize = (p) => (typeof p === 'string' ? { name: p } : (p || {}));
+    if (Array.isArray(parsed)) {
+      players = parsed.map(normalize);
+    } else if (parsed && typeof parsed === 'object' && parsed.player_1) {
+      players = [normalize(parsed.player_1), normalize(parsed.player_2)];
+    }
   } catch (e) {
     console.error('Failed to parse match players:', e);
     return;
@@ -450,10 +455,10 @@ function autoStartMatch(playersJson) {
 
   socket.emit('new_game', {
     user_id: userId,
-    black_bot: p1.botId || null,
-    white_bot: p2.botId || null,
-    black_is_human: p1.type !== 'bot',
-    white_is_human: p2.type !== 'bot',
+    black_bot: p1.bot_id || null,
+    white_bot: p2.bot_id || null,
+    black_is_human: p1.type === 'human',
+    white_is_human: p2.type === 'human',
     match_id: MATCH_ID
   });
 }
@@ -513,19 +518,24 @@ document.addEventListener('DOMContentLoaded', function() {
   let matchPlayers = [];
   try {
     const parsed = {{ match.players | tojson }};
+    const normalize = (p) => (typeof p === 'string' ? { name: p } : (p || {}));
     if (Array.isArray(parsed)) {
-      matchPlayers = parsed;
-    } else if (parsed.player_1) {
-      matchPlayers = [{ name: parsed.player_1 }, { name: parsed.player_2 }];
+      matchPlayers = parsed.map(normalize);
+    } else if (parsed && parsed.player_1) {
+      matchPlayers = [normalize(parsed.player_1), normalize(parsed.player_2)];
     }
   } catch (e) {
     console.error('Failed to parse match players:', e);
   }
 
+  const labelFor = (p, fallback) => {
+    if (!p || !p.name) return fallback;
+    return p.version ? `${p.name} v${p.version}` : p.name;
+  };
   const p1 = matchPlayers[0];
   const p2 = matchPlayers[1];
-  const blackName = (p1 && p1.name) ? p1.name : 'Player 1';
-  const whiteName = (p2 && p2.name) ? p2.name : 'Player 2';
+  const blackName = labelFor(p1, 'Player 1');
+  const whiteName = labelFor(p2, 'Player 2');
   const blackEl = document.getElementById('blackPlayerName');
   const whiteEl = document.getElementById('whitePlayerName');
   if (blackEl) blackEl.textContent = blackName;

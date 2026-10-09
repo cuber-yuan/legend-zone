@@ -333,12 +333,11 @@ function autoStartMatch(playersJson) {
     let players = [];
     try {
         const parsed = typeof playersJson === 'string' ? JSON.parse(playersJson) : playersJson;
-        if (parsed && typeof parsed === 'object') {
-            if (parsed.player_1) {
-                players = [{ name: parsed.player_1 }, { name: parsed.player_2 }];
-            } else if (Array.isArray(parsed)) {
-                players = parsed;
-            }
+        const normalize = (p) => (typeof p === 'string' ? { name: p } : (p || {}));
+        if (Array.isArray(parsed)) {
+            players = parsed.map(normalize);
+        } else if (parsed && typeof parsed === 'object' && parsed.player_1) {
+            players = [normalize(parsed.player_1), normalize(parsed.player_2)];
         }
     } catch (e) {
         console.error('Failed to parse match players:', e);
@@ -348,10 +347,10 @@ function autoStartMatch(playersJson) {
 
     socket.emit('new_game', {
         user_id: userId,
-        p1_bot_id: players[0].botId || null,
-        p2_bot_id: players[1].botId || null,
-        p1_is_human: players[0].type !== 'bot',
-        p2_is_human: players[1].type !== 'bot',
+        p1_bot_id: players[0].bot_id || null,
+        p2_bot_id: players[1].bot_id || null,
+        p1_is_human: players[0].type === 'human',
+        p2_is_human: players[1].type === 'human',
         match_id: MATCH_ID,
         game_name: (typeof MATCH_GAME_NAME !== 'undefined' && MATCH_GAME_NAME) ? MATCH_GAME_NAME : 'Snake'
     });
@@ -526,12 +525,11 @@ function showMatchPlayerNames() {
         const raw = (typeof MATCH_PLAYERS !== 'undefined') ? MATCH_PLAYERS : null;
         if (!raw) return;
         const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
-        if (parsed && typeof parsed === 'object') {
-            if (parsed.player_1) {
-                players = [{ name: parsed.player_1 }, { name: parsed.player_2 }];
-            } else if (Array.isArray(parsed)) {
-                players = parsed;
-            }
+        const normalize = (p) => (typeof p === 'string' ? { name: p } : (p || {}));
+        if (Array.isArray(parsed)) {
+            players = parsed.map(normalize);
+        } else if (parsed && typeof parsed === 'object' && parsed.player_1) {
+            players = [normalize(parsed.player_1), normalize(parsed.player_2)];
         }
     } catch (e) {
         console.error('Failed to parse match players:', e);
@@ -539,10 +537,11 @@ function showMatchPlayerNames() {
     }
     if (players.length < 2) return;
 
+    const fmt = (p) => p && p.name ? (p.version ? `${p.name} v${p.version}` : p.name) : '';
     const blueEl = document.getElementById('bluePlayerName');
     const redEl = document.getElementById('redPlayerName');
-    if (blueEl) blueEl.textContent = players[0].name || 'Player 1';
-    if (redEl) redEl.textContent = players[1].name || 'Player 2';
+    if (blueEl) blueEl.textContent = fmt(players[0]) || 'Player 1';
+    if (redEl) redEl.textContent = fmt(players[1]) || 'Player 2';
 }
 
 // Keyboard control for human player (WASD)

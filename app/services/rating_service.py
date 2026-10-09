@@ -28,39 +28,53 @@ def _calculate_new_ratings(rating_1, rating_2, winner):
     return R_A_new, R_B_new
 
 
+def _latest_version(cursor, bot_id):
+    cursor.execute(
+        """
+        SELECT id, COALESCE(rating, ?) AS rating
+        FROM bot_versions
+        WHERE bot_id = ?
+        ORDER BY version_number DESC
+        LIMIT 1
+        """,
+        (DEFAULT_RATING, bot_id)
+    )
+    return cursor.fetchone()
+
+
 def update_bot_ratings(player_1_id, player_2_id, winner):
-    """
-    Fetches current ratings, calculates new ratings, and updates the database.
-    player_1_id and player_2_id must be integers (bot IDs).
+    """Update ELO on the latest bot_versions row for each bot.
+
+    player_1_id / player_2_id are logical bot IDs (bots.id). Rating lives on
+    bot_versions so a rewrite inherits its predecessor's rating at creation
+    and only the currently-competing version's number moves after a match.
     """
     p1_id_int = int(player_1_id)
     p2_id_int = int(player_2_id)
+
+    if p1_id_int == p2_id_int:
+        print(f"Self-play match for bot {p1_id_int}: rating unchanged.")
+        return
 
     conn = None
     try:
         conn = get_db_connection()
         with conn.cursor() as cursor:
-            cursor.execute(
-                "SELECT id, COALESCE(rating, ?) AS rating FROM bots WHERE id IN (?, ?)",
-                (DEFAULT_RATING, p1_id_int, p2_id_int)
-            )
-
-            bots_data = {row['id']: row['rating'] for row in cursor.fetchall()}
-
-            rating_1 = bots_data.get(p1_id_int)
-            rating_2 = bots_data.get(p2_id_int)
-
-            if rating_1 is None or rating_2 is None:
-                print("Error: Could not retrieve ratings for both bots. Check if IDs exist or match the returned type.")
+            v1 = _latest_version(cursor, p1_id_int)
+            v2 = _latest_version(cursor, p2_id_int)
+            if not v1 or not v2:
+                print(f"Error: no version found for bot {p1_id_int} or {p2_id_int}")
                 return
 
+            rating_1 = v1['rating']
+            rating_2 = v2['rating']
             R_1_new, R_2_new = _calculate_new_ratings(rating_1, rating_2, winner)
 
-            cursor.execute("UPDATE bots SET rating = ? WHERE id = ?", (R_1_new, player_1_id))
-            cursor.execute("UPDATE bots SET rating = ? WHERE id = ?", (R_2_new, player_2_id))
+            cursor.execute("UPDATE bot_versions SET rating = ? WHERE id = ?", (R_1_new, v1['id']))
+            cursor.execute("UPDATE bot_versions SET rating = ? WHERE id = ?", (R_2_new, v2['id']))
             conn.commit()
-            print(f"Ratings updated. P1({player_1_id}): {rating_1:.2f} -> {R_1_new:.2f}, P2({player_2_id}): {rating_2:.2f} -> {R_2_new:.2f}")
-
+            print(f"Ratings updated. P1({p1_id_int}/v-vid {v1['id']}): {rating_1:.2f} -> {R_1_new:.2f}, "
+                  f"P2({p2_id_int}/v-vid {v2['id']}): {rating_2:.2f} -> {R_2_new:.2f}")
     except Exception as e:
         print("Failed to update bot ratings:", e)
     finally:

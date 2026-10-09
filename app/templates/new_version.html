@@ -1,0 +1,71 @@
+{% extends 'base.html' %}
+
+{% block title %}New Version · {{ bot.bot_name }}{% endblock %}
+
+{% block sidebar_left %}
+{% endblock %}
+{% block sidebar_right %}
+{% endblock %}
+
+{% block content %}
+<div class="max-w-screen-md mx-auto mt-8">
+  <h1 class="text-2xl font-bold text-blue-700 mb-2">Add new version of "{{ bot.bot_name }}"</h1>
+  <p class="text-sm text-gray-600 mb-6">
+    Game: {{ bot.game }} &middot; Language: {{ bot.language }}
+    &middot; Latest version: v{{ bot.latest_version or 0 }}
+    &middot; Next version: v{{ (bot.latest_version or 0) + 1 }}
+  </p>
+
+  <form id="versionForm" action="{{ url_for('upload.add_version', bot_id=bot.id) }}" method="POST" enctype="multipart/form-data" class="bg-white p-6 rounded-lg shadow space-y-6">
+    <div>
+      <label for="botDescription" class="block text-sm font-medium text-gray-700">Version Description</label>
+      <textarea id="botDescription" name="botDescription" rows="3" required
+                class="mt-1 block w-full border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm p-2"
+                placeholder="What changed in this version?"></textarea>
+    </div>
+
+    <div>
+      <label class="block text-sm font-medium text-gray-700">Language</label>
+      <div class="mt-1 block w-full border border-gray-200 bg-gray-50 rounded-lg p-2 text-gray-600 sm:text-sm">
+        {{ bot.language }} (locked for this bot)
+      </div>
+    </div>
+
+    <div>
+      <label for="botFile" class="block text-sm font-medium text-gray-700">Upload file</label>
+      <input type="file" id="botFile" name="botFile"
+             class="mt-1 block w-full border border-gray-300 rounded-lg shadow-sm sm:text-sm p-2">
+    </div>
+
+    <div>
+      <label for="sourceCode" class="block text-sm font-medium text-gray-700">Or paste source code</label>
+      <textarea id="sourceCode" name="sourceCode" rows="10"
+                class="mt-1 block w-full border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm p-2 font-mono"
+                placeholder="Paste your source code here"></textarea>
+    </div>
+
+    <div class="flex justify-end space-x-4">
+      <a href="{{ url_for('main.bot_detail', bot_id=bot.id) }}"
+         class="bg-gray-500 text-white px-4 py-2 rounded-lg hover:bg-gray-600 transition">Cancel</a>
+      <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition">Upload Version</button>
+    </div>
+  </form>
+</div>
+
+<script>
+  document.getElementById('versionForm').onsubmit = async function (e) {
+    e.preventDefault();
+    const form = e.target;
+    const formData = new FormData(form);
+
+    const response = await fetch(form.action, { method: 'POST', body: formData });
+    const result = await response.json().catch(() => ({ message: 'Upload failed.' }));
+    if (response.ok) {
+      alert(result.message || 'Version added!');
+      window.location.href = "{{ url_for('main.bot_detail', bot_id=bot.id) }}";
+    } else {
+      alert(result.message || 'Failed to add version.');
+    }
+  };
+</script>
+{% endblock %}

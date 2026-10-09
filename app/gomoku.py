@@ -10,6 +10,7 @@ from .code_executor import CodeExecutor
 import uuid
 from .db import get_db_connection
 from .services.rating_service import update_bot_ratings
+from .services.bot_service import load_latest_version, player_json_for_bot, player_json_for_human
 
 gomoku_bp = Blueprint('gomoku', __name__)
 
@@ -18,19 +19,10 @@ active_matches = {}
 
 
 def _get_bot_executor(bot_id):
-    if not bot_id:
+    rec = load_latest_version(bot_id)
+    if not rec:
         return None
-    try:
-        conn = get_db_connection()
-        with conn.cursor() as cursor:
-            cursor.execute("SELECT source_code, file_path, language FROM bots WHERE id = ?", (bot_id,))
-            result = cursor.fetchone()
-        if result:
-            return CodeExecutor(code=result['source_code'], language=result['language'], path=result['file_path'])
-    finally:
-        if conn:
-            conn.close()
-    return None
+    return CodeExecutor(workdir=rec['file_path'], language=rec['language'])
 
 def run_auto_gomoku_match(player_1_id, player_2_id):
     """
@@ -53,13 +45,12 @@ def run_auto_gomoku_match(player_1_id, player_2_id):
     try:
         conn = get_db_connection()
         with conn.cursor() as cursor:
-            cursor.execute("SELECT bot_name FROM bots WHERE id = ?", (player_1_id,))
-            row1 = cursor.fetchone()
-            name1 = row1['bot_name'] if row1 else str(player_1_id)
-            cursor.execute("SELECT bot_name FROM bots WHERE id = ?", (player_2_id,))
-            row2 = cursor.fetchone()
-            name2 = row2['bot_name'] if row2 else str(player_2_id)
-            players = json.dumps({'player_1': name1, 'player_2': name2})
+            pass
+        players = json.dumps({
+            'player_1': player_json_for_bot(player_1_id),
+            'player_2': player_json_for_bot(player_2_id),
+        })
+        with conn.cursor() as cursor:
             cursor.execute(
                 "INSERT INTO matches (id, game, players, status) VALUES (?, ?, ?, 'playing')",
                 (match_id, 'Gomoku', players)
@@ -351,18 +342,15 @@ def register_gomoku_events(socketio):
         conn = None
         try:
             conn = get_db_connection()
-            with conn.cursor() as cursor:
-                cursor.execute("SELECT bot_name FROM bots WHERE id = ?", (player_1_id,))
-                row1 = cursor.fetchone()
-                username_1 = row1['bot_name'] if row1 else str(player_1_id)
-                if player_1_type == 'human':
-                    username_1 = '<i>HUMAN</i>'
-                cursor.execute("SELECT bot_name FROM bots WHERE id = ?", (player_2_id,))
-                row2 = cursor.fetchone()
-                username_2 = row2['bot_name'] if row2 else str(player_2_id)
-                if player_2_type == 'human':
-                    username_2 = '<i>HUMAN</i>'
-            players = json.dumps({'player_1': username_1, 'player_2': username_2})
+            if player_1_type == 'bot':
+                p1_json = player_json_for_bot(player_1_id)
+            else:
+                p1_json = player_json_for_human()
+            if player_2_type == 'bot':
+                p2_json = player_json_for_bot(player_2_id)
+            else:
+                p2_json = player_json_for_human()
+            players = json.dumps({'player_1': p1_json, 'player_2': p2_json})
 
             result_winner = game.winner if game.winner != 0 else -1
             elo_winner = result_winner - 1 if result_winner in (1, 2) else -1
