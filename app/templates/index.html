@@ -60,7 +60,8 @@
     // Clickable when we know the bot's id (jumps to /bot/<id>);
     // humans / deleted bots render as a plain non-link card.
     // The winner's card carries a small green "W" corner badge.
-    function playerCard(name, isWinner, tone, botId) {
+    // The version renders in a smaller, lighter font than the bot name.
+    function playerCard(name, isWinner, tone, botId, version) {
         if (!name) return '';
         const tones = {
             blue: 'bg-blue-100 text-blue-800 hover:bg-blue-200',
@@ -70,7 +71,8 @@
         const badge = isWinner
             ? '<span class="absolute -top-1.5 -right-1.5 flex items-center justify-center w-4 h-4 rounded-full bg-green-500 text-white text-[10px] font-bold shadow" title="Winner">W</span>'
             : '';
-        const inner = `${escapeHtml(name)}${badge}`;
+        const versionHtml = version ? `<span class="ml-1 text-xs font-normal opacity-70">v${version}</span>` : '';
+        const inner = `${escapeHtml(name)}${versionHtml}${badge}`;
         if (botId) {
             return `<a href="/bot/${botId}" class="relative inline-flex items-center px-2.5 py-1 rounded-full ${cls} text-sm font-medium whitespace-nowrap transition-colors" title="View bot">${inner}</a>`;
         }
@@ -86,12 +88,8 @@
         matches.forEach(match => {
             // home.py already flattened match.player_1 / player_2 into
             // name strings plus player_1_id / player_1_version fields.
-            const p1Name = match.player_1;
-            const p2Name = match.player_2;
-            const p1Label = match.player_1_version ? `${p1Name} v${match.player_1_version}` : p1Name;
-            const p2Label = match.player_2_version ? `${p2Name} v${match.player_2_version}` : p2Name;
-            const p1Card = playerCard(p1Label, match.winner === 0, 'purple', match.player_1_id);
-            const p2Card = playerCard(p2Label, match.winner === 1, 'purple', match.player_2_id);
+            const p1Card = playerCard(match.player_1, match.winner === 0, 'purple', match.player_1_id, match.player_1_version);
+            const p2Card = playerCard(match.player_2, match.winner === 1, 'purple', match.player_2_id, match.player_2_version);
             const cards = [p1Card, p2Card].filter(Boolean);
             const playersStr = cards.join('<span class="mx-1.5 text-xs text-gray-400"></span>');
 
