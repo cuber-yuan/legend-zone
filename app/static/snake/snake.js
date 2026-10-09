@@ -9,6 +9,15 @@ explosionAudio.volume = 0.3;
 let gameoverAudio = new Audio('/static/snake/assets/gameover.m4a');
 gameoverAudio.volume = 1;
 
+// Play a clip, restarting one-shots so repeated replay ticks retrigger them.
+// Swallows the autoplay-policy rejection (resolved after the first user gesture).
+function _tryPlay(audio) {
+    if (!audio) return;
+    if (!audio.loop) audio.currentTime = 0;
+    const p = audio.play();
+    if (p && p.catch) p.catch(() => {});
+}
+
 // --- Phaser Scene Definition ---
 class SnakeScene extends Phaser.Scene {
     constructor() {
@@ -370,6 +379,14 @@ function renderReplayFrame(index) {
             scene.updateFromState(display);
         }
     }
+
+    // Mirror the live-match audio: a move each turn, explosion+gameover at the end.
+    if (index > 0) _tryPlay(moveAudio);
+    if (index >= replayDisplays.length - 1 && replayDisplays.length > 1) {
+        if (bgmAudio) { bgmAudio.pause(); bgmAudio.currentTime = 0; }
+        _tryPlay(explosionAudio);
+        _tryPlay(gameoverAudio);
+    }
 }
 
 const replayController = new ReplayController({
@@ -383,6 +400,22 @@ function startReplay(displays, winner) {
 
     const controls = document.getElementById('replayControls');
     if (controls) controls.style.display = 'flex';
+
+    // Start BGM; browsers block autoplay without a gesture, so arm a one-time
+    // unlock that resumes it on the first click/keypress.
+    if (bgmAudio) {
+        gameoverAudio.pause();
+        gameoverAudio.currentTime = 0;
+        bgmAudio.currentTime = 0;
+        _tryPlay(bgmAudio);
+        const unlock = () => {
+            if (isReplayMode && bgmAudio.paused) _tryPlay(bgmAudio);
+            document.removeEventListener('pointerdown', unlock);
+            document.removeEventListener('keydown', unlock);
+        };
+        document.addEventListener('pointerdown', unlock);
+        document.addEventListener('keydown', unlock);
+    }
 
     let msg = winner == 0 ? 'Blue wins!' : (winner == 1 ? 'Red wins!' : 'Draw!');
     replayController.load(Math.max(0, displays.length - 1));
