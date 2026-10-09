@@ -75,45 +75,50 @@
   <!-- <h2 class="text-2xl font-bold mb-4">My bot list</h2> -->
   
   {% if bots and bots|length > 0 %}
-    <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-      {% for bot in bots %}
-        <div class="bg-white p-4 rounded-lg shadow">
-          <div class="flex items-start justify-between">
-            <div>
-              <div class="text-lg font-semibold text-gray-900">
-                {{ bot.name }}
-                {% if bot.latest_version %}<span class="text-sm text-gray-500">v{{ bot.latest_version }}</span>{% endif %}
-              </div>
-              {% if username %}
-                <div class="text-sm text-gray-500">@{{ username }} &middot; {{ bot.game }}</div>
-              {% endif %}
-              {% if bot.versions is not none %}
-                <div class="text-xs text-gray-400 mt-1">
-                  versions: {{ bot.versions }}
-                  {% if bot.latest_rating is not none %}
-                    &middot; rating {{ '%.1f'|format(bot.latest_rating) }}
+    {% for game, game_bots in bots | groupby('game') %}
+      <section class="mb-8">
+        <h2 class="text-xl font-bold text-gray-800 mb-3">{{ game }}</h2>
+        <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {% for bot in game_bots %}
+            <div class="bg-white p-4 rounded-lg shadow">
+              <div class="flex items-start justify-between">
+                <div>
+                  <div class="text-lg font-semibold text-gray-900">
+                    {{ bot.name }}
+                    {% if bot.latest_version %}<span class="text-sm text-gray-500">v{{ bot.latest_version }}</span>{% endif %}
+                  </div>
+                  {% if username %}
+                    <div class="text-sm text-gray-500">@{{ username }}</div>
+                  {% endif %}
+                  {% if bot.versions is not none %}
+                    <div class="text-xs text-gray-400 mt-1">
+                      versions: {{ bot.versions }}
+                      {% if bot.latest_rating is not none %}
+                        &middot; rating {{ '%.1f'|format(bot.latest_rating) }}
+                      {% endif %}
+                    </div>
                   {% endif %}
                 </div>
+              </div>
+              {% if bot.latest_description %}
+                <p class="mt-3 text-sm text-gray-700">{{ bot.latest_description }}</p>
               {% endif %}
+              <div class="mt-4 flex gap-2">
+                <a href="{{ url_for('main.bot_detail', bot_id=bot.id) }}"
+                   class="inline-block px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-500 text-sm">View</a>
+                {% if is_owner %}
+                  <a href="{{ url_for('upload.new_version_page', bot_id=bot.id) }}"
+                     class="inline-block px-3 py-1 bg-green-600 text-white rounded hover:bg-green-500 text-sm">New Version</a>
+                  <button type="button"
+                          class="delete-bot-btn inline-block px-3 py-1 bg-red-600 text-white rounded hover:bg-red-500 text-sm"
+                          data-bot-id="{{ bot.id }}" data-bot-name="{{ bot.name }}">Delete</button>
+                {% endif %}
+              </div>
             </div>
-          </div>
-          {% if bot.latest_description %}
-            <p class="mt-3 text-sm text-gray-700">{{ bot.latest_description }}</p>
-          {% endif %}
-          <div class="mt-4 flex gap-2">
-            <a href="{{ url_for('main.bot_detail', bot_id=bot.id) }}"
-               class="inline-block px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-500 text-sm">View</a>
-            {% if is_owner %}
-              <a href="{{ url_for('upload.new_version_page', bot_id=bot.id) }}"
-                 class="inline-block px-3 py-1 bg-green-600 text-white rounded hover:bg-green-500 text-sm">New Version</a>
-              <button type="button"
-                      class="delete-bot-btn inline-block px-3 py-1 bg-red-600 text-white rounded hover:bg-red-500 text-sm"
-                      data-bot-id="{{ bot.id }}" data-bot-name="{{ bot.name }}">Delete</button>
-            {% endif %}
-          </div>
+          {% endfor %}
         </div>
-      {% endfor %}
-    </div>
+      </section>
+    {% endfor %}
   {% else %}
     {% if not user_not_found %}
       <div class="bg-white p-6 rounded shadow text-center text-gray-600">

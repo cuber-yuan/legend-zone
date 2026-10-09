@@ -151,8 +151,9 @@ def register_snake_events(socketio):
                 active_matches[match_id]['latest_display'] = game_state_dict['display']
 
             for turn in range(maxTurn):
-                if user_id not in sessions or sessions[user_id].get('sid') != sid:
-                    print(f"User {user_id} disconnected, terminating snake game loop.")
+                session_gone = user_id not in sessions or sessions[user_id].get('sid') != sid
+                if session_gone and (player_1_type == 'human' or player_2_type == 'human'):
+                    print(f"Human player {user_id} disconnected, terminating snake game loop.")
                     break
 
                 input_str_1 = json.dumps(input_dict_1)
