@@ -2,26 +2,19 @@ from flask import Blueprint, request
 from flask_login import current_user
 from . import socketio
 from .cpp_judge_executor import CppJudgeExecutor
-from .code_executor import CodeExecutor
-from flask_socketio import emit, join_room, disconnect
+from flask_socketio import emit, join_room
 from uuid import uuid4
 import os
 import json
 import concurrent.futures
 from .db import get_db_connection
 from .services.rating_service import update_bot_ratings
-from .services.bot_service import load_latest_version, player_json_for_bot, player_json_for_human
+from .services.bot_service import get_bot_executor as _get_bot_executor, build_players_json
+from .services.match_service import create_match_record, finalize_match_record, update_match_result
 
 tank_bp = Blueprint('tank', __name__)
 sessions = {}
 active_matches = {}
-
-
-def _get_bot_executor(bot_id):
-    rec = load_latest_version(bot_id)
-    if not rec:
-        return None
-    return CodeExecutor(workdir=rec['file_path'], language=rec['language'])
 
 
 class TankGameSession:
@@ -36,9 +29,6 @@ class TankGameSession:
 def register_tank_events(socketio):
     @socketio.on('connect', namespace='/tank2')
     def handle_connect():
-        if not current_user.is_authenticated:
-            disconnect()
-            return False
         user_id = str(uuid4())
         sessions[user_id] = {'sid': request.sid}
         join_room(request.sid)
@@ -89,6 +79,8 @@ def register_tank_events(socketio):
 
     @socketio.on('new_game', namespace='/tank2')
     def new_game(data):
+        if not current_user.is_authenticated:
+            return
         user_id = data['user_id']
         if user_id in sessions:
             sessions[user_id]['terminated'] = True
@@ -232,30 +224,8 @@ def register_tank_events(socketio):
                     'match_id': match_id,
                 }, room=broadcast_target)
 
-                conn = None
-                try:
-                    conn = get_db_connection()
-                    p1_json = player_json_for_bot(player_1_id_str) if player_1_type == 'bot' else player_json_for_human()
-                    p2_json = player_json_for_bot(player_2_id_str) if player_2_type == 'bot' else player_json_for_human()
-                    players = json.dumps({'player_1': p1_json, 'player_2': p2_json})
-
-                    with conn.cursor() as cursor:
-                        if match_id:
-                            cursor.execute("""
-                                UPDATE matches SET players = ?, winner = ?, displays = ?, status = 'finished'
-                                WHERE id = ?
-                            """, (players, winner, json.dumps(displays), match_id))
-                        else:
-                            cursor.execute("""
-                                INSERT INTO matches (id, game, players, winner, displays, status)
-                                VALUES (?, ?, ?, ?, ?, 'finished')
-                            """, (uuid4().hex, 'Tank Battle', players, winner, json.dumps(displays)))
-                        conn.commit()
-                except Exception as e:
-                    print("Failed to save tank match record:", e)
-                finally:
-                    if conn:
-                        conn.close()
+                players = build_players_json(player_1_id_str, player_1_type, player_2_id_str, player_2_type)
+                finalize_match_record(match_id, 'Tank Battle', players, winner, json.dumps(displays), 'displays')
 
                 if player_1_type == 'bot' and player_2_type == 'bot':
                     update_bot_ratings(player_1_id_str, player_2_id_str, winner if winner in (0, 1) else -1)
@@ -316,32 +286,15 @@ def run_auto_tank_match(player_1_id, player_2_id):
         print("Error: Failed to load both bot executors for auto Tank match.")
         return
 
-    match_id = uuid4().hex
-
     # 1) 创建 matches 记录
-    conn = None
+    players = build_players_json(player_1_id, 'bot', player_2_id, 'bot')
     try:
-        conn = get_db_connection()
-        players = json.dumps({
-            'player_1': player_json_for_bot(player_1_id),
-            'player_2': player_json_for_bot(player_2_id),
-        })
-        with conn.cursor() as cursor:
-            cursor.execute(
-                "INSERT INTO matches (id, game, players, status) VALUES (?, ?, ?, 'playing')",
-                (match_id, 'Tank Battle', players),
-            )
-            conn.commit()
+        match_id = create_match_record('Tank Battle', players)
     except Exception as e:
         print("Failed to create auto Tank match record:", e)
-        if conn:
-            conn.close()
         executor_1.cleanup()
         executor_2.cleanup()
         return
-    finally:
-        if conn:
-            conn.close()
 
     # 2) 跑对战
     cpp_path = os.path.join(os.path.dirname(__file__), '../judges/tank2_judge.exe')
@@ -391,24 +344,8 @@ def run_auto_tank_match(player_1_id, player_2_id):
         executor_2.cleanup()
 
     # winner 标准化：0/1/-1
-    db_winner = winner if winner in (0, 1) else -1
     elo_winner = winner if winner in (0, 1) else -1
     update_bot_ratings(player_1_id, player_2_id, elo_winner)
+    update_match_result(match_id, elo_winner, json.dumps(displays), 'displays')
 
-    # 3) 写回 matches
-    conn = None
-    try:
-        conn = get_db_connection()
-        with conn.cursor() as cursor:
-            cursor.execute("""
-                UPDATE matches SET winner = ?, displays = ?, status = 'finished'
-                WHERE id = ?
-            """, (db_winner, json.dumps(displays), match_id))
-            conn.commit()
-    except Exception as e:
-        print("Failed to update auto Tank match record:", e)
-    finally:
-        if conn:
-            conn.close()
-
-    print(f"Auto Tank match finished. Winner: {db_winner} (-1=draw, 0=Top, 1=Bottom)")
+    print(f"Auto Tank match finished. Winner: {elo_winner} (-1=draw, 0=Top, 1=Bottom)")

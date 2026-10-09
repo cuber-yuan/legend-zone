@@ -3,26 +3,19 @@ from flask_login import current_user
 from . import socketio
 from judges.gomoku_judge import GomokuJudge
 from uuid import uuid4
-from flask_socketio import emit, join_room, disconnect
+from flask_socketio import emit, join_room
 import json
-import os
-from .code_executor import CodeExecutor
 import uuid
 from .db import get_db_connection
 from .services.rating_service import update_bot_ratings
-from .services.bot_service import load_latest_version, player_json_for_bot, player_json_for_human
+from .services.bot_service import get_bot_executor as _get_bot_executor, build_players_json
+from .services.match_service import create_match_record, finalize_match_record, update_match_result
 
 gomoku_bp = Blueprint('gomoku', __name__)
 
 sessions = {}
 active_matches = {}
 
-
-def _get_bot_executor(bot_id):
-    rec = load_latest_version(bot_id)
-    if not rec:
-        return None
-    return CodeExecutor(workdir=rec['file_path'], language=rec['language'])
 
 def run_auto_gomoku_match(player_1_id, player_2_id):
     """
@@ -39,33 +32,14 @@ def run_auto_gomoku_match(player_1_id, player_2_id):
         print("Error: Failed to load both bot executors for auto match.")
         return
 
-    match_id = uuid.uuid4().hex
-
-    conn = None
+    players = build_players_json(player_1_id, 'bot', player_2_id, 'bot')
     try:
-        conn = get_db_connection()
-        with conn.cursor() as cursor:
-            pass
-        players = json.dumps({
-            'player_1': player_json_for_bot(player_1_id),
-            'player_2': player_json_for_bot(player_2_id),
-        })
-        with conn.cursor() as cursor:
-            cursor.execute(
-                "INSERT INTO matches (id, game, players, status) VALUES (?, ?, ?, 'playing')",
-                (match_id, 'Gomoku', players)
-            )
-            conn.commit()
+        match_id = create_match_record('Gomoku', players)
     except Exception as e:
         print("Failed to create auto match record:", e)
-        if conn:
-            conn.close()
         executor_1.cleanup()
         executor_2.cleanup()
         return
-    finally:
-        if conn:
-            conn.close()
 
     game = GomokuJudge()
     game.game_id = str(uuid.uuid4())
@@ -131,25 +105,9 @@ def run_auto_gomoku_match(player_1_id, player_2_id):
     finally:
         active_matches.pop(match_id, None)
 
-    result_winner = game.winner if game.winner != 0 else -1
-    elo_winner = result_winner - 1 if result_winner in (1, 2) else -1
+    elo_winner = (game.winner - 1) if game.winner in (1, 2) else -1
     update_bot_ratings(player_1_id, player_2_id, elo_winner)
-
-    conn = None
-    try:
-        conn = get_db_connection()
-        with conn.cursor() as cursor:
-            cursor.execute("""
-                UPDATE matches SET winner = ?, move_history = ?, status = 'finished'
-                WHERE id = ?
-            """, (result_winner - 1 if result_winner in (1, 2) else -1,
-                  json.dumps(game.move_history), match_id))
-            conn.commit()
-    except Exception as e:
-        print("Failed to update auto match record:", e)
-    finally:
-        if conn:
-            conn.close()
+    update_match_result(match_id, elo_winner, json.dumps(game.move_history), 'move_history')
 
     socketio.emit('match_finished', {
         'match_id': match_id,
@@ -163,9 +121,6 @@ def run_auto_gomoku_match(player_1_id, player_2_id):
 def register_gomoku_events(socketio):
     @socketio.on('connect', namespace='/gomoku')
     def handle_connect():
-        if not current_user.is_authenticated:
-            disconnect()
-            return False
         user_id = str(uuid4())
         sessions[user_id] = {'sid': request.sid}
         join_room(request.sid)
@@ -220,6 +175,8 @@ def register_gomoku_events(socketio):
 
     @socketio.on('new_game', namespace='/gomoku')
     def new_game(data):
+        if not current_user.is_authenticated:
+            return
         user_id = data['user_id']
         user_session = sessions.get(user_id)
         if not user_session: return
@@ -336,42 +293,12 @@ def register_gomoku_events(socketio):
                 active_matches.pop(match_id, None)
 
         # update ratings and save match
+        elo_winner = (game.winner - 1) if game.winner in (1, 2) else -1
         if player_1_type == 'bot' and player_2_type == 'bot':
-            update_bot_ratings(player_1_id, player_2_id, game.winner - 1)
+            update_bot_ratings(player_1_id, player_2_id, elo_winner)
 
-        conn = None
-        try:
-            conn = get_db_connection()
-            if player_1_type == 'bot':
-                p1_json = player_json_for_bot(player_1_id)
-            else:
-                p1_json = player_json_for_human()
-            if player_2_type == 'bot':
-                p2_json = player_json_for_bot(player_2_id)
-            else:
-                p2_json = player_json_for_human()
-            players = json.dumps({'player_1': p1_json, 'player_2': p2_json})
-
-            result_winner = game.winner if game.winner != 0 else -1
-            elo_winner = result_winner - 1 if result_winner in (1, 2) else -1
-
-            with conn.cursor() as cursor:
-                if match_id:
-                    cursor.execute("""
-                        UPDATE matches SET players = ?, winner = ?, move_history = ?, status = 'finished'
-                        WHERE id = ?
-                    """, (players, elo_winner, json.dumps(game.move_history), match_id))
-                else:
-                    cursor.execute("""
-                        INSERT INTO matches (id, game, players, winner, move_history, status)
-                        VALUES (?, ?, ?, ?, ?, 'finished')
-                    """, (uuid.uuid4().hex, 'Gomoku', players, elo_winner, json.dumps(game.move_history)))
-                conn.commit()
-        except Exception as e:
-            print("Failed to update match record:", e)
-        finally:
-            if conn:
-                conn.close()
+        players = build_players_json(player_1_id, player_1_type, player_2_id, player_2_type)
+        finalize_match_record(match_id, 'Gomoku', players, elo_winner, json.dumps(game.move_history), 'move_history')
 
         if match_id:
             socketio.emit('match_finished', {

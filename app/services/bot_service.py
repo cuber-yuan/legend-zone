@@ -1,4 +1,6 @@
+import json
 from ..db import get_db_connection
+from ..code_executor import CodeExecutor
 
 
 def load_latest_version(bot_id):
@@ -49,3 +51,18 @@ def player_json_for_bot(bot_id):
 
 def player_json_for_human(label="HUMAN"):
     return {"name": label, "type": "human"}
+
+
+def get_bot_executor(bot_id):
+    """Build a CodeExecutor for the bot's latest version, or None."""
+    rec = load_latest_version(bot_id)
+    if not rec:
+        return None
+    return CodeExecutor(workdir=rec['file_path'], language=rec['language'])
+
+
+def build_players_json(p1_id, p1_type, p2_id, p2_type):
+    """Serialize the matches.players JSON object for two slots (bot or human)."""
+    p1 = player_json_for_bot(p1_id) if p1_type == 'bot' else player_json_for_human()
+    p2 = player_json_for_bot(p2_id) if p2_type == 'bot' else player_json_for_human()
+    return json.dumps({'player_1': p1, 'player_2': p2})
