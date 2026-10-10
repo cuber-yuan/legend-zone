@@ -174,15 +174,15 @@
     <section class="bg-gray-100 p-6 rounded-lg shadow-md">
         <h2 class="text-2xl font-semibold mb-4" style="margin-bottom:1em;">Latest Matches</h2>
         <div class="overflow-x-auto">
-            <table class="min-w-full text-left text-gray-700 border border-gray-300 rounded">
+            <!-- Tailwind's preflight sets border-collapse: collapse, which makes
+                 cell border-radius a no-op, so the corners stay square here. -->
+            <table class="min-w-full text-left text-gray-700 border border-gray-300 bg-white">
                 <thead>
-                    <tr class="bg-gray-200">
-                        <th class="px-4 py-2 border-b">Game</th>
-                        <th class="px-4 py-2 border-b">Players</th>
-                        <!-- <th class="px-4 py-2 border-b">Player 2</th> -->
-                        <!-- <th class="px-4 py-2 border-b hidden sm:table-cell">Winner</th> -->
-                        <th class="px-4 py-2 border-b">Replay</th>
-                        <th class="px-4 py-2 border-b hidden sm:table-cell">Time</th>
+                    <tr class="bg-gradient-to-r from-blue-600 to-blue-400 text-white">
+                        <th class="px-4 py-2 border-b border-blue-700">Game</th>
+                        <th class="px-4 py-2 border-b border-blue-700">Players</th>
+                        <th class="px-4 py-2 border-b border-blue-700">Replay</th>
+                        <th class="px-4 py-2 border-b border-blue-700 hidden sm:table-cell">Time</th>
                     </tr>
                 </thead>
                 <tbody id="latest-matches-tbody">

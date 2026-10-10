@@ -415,7 +415,9 @@ def bot_detail(bot_id):
                     bot['rating'] = latest['rating']
                     bot['description'] = latest['description']
                     bot['source_code'] = latest['source_code']
-                    bot['file_path'] = latest['file_path']
+                    # Expose only whether files exist — the absolute workdir would
+                    # leak the server's directory layout to any visitor.
+                    bot['has_files'] = bool(latest['file_path'])
     except Exception as e:
         print(f"Error loading bot {bot_id}: {e}")
         abort(500)

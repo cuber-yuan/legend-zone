@@ -96,10 +96,9 @@
 
     {% if bot.source_code %}
       <pre class="p-4 overflow-x-auto text-sm leading-relaxed bg-gray-50 text-gray-800"><code id="bot-source">{{ bot.source_code }}</code></pre>
-    {% elif bot.file_path %}
+    {% elif bot.has_files %}
       <div class="p-6 text-gray-600 text-sm">
-        This bot was uploaded as files under:
-        <span class="font-mono text-gray-800">{{ bot.file_path.replace('\\', '/') }}</span>
+        This bot was uploaded as a file package. Its source is stored on the server and is not shown here.
       </div>
     {% else %}
       <div class="p-6 text-gray-500 text-sm">No source code is available for this bot.</div>
