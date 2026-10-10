@@ -7,9 +7,22 @@ import atexit
 import logging
 import os
 
+from dotenv import load_dotenv
 
+# Loaded here rather than in run.py: ALLOWED_ORIGINS below is evaluated at
+# import time, and run.py's `from app import ...` has already executed this
+# whole module before its own top-level code could call load_dotenv().
+load_dotenv(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), '.env'))
 
-ALLOWED_ORIGINS = os.environ.get('ALLOWED_ORIGINS', 'http://localhost:5000,http://127.0.0.1:5000').split(',')
+_DEFAULT_ORIGINS = 'http://localhost:5000,http://127.0.0.1:5000'
+ALLOWED_ORIGINS = os.environ.get('ALLOWED_ORIGINS', _DEFAULT_ORIGINS).split(',')
+if 'ALLOWED_ORIGINS' not in os.environ:
+    # Browsers omit the Origin header on same-origin GET but send it on POST,
+    # so an unset value looks like a working handshake followed by 400s on
+    # every poll POST — with no application error to find.
+    print("WARNING: ALLOWED_ORIGINS is not set; falling back to %s. SocketIO "
+          "POSTs from any other origin will be rejected with 400 'Not an "
+          "accepted origin.'" % _DEFAULT_ORIGINS)
 # The Werkzeug dev server's WebSocket upgrade (via simple-websocket) raises a
 # ConnectionError and logs a spurious 500 traceback whenever a client that was
 # upgraded to WebSocket disconnects abruptly (e.g. navigating away from a page
