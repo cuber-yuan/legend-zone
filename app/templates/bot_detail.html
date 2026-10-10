@@ -53,6 +53,23 @@
     {% endif %}
   </div>
 
+  <!-- Rating history -->
+  <div class="bg-white rounded-lg shadow mb-6 overflow-hidden">
+    <div class="bg-gray-800 px-4 py-2 flex items-center justify-between">
+      <h2 class="text-white font-semibold">Rating History</h2>
+      <span class="text-gray-400 text-xs">click a point to open its match</span>
+    </div>
+    <div class="p-4">
+      {% if history %}
+        <canvas id="rating-chart" height="120"></canvas>
+      {% else %}
+        <p class="text-gray-500 text-sm py-6 text-center">
+          No rating history yet. This bot predates rating tracking, or has not finished a match.
+        </p>
+      {% endif %}
+    </div>
+  </div>
+
   <!-- Version list -->
   {% if versions and versions|length > 1 %}
     <div class="bg-white rounded-lg shadow mb-6 overflow-hidden">
@@ -128,6 +145,108 @@
       }
     });
   });
+</script>
+{% endif %}
+
+{% if history %}
+<script src="{{ url_for('static', filename='vendor/chart.umd.min.js') }}"></script>
+<script>
+  (function () {
+    const history = {{ history | tojson }};
+    const canvas = document.getElementById('rating-chart');
+    if (!canvas || !window.Chart) return;
+
+    function shortLabel(iso) {
+      const d = new Date(iso);
+      if (isNaN(d.getTime())) return iso;
+      const p = n => (n < 10 ? '0' + n : n);
+      return (d.getMonth() + 1) + '/' + p(d.getDate()) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
+    }
+
+    // Dot colour encodes the move this point represents, so a version baseline
+    // and a drawn match both read as neutral grey.
+    const colors = history.map((h, i) => {
+      if (i === 0) return '#9ca3af';
+      const delta = h.rating - history[i - 1].rating;
+      return delta > 0.001 ? '#16a34a' : (delta < -0.001 ? '#dc2626' : '#9ca3af');
+    });
+
+    new Chart(canvas, {
+      type: 'line',
+      data: {
+        labels: history.map(h => shortLabel(h.created_at)),
+        datasets: [
+          {
+            label: 'Rating',
+            data: history.map(h => h.rating),
+            borderColor: '#2563eb',
+            backgroundColor: 'rgba(37, 99, 235, 0.08)',
+            borderWidth: 2,
+            pointRadius: 4,
+            pointHoverRadius: 6,
+            pointBackgroundColor: colors,
+            pointBorderColor: '#ffffff',
+            pointBorderWidth: 1,
+            fill: true,
+            tension: 0.25
+          },
+          {
+            label: 'Default 1500',
+            data: history.map(() => 1500),
+            borderColor: '#9ca3af',
+            borderDash: [5, 5],
+            borderWidth: 1,
+            pointRadius: 0,
+            fill: false
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        interaction: { mode: 'nearest', intersect: true },
+        scales: {
+          y: {
+            beginAtZero: false,
+            grace: '10%',
+            title: { display: true, text: 'rating' },
+            grid: { color: 'rgba(0,0,0,0.06)' }
+          },
+          x: {
+            grid: { display: false },
+            ticks: { maxRotation: 0, autoSkip: true, maxTicksLimit: 8 }
+          }
+        },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            filter: item => item.datasetIndex === 0,
+            callbacks: {
+              title: items => history[items[0].dataIndex] ? shortLabel(history[items[0].dataIndex].created_at) : '',
+              label: ctx => {
+                const h = history[ctx.dataIndex];
+                const delta = ctx.dataIndex === 0 ? null : h.rating - history[ctx.dataIndex - 1].rating;
+                const move = delta === null ? 'baseline'
+                  : (delta > 0.001 ? '+' + delta.toFixed(1) : (delta < -0.001 ? delta.toFixed(1) : '±0'));
+                return [
+                  'rating ' + h.rating.toFixed(2) + '  (' + move + ')',
+                  'v' + h.version_number + ' · ' + (h.match_id ? 'click to watch the match' : 'version baseline')
+                ];
+              }
+            }
+          }
+        },
+        onHover: (event, elements) => {
+          const hit = elements.length && history[elements[0].index] && history[elements[0].index].match_id;
+          canvas.style.cursor = hit ? 'pointer' : 'default';
+        },
+        onClick: (event, elements) => {
+          if (!elements.length) return;
+          const h = history[elements[0].index];
+          if (h && h.match_id) window.location.href = '/match/' + h.match_id;
+        }
+      }
+    });
+  })();
 </script>
 {% endif %}
 {% endblock %}

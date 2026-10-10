@@ -1,4 +1,5 @@
 from ..db import get_db_connection
+from .utils import utc_now_iso
 
 K_FACTOR = 32
 DEFAULT_RATING = 1500
@@ -42,12 +43,41 @@ def _latest_version(cursor, bot_id):
     return cursor.fetchone()
 
 
-def update_bot_ratings(player_1_id, player_2_id, winner):
+def _already_scored(cursor, match_id):
+    """True if this match already moved any rating.
+
+    Guards the ELO update itself, not just the history insert: re-applying a
+    match would compound the delta on bot_versions.rating while the timeline
+    stayed put, silently desyncing the chart from the live number.
+    """
+    cursor.execute("SELECT 1 FROM rating_history WHERE match_id = ? LIMIT 1", (match_id,))
+    return cursor.fetchone() is not None
+
+
+def record_history(cursor, bot_id, version_id, match_id, rating):
+    """Append one point to the bot's rating timeline.
+
+    INSERT OR IGNORE keeps a UNIQUE(version_id, match_id) collision from
+    raising and rolling back the rating UPDATEs sharing this transaction;
+    _already_scored is what actually prevents a repeat.
+    """
+    cursor.execute(
+        """
+        INSERT OR IGNORE INTO rating_history (bot_id, version_id, match_id, rating, created_at)
+        VALUES (?, ?, ?, ?, ?)
+        """,
+        (bot_id, version_id, match_id, rating, utc_now_iso())
+    )
+
+
+def update_bot_ratings(player_1_id, player_2_id, winner, match_id=None):
     """Update ELO on the latest bot_versions row for each bot.
 
     player_1_id / player_2_id are logical bot IDs (bots.id). Rating lives on
     bot_versions so a rewrite inherits its predecessor's rating at creation
     and only the currently-competing version's number moves after a match.
+    match_id links the appended rating_history points back to the game; it is
+    null on the legacy game-page path that never created a match row.
     """
     p1_id_int = int(player_1_id)
     p2_id_int = int(player_2_id)
@@ -60,6 +90,10 @@ def update_bot_ratings(player_1_id, player_2_id, winner):
     try:
         conn = get_db_connection()
         with conn.cursor() as cursor:
+            if match_id and _already_scored(cursor, match_id):
+                print(f"Match {match_id} already scored: rating unchanged.")
+                return
+
             v1 = _latest_version(cursor, p1_id_int)
             v2 = _latest_version(cursor, p2_id_int)
             if not v1 or not v2:
@@ -72,6 +106,8 @@ def update_bot_ratings(player_1_id, player_2_id, winner):
 
             cursor.execute("UPDATE bot_versions SET rating = ? WHERE id = ?", (R_1_new, v1['id']))
             cursor.execute("UPDATE bot_versions SET rating = ? WHERE id = ?", (R_2_new, v2['id']))
+            record_history(cursor, p1_id_int, v1['id'], match_id, R_1_new)
+            record_history(cursor, p2_id_int, v2['id'], match_id, R_2_new)
             conn.commit()
             print(f"Ratings updated. P1({p1_id_int}/v-vid {v1['id']}): {rating_1:.2f} -> {R_1_new:.2f}, "
                   f"P2({p2_id_int}/v-vid {v2['id']}): {rating_2:.2f} -> {R_2_new:.2f}")

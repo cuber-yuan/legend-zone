@@ -6,6 +6,7 @@ import zipfile
 from werkzeug.utils import secure_filename
 from .db import get_db_connection
 from .services.utils import utc_now_iso
+from .services.rating_service import record_history
 
 upload_bp = Blueprint('upload', __name__)
 
@@ -178,6 +179,9 @@ def upload_bot():
             """,
             (bot_id, description, source_code if not bot_file else None, file_path, now)
         )
+        # Baseline point so the rating chart starts at the bot's birth instead
+        # of its first finished match.
+        record_history(cursor, bot_id, cursor.lastrowid, None, 1500)
         conn.commit()
     except Exception as e:
         print("Failed to create bot:", e)
@@ -262,6 +266,7 @@ def add_version(bot_id):
             """,
             (bot_id, next_v, description, source_code if not bot_file else None, file_path, prev_rating, utc_now_iso())
         )
+        record_history(cursor, bot_id, cursor.lastrowid, None, prev_rating)
         conn.commit()
     except Exception as e:
         print("Failed to add version:", e)
@@ -299,6 +304,7 @@ def delete_bot(bot_id):
             return jsonify({"message": "Not your bot."}), 403
 
         # SQLite foreign keys are off by default, so cascade explicitly.
+        cursor.execute("DELETE FROM rating_history WHERE bot_id = ?", (bot_id,))
         cursor.execute("DELETE FROM bot_versions WHERE bot_id = ?", (bot_id,))
         cursor.execute("DELETE FROM bots WHERE id = ?", (bot_id,))
         conn.commit()

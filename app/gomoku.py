@@ -106,7 +106,7 @@ def run_auto_gomoku_match(player_1_id, player_2_id):
         active_matches.pop(match_id, None)
 
     elo_winner = (game.winner - 1) if game.winner in (1, 2) else -1
-    update_bot_ratings(player_1_id, player_2_id, elo_winner)
+    update_bot_ratings(player_1_id, player_2_id, elo_winner, match_id)
     update_match_result(match_id, elo_winner, json.dumps(game.move_history), 'move_history')
 
     socketio.emit('match_finished', {
@@ -295,7 +295,7 @@ def register_gomoku_events(socketio):
         # update ratings and save match
         elo_winner = (game.winner - 1) if game.winner in (1, 2) else -1
         if player_1_type == 'bot' and player_2_type == 'bot':
-            update_bot_ratings(player_1_id, player_2_id, elo_winner)
+            update_bot_ratings(player_1_id, player_2_id, elo_winner, match_id)
 
         players = build_players_json(player_1_id, player_1_type, player_2_id, player_2_type)
         finalize_match_record(match_id, 'Gomoku', players, elo_winner, json.dumps(game.move_history), 'move_history')

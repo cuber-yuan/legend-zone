@@ -82,6 +82,23 @@ def init_db():
         )
     """)
 
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS rating_history (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            bot_id INTEGER NOT NULL,
+            version_id INTEGER NOT NULL,
+            match_id TEXT,
+            rating REAL NOT NULL,
+            created_at TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+            UNIQUE (version_id, match_id)
+        )
+    """)
+
+    cursor.execute("""
+        CREATE INDEX IF NOT EXISTS idx_rating_history_bot
+            ON rating_history (bot_id, created_at)
+    """)
+
     conn.commit()
     
     # Insert test data

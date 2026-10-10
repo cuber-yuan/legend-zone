@@ -382,6 +382,7 @@ def bot_detail(bot_id):
     conn = None
     bot = None
     versions = []
+    history = []
     try:
         conn = get_db_connection()
         with conn.cursor() as cursor:
@@ -408,6 +409,14 @@ def bot_detail(bot_id):
                     ORDER BY version_number DESC
                 """, (bot_id,))
                 versions = cursor.fetchall()
+                cursor.execute("""
+                    SELECT bv.version_number, rh.match_id, rh.rating, rh.created_at
+                    FROM rating_history rh
+                    JOIN bot_versions bv ON bv.id = rh.version_id
+                    WHERE rh.bot_id = ?
+                    ORDER BY rh.created_at, rh.id
+                """, (bot_id,))
+                history = cursor.fetchall()
                 if versions:
                     latest = versions[0]
                     bot = dict(bot)
@@ -428,4 +437,4 @@ def bot_detail(bot_id):
     if not bot:
         abort(404)
 
-    return render_template('bot_detail.html', bot=bot, versions=versions)
+    return render_template('bot_detail.html', bot=bot, versions=versions, history=history)

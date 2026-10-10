@@ -209,7 +209,7 @@ def register_snake_events(socketio):
                     finalize_match_record(match_id, 'Snake', players, winner, json.dumps(displays), 'displays')
 
                     if player_1_type == 'bot' and player_2_type == 'bot':
-                        update_bot_ratings(player_1_id_str, player_2_id_str, winner if winner in (0, 1) else -1)
+                        update_bot_ratings(player_1_id_str, player_2_id_str, winner if winner in (0, 1) else -1, match_id)
 
                     if match_id:
                         socketio.emit('match_finished', {
@@ -325,7 +325,7 @@ def run_auto_snake_match(player_1_id, player_2_id):
 
     # winner 标准化：0/1/-1
     elo_winner = winner if winner in (0, 1) else -1
-    update_bot_ratings(player_1_id, player_2_id, elo_winner)
+    update_bot_ratings(player_1_id, player_2_id, elo_winner, match_id)
     update_match_result(match_id, elo_winner, json.dumps(displays), 'displays')
 
     print(f"Auto Snake match finished. Winner: {elo_winner} (-1=draw, 0=P1, 1=P2)")
