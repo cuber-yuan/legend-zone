@@ -96,6 +96,9 @@ class GomokuJudge:
                 return player
         return 0
 
+    def is_board_full(self):
+        return all(self.board[y][x] != 0 for y in range(BOARD_SIZE) for x in range(BOARD_SIZE))
+
     def to_json(self):
         return json.dumps({
             "board": self.board,

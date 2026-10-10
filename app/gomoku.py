@@ -99,7 +99,7 @@ def run_auto_gomoku_match(player_1_id, player_2_id):
             }
             socketio.emit('update', response, room=match_id)
 
-            if game.winner != 0 or game.is_terminated:
+            if game.winner != 0 or game.is_board_full() or game.is_terminated:
                 print(f"Game ended after {turn + 1} turns. Winner: {game.winner}")
                 break
     finally:
@@ -285,7 +285,7 @@ def register_gomoku_events(socketio):
                     'match_id': match_id
                 }
                 emit('update', response, room=broadcast_target)
-                if game.winner != 0 or game.is_terminated:
+                if game.winner != 0 or game.is_board_full() or game.is_terminated:
                     print(f"Game ended after {turn + 1} turns. Winner: {game.winner}")
                     break
         finally:
