@@ -42,11 +42,7 @@
 
         <div class="text-sm text-gray-500 mt-1">
           {% if registered_at %}
-            {% if registered_at is string %}
-              Registered: {{ registered_at }}
-            {% else %}
-              Registered: {{ registered_at.strftime('%Y-%m-%d') }}
-            {% endif %}
+            <span data-utc="{{ registered_at }}">Registered: {{ registered_at }}</span>
           {% endif %}
         </div>
 

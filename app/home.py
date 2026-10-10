@@ -7,7 +7,6 @@ import json
 import os
 from .code_executor import CodeExecutor
 import uuid
-import datetime
 from .db import get_db_connection
 
 home_bp = Blueprint('home', __name__)
@@ -38,11 +37,6 @@ def register_home_events(socketio):
             with conn.cursor() as cursor:
                 cursor.execute("SELECT * FROM matches WHERE status = 'finished' ORDER BY created_at DESC LIMIT 20")
                 matches = cursor.fetchall()
-                for match in matches:
-                    for k, v in match.items():
-                        if isinstance(v, datetime.datetime):
-                            match[k] = v.strftime('%m-%d %H:%M')
-
                 for match in matches:
                     try:
                         p = json.loads(match['players']) if match['players'] else {}

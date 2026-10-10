@@ -96,7 +96,7 @@
             let winner = match.winner;
             if (winner === null || winner === undefined) winner = 'Draw';
 
-            let date = match.created_at || '';
+            let date = fmtLocal(match.created_at);
 
             let replayLink = '';
             if (match.status === 'finished') {

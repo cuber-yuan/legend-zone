@@ -1,6 +1,7 @@
 import sqlite3
 import os
 import sys
+from datetime import datetime, timezone
 from werkzeug.security import generate_password_hash
 
 
@@ -25,7 +26,7 @@ def init_db():
             username TEXT UNIQUE NOT NULL,
             password_hash TEXT NOT NULL,
             email TEXT,
-            created_at TEXT DEFAULT (datetime('now', 'localtime'))
+            created_at TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
         )
     """)
 
@@ -36,7 +37,7 @@ def init_db():
             bot_name TEXT NOT NULL,
             game TEXT NOT NULL,
             language TEXT NOT NULL DEFAULT 'cpp',
-            created_at TEXT DEFAULT (datetime('now', 'localtime')),
+            created_at TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
             UNIQUE (bot_name, game)
         )
     """)
@@ -50,7 +51,7 @@ def init_db():
             source_code TEXT,
             file_path TEXT,
             rating REAL DEFAULT 1500,
-            created_at TEXT DEFAULT (datetime('now', 'localtime')),
+            created_at TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
             FOREIGN KEY (bot_id) REFERENCES bots(id) ON DELETE CASCADE,
             UNIQUE (bot_id, version_number)
         )
@@ -65,7 +66,7 @@ def init_db():
             displays TEXT,
             move_history TEXT,
             status TEXT DEFAULT 'playing',
-            created_at TEXT DEFAULT (datetime('now', 'localtime'))
+            created_at TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
         )
     """)
 
@@ -77,7 +78,7 @@ def init_db():
             author_id INTEGER,
             min_players INTEGER DEFAULT 2,
             max_players INTEGER DEFAULT 4,
-            created_at TEXT DEFAULT (datetime('now', 'localtime'))
+            created_at TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
         )
     """)
 
@@ -87,9 +88,10 @@ def init_db():
     cursor.execute("SELECT COUNT(*) FROM users")
     if cursor.fetchone()[0] == 0:
         password_hash = generate_password_hash('123456')
+        now = datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
         cursor.execute(
-            "INSERT INTO users (username, password_hash, email) VALUES (?, ?, ?)",
-            ('admin', password_hash, 'cuber_yuan@outlook.com')
+            "INSERT INTO users (username, password_hash, email, created_at) VALUES (?, ?, ?, ?)",
+            ('admin', password_hash, 'cuber_yuan@outlook.com', now)
         )
         print("Inserted test user: admin")
     
@@ -103,8 +105,8 @@ def init_db():
         ]
         for game in default_games:
             cursor.execute(
-                "INSERT INTO games (name, description, author_id, min_players, max_players) VALUES (?, ?, ?, ?, ?)",
-                game
+                "INSERT INTO games (name, description, author_id, min_players, max_players, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+                game + (now,)
             )
         print(f"Inserted {len(default_games)} default games: {[g[0] for g in default_games]}")
     

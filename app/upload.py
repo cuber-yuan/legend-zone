@@ -5,6 +5,7 @@ import shutil
 import zipfile
 from werkzeug.utils import secure_filename
 from .db import get_db_connection
+from .services.utils import utc_now_iso
 
 upload_bp = Blueprint('upload', __name__)
 
@@ -160,9 +161,10 @@ def upload_bot():
                 return jsonify({"message": "Bot already exists. Use New Version to update it."}), 409
             return jsonify({"message": "Bot name already taken by another user for this game."}), 409
 
+        now = utc_now_iso()
         cursor.execute(
-            "INSERT INTO bots (user_id, bot_name, game, language) VALUES (?, ?, ?, ?)",
-            (current_user.id, bot_name, game, language)
+            "INSERT INTO bots (user_id, bot_name, game, language, created_at) VALUES (?, ?, ?, ?, ?)",
+            (current_user.id, bot_name, game, language, now)
         )
         bot_id = cursor.lastrowid
 
@@ -171,10 +173,10 @@ def upload_bot():
 
         cursor.execute(
             """
-            INSERT INTO bot_versions (bot_id, version_number, description, source_code, file_path, rating)
-            VALUES (?, 1, ?, ?, ?, 1500)
+            INSERT INTO bot_versions (bot_id, version_number, description, source_code, file_path, rating, created_at)
+            VALUES (?, 1, ?, ?, ?, 1500, ?)
             """,
-            (bot_id, description, source_code if not bot_file else None, file_path)
+            (bot_id, description, source_code if not bot_file else None, file_path, now)
         )
         conn.commit()
     except Exception as e:
@@ -255,10 +257,10 @@ def add_version(bot_id):
 
         cursor.execute(
             """
-            INSERT INTO bot_versions (bot_id, version_number, description, source_code, file_path, rating)
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO bot_versions (bot_id, version_number, description, source_code, file_path, rating, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
-            (bot_id, next_v, description, source_code if not bot_file else None, file_path, prev_rating)
+            (bot_id, next_v, description, source_code if not bot_file else None, file_path, prev_rating, utc_now_iso())
         )
         conn.commit()
     except Exception as e:

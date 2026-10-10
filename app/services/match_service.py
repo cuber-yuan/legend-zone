@@ -1,5 +1,6 @@
 import uuid
 from ..db import get_db_connection
+from .utils import utc_now_iso
 
 # Whitelist the per-game payload column so the f-string SQL stays injection-safe.
 _PAYLOAD_COLS = {'move_history', 'displays'}
@@ -13,8 +14,8 @@ def create_match_record(game, players_json, status='playing'):
         conn = get_db_connection()
         with conn.cursor() as cursor:
             cursor.execute(
-                "INSERT INTO matches (id, game, players, status) VALUES (?, ?, ?, ?)",
-                (match_id, game, players_json, status)
+                "INSERT INTO matches (id, game, players, status, created_at) VALUES (?, ?, ?, ?, ?)",
+                (match_id, game, players_json, status, utc_now_iso())
             )
             conn.commit()
     finally:
@@ -39,8 +40,8 @@ def finalize_match_record(match_id, game, players_json, winner, payload_json, pa
                 )
             else:
                 cursor.execute(
-                    f"INSERT INTO matches (id, game, players, winner, {payload_col}, status) VALUES (?, ?, ?, ?, ?, 'finished')",
-                    (uuid.uuid4().hex, game, players_json, winner, payload_json)
+                    f"INSERT INTO matches (id, game, players, winner, {payload_col}, status, created_at) VALUES (?, ?, ?, ?, ?, 'finished', ?)",
+                    (uuid.uuid4().hex, game, players_json, winner, payload_json, utc_now_iso())
                 )
             conn.commit()
     except Exception as e:

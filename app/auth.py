@@ -4,6 +4,7 @@ from werkzeug.security import check_password_hash, generate_password_hash
 from .models import User
 from . import login_manager
 from .db import get_db_connection
+from .services.utils import utc_now_iso
 
 auth_bp = Blueprint('auth', __name__)
 
@@ -27,7 +28,7 @@ def create_user_in_db(username, password, email):
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
-        cursor.execute("INSERT INTO users (username, password_hash, email) VALUES (?, ?, ?)", (username, password_hash, email))
+        cursor.execute("INSERT INTO users (username, password_hash, email, created_at) VALUES (?, ?, ?, ?)", (username, password_hash, email, utc_now_iso()))
         conn.commit()
         return True
     except Exception:

@@ -5,6 +5,7 @@ import uuid
 import json
 from .db import get_db_connection
 from .services.bot_service import player_json_for_bot, player_json_for_human
+from .services.utils import utc_now_iso
 
 main_bp = Blueprint('main', __name__)
 
@@ -308,8 +309,8 @@ def api_create_match():
         conn = get_db_connection()
         with conn.cursor() as cursor:
             cursor.execute(
-                "INSERT INTO matches (id, game, players, status) VALUES (?, ?, ?, ?)",
-                (match_id, game['name'], json.dumps(players_map), 'playing')
+                "INSERT INTO matches (id, game, players, status, created_at) VALUES (?, ?, ?, ?, ?)",
+                (match_id, game['name'], json.dumps(players_map), 'playing', utc_now_iso())
             )
             conn.commit()
         return jsonify({'match_id': match_id, 'game_name': game['name']})
