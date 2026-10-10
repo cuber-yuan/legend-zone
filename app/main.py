@@ -377,7 +377,7 @@ def api_get_match(match_id):
         if conn:
             conn.close()
 
-@main_bp.route('/bot/<int:bot_id>')
+@main_bp.route('/bot/<string:bot_id>')
 def bot_detail(bot_id):
     conn = None
     bot = None

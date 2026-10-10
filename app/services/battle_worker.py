@@ -32,7 +32,7 @@ def select_bots_for_game(game_name):
                 return None, None
 
             p1_id, p2_id = random.sample(bot_ids, 2)
-            return int(p1_id), int(p2_id)
+            return p1_id, p2_id
 
     except Exception as e:
         print(f"Error during bot selection for {game_name}: {e}")
@@ -57,14 +57,12 @@ def schedule_all_games():
         player_1_id, player_2_id = select_bots_for_game(game)
         if player_1_id is None or player_2_id is None:
             continue
-        p1_id_int = int(player_1_id)
-        p2_id_int = int(player_2_id)
         print(f"Scheduling match for {game} between Bot {player_1_id} and Bot {player_2_id}")
         runner = auto_match_runners.get(game)
         if runner is None:
             print(f"No auto-match runner registered for {game}, skipping.")
             continue
-        runner(p1_id_int, p2_id_int)
+        runner(player_1_id, player_2_id)
 
         time.sleep(1)
 

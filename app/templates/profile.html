@@ -245,6 +245,8 @@
         });
         const data = await resp.json().catch(() => ({ message: 'Delete failed.' }));
         if (resp.ok) {
+          // Surface the partial-success warning before the reload wipes the page.
+          if (data.files_remaining) alert(data.message);
           window.location.reload();
         } else {
           alert(data.message || 'Delete failed.');

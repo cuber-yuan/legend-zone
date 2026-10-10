@@ -2,6 +2,8 @@ from flask import Blueprint, request, jsonify, render_template, abort
 from flask_login import login_required, current_user
 import os
 import shutil
+import time
+import uuid
 import zipfile
 from werkzeug.utils import secure_filename
 from .db import get_db_connection
@@ -163,11 +165,11 @@ def upload_bot():
             return jsonify({"message": "Bot name already taken by another user for this game."}), 409
 
         now = utc_now_iso()
+        bot_id = uuid.uuid4().hex
         cursor.execute(
-            "INSERT INTO bots (user_id, bot_name, game, language, created_at) VALUES (?, ?, ?, ?, ?)",
-            (current_user.id, bot_name, game, language, now)
+            "INSERT INTO bots (id, user_id, bot_name, game, language, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+            (bot_id, current_user.id, bot_name, game, language, now)
         )
-        bot_id = cursor.lastrowid
 
         version_dir = _version_dir(current_user.id, bot_id, 1)
         file_path = _store_version_files(version_dir, language, source_code, bot_file)
@@ -195,7 +197,7 @@ def upload_bot():
     return jsonify({"message": "Bot uploaded successfully!", "bot_id": bot_id})
 
 
-@upload_bp.route('/bots/<int:bot_id>/new-version')
+@upload_bp.route('/bots/<string:bot_id>/new-version')
 @login_required
 def new_version_page(bot_id):
     conn = None
@@ -223,7 +225,7 @@ def new_version_page(bot_id):
     return render_template('new_version.html', bot=bot)
 
 
-@upload_bp.route('/bots/<int:bot_id>/versions', methods=['POST'])
+@upload_bp.route('/bots/<string:bot_id>/versions', methods=['POST'])
 @login_required
 def add_version(bot_id):
     if request.content_length and request.content_length > MAX_CONTENT_LENGTH:
@@ -280,7 +282,101 @@ def add_version(bot_id):
     return jsonify({"message": "Version added!", "version_number": next_v})
 
 
-@upload_bp.route('/bots/<int:bot_id>/delete', methods=['POST'])
+def _remove_bot_directory(user_id, bot_id):
+    """Delete a bot's upload tree, reporting whether it really went away.
+
+    ignore_errors=True used to swallow failures here while the DB rows had
+    already been committed, silently stranding a directory nothing pointed at
+    any more. The path is logged server-side only — never returned to the
+    client, since it reveals the server's layout.
+    """
+    bot_dir = os.path.join(UPLOAD_ROOT, str(user_id), str(bot_id))
+    for attempt in range(2):
+        try:
+            shutil.rmtree(bot_dir)
+            return True
+        except FileNotFoundError:
+            return True
+        except OSError as exc:
+            if attempt == 0:
+                # A ladder match may still hold this directory as its cwd.
+                time.sleep(0.5)
+                continue
+            print("Bot rows deleted but directory survived %s: %s" % (bot_dir, exc))
+            return False
+
+
+def sweep_orphan_bot_dirs():
+    """Reclaim upload directories whose bot row no longer exists.
+
+    Startup-only: at request time this could race with an upload that has
+    written its files but not yet inserted the row. This is also the only
+    recovery path for a directory orphaned by a crash between the DB commit
+    and the rmtree in delete_bot.
+    """
+    if not os.path.isdir(UPLOAD_ROOT):
+        return
+
+    conn = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, user_id FROM bots")
+        rows = cursor.fetchall()
+    except Exception as exc:
+        print("Skipped orphan bot sweep:", exc)
+        return
+    finally:
+        if conn:
+            conn.close()
+
+    # A row with no id means the insert never completed (bot ids are generated
+    # in upload_bot before the INSERT, so a NULL means schema or code drift).
+    # Deleting on that reading would wipe live bots, so refuse outright.
+    alive = set()
+    for row in rows:
+        uid, bid = row['user_id'], row['id']
+        if uid is None or bid is None or str(bid).strip() == '':
+            print("Skipped orphan bot sweep: a bots row has a null id — "
+                  "schema drift, refusing to delete anything.")
+            return
+        alive.add((str(uid), str(bid)))
+
+    # An empty result means something is wrong with the database, not that
+    # every bot is gone — refuse to delete anything on that reading.
+    if not alive:
+        print("Skipped orphan bot sweep: database reports no bots.")
+        return
+
+    removed = 0
+    for user_id in os.listdir(UPLOAD_ROOT):
+        user_dir = os.path.join(UPLOAD_ROOT, user_id)
+        if not os.path.isdir(user_dir):
+            continue
+        if not user_id.isdigit():
+            continue
+        for bot_id in os.listdir(user_dir):
+            # Bot ids are uuid4().hex: exactly 32 lowercase hex characters.
+            # Anything shorter or looser (a 'cafe' folder, a stray file) is not
+            # ours to delete, so match the real shape rather than a hex-ish guess.
+            if len(bot_id) != 32 or any(c not in '0123456789abcdef' for c in bot_id):
+                continue
+            orphan = os.path.join(user_dir, bot_id)
+            if not os.path.isdir(orphan):
+                continue
+            if (user_id, bot_id) in alive:
+                continue
+            try:
+                shutil.rmtree(orphan)
+                removed += 1
+                print("Removed orphan bot directory:", orphan.replace('\\', '/'))
+            except OSError as exc:
+                print("Could not remove orphan bot directory %s: %s" % (orphan, exc))
+    if removed:
+        print("Orphan bot sweep reclaimed %d director%s" % (removed, 'y' if removed == 1 else 'ies'))
+
+
+@upload_bp.route('/bots/<string:bot_id>/delete', methods=['POST'])
 @login_required
 def delete_bot(bot_id):
     """Permanently remove a bot, all its versions, and its uploaded files.
@@ -317,7 +413,12 @@ def delete_bot(bot_id):
         if conn:
             conn.close()
 
-    bot_dir = os.path.join(UPLOAD_ROOT, str(current_user.id), str(bot_id))
-    shutil.rmtree(bot_dir, ignore_errors=True)
+    removed = _remove_bot_directory(current_user.id, bot_id)
+    if not removed:
+        return jsonify({
+            "message": "Bot deleted, but its uploaded files are still on disk and "
+                       "will be reclaimed on the next server restart.",
+            "files_remaining": True,
+        })
 
     return jsonify({"message": "Bot deleted."})

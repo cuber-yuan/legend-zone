@@ -79,11 +79,11 @@ def update_bot_ratings(player_1_id, player_2_id, winner, match_id=None):
     match_id links the appended rating_history points back to the game; it is
     null on the legacy game-page path that never created a match row.
     """
-    p1_id_int = int(player_1_id)
-    p2_id_int = int(player_2_id)
+    p1_id = str(player_1_id)
+    p2_id = str(player_2_id)
 
-    if p1_id_int == p2_id_int:
-        print(f"Self-play match for bot {p1_id_int}: rating unchanged.")
+    if p1_id == p2_id:
+        print(f"Self-play match for bot {p1_id}: rating unchanged.")
         return
 
     conn = None
@@ -94,10 +94,10 @@ def update_bot_ratings(player_1_id, player_2_id, winner, match_id=None):
                 print(f"Match {match_id} already scored: rating unchanged.")
                 return
 
-            v1 = _latest_version(cursor, p1_id_int)
-            v2 = _latest_version(cursor, p2_id_int)
+            v1 = _latest_version(cursor, p1_id)
+            v2 = _latest_version(cursor, p2_id)
             if not v1 or not v2:
-                print(f"Error: no version found for bot {p1_id_int} or {p2_id_int}")
+                print(f"Error: no version found for bot {p1_id} or {p2_id}")
                 return
 
             rating_1 = v1['rating']
@@ -106,11 +106,11 @@ def update_bot_ratings(player_1_id, player_2_id, winner, match_id=None):
 
             cursor.execute("UPDATE bot_versions SET rating = ? WHERE id = ?", (R_1_new, v1['id']))
             cursor.execute("UPDATE bot_versions SET rating = ? WHERE id = ?", (R_2_new, v2['id']))
-            record_history(cursor, p1_id_int, v1['id'], match_id, R_1_new)
-            record_history(cursor, p2_id_int, v2['id'], match_id, R_2_new)
+            record_history(cursor, p1_id, v1['id'], match_id, R_1_new)
+            record_history(cursor, p2_id, v2['id'], match_id, R_2_new)
             conn.commit()
-            print(f"Ratings updated. P1({p1_id_int}/v-vid {v1['id']}): {rating_1:.2f} -> {R_1_new:.2f}, "
-                  f"P2({p2_id_int}/v-vid {v2['id']}): {rating_2:.2f} -> {R_2_new:.2f}")
+            print(f"Ratings updated. P1({p1_id}/v-vid {v1['id']}): {rating_1:.2f} -> {R_1_new:.2f}, "
+                  f"P2({p2_id}/v-vid {v2['id']}): {rating_2:.2f} -> {R_2_new:.2f}")
     except Exception as e:
         print("Failed to update bot ratings:", e)
     finally:

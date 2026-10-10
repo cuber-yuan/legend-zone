@@ -32,6 +32,11 @@ def create_app():
     from judges.build import ensure_judges_built
     ensure_judges_built()
 
+    # Reclaim bot upload directories orphaned by an interrupted delete. Runs
+    # before the scheduler so it can never race with a live match.
+    from .upload import sweep_orphan_bot_dirs
+    sweep_orphan_bot_dirs()
+
     from .home import register_home_events
     from .gomoku import register_gomoku_events
     from .tank2 import register_tank_events

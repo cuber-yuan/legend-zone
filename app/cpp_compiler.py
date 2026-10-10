@@ -3,6 +3,11 @@ import tempfile
 import os
 import hashlib
 
+# Bound for the compiled-bot cache. Nothing maps a bot back to its executable
+# (the filename is a hash of path + mtime + size), so deleting a bot cannot
+# target its builds — only an age cap keeps the directory from growing forever.
+MAX_CACHED_BINARIES = 50
+
 class CppCompiler:
     """
     用于编译和运行C++源代码的工具类。
@@ -14,6 +19,35 @@ class CppCompiler:
             cache_dir = os.path.join(tempfile.gettempdir(), "cpp_code_cache")
         self.cache_dir = cache_dir
         os.makedirs(self.cache_dir, exist_ok=True)
+
+    def _prune_cache(self):
+        """Evict the oldest cached binaries once the cache is over budget.
+
+        Binaries still held by a running match refuse to unlink on Windows;
+        those are skipped and picked up by a later compile rather than
+        turning a housekeeping step into a bot failure.
+        """
+        try:
+            names = [n for n in os.listdir(self.cache_dir) if n.startswith('cpp_')]
+        except OSError:
+            return
+        if len(names) <= MAX_CACHED_BINARIES:
+            return
+
+        dated = []
+        for name in names:
+            path = os.path.join(self.cache_dir, name)
+            try:
+                dated.append((os.path.getmtime(path), path))
+            except OSError:
+                continue
+        dated.sort()
+
+        for _, path in dated[:len(dated) - MAX_CACHED_BINARIES]:
+            try:
+                os.remove(path)
+            except OSError:
+                continue
 
     def compile(self, code: str, extra_args=None) -> str:
         """
@@ -41,6 +75,7 @@ class CppCompiler:
             os.remove(src_path)
             if result.returncode != 0:
                 raise RuntimeError(f"C++ compile error:\n{result.stderr.decode()}")
+            self._prune_cache()
         else:
             pass
             # print(f"Using cached executable: {exe_path}")
@@ -71,6 +106,7 @@ class CppCompiler:
         result = subprocess.run(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         if result.returncode != 0:
             raise RuntimeError(f"C++ compile error:\n{result.stderr.decode()}")
+        self._prune_cache()
         return exe_path
 
     def run(self, exe_path: str, input_str: str = "", timeout=10) -> str:

@@ -32,7 +32,7 @@ def init_db():
 
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS bots (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id TEXT PRIMARY KEY,
             user_id INTEGER NOT NULL,
             bot_name TEXT NOT NULL,
             game TEXT NOT NULL,
@@ -45,7 +45,7 @@ def init_db():
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS bot_versions (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            bot_id INTEGER NOT NULL,
+            bot_id TEXT NOT NULL,
             version_number INTEGER NOT NULL,
             description TEXT,
             source_code TEXT,
@@ -85,7 +85,7 @@ def init_db():
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS rating_history (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            bot_id INTEGER NOT NULL,
+            bot_id TEXT NOT NULL,
             version_id INTEGER NOT NULL,
             match_id TEXT,
             rating REAL NOT NULL,
