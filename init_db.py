@@ -99,6 +99,7 @@ def init_db():
             ('Gomoku', 'Five in a row', 1, 2, 2),
             ('Snake', 'Snake battle game', 1, 2, 2),
             ('Tank Battle', 'Tank battle game', 1, 2, 2),
+            ('Tic Tac Toe', 'Classic 3x3 noughts and crosses', 1, 2, 2),
         ]
         for game in default_games:
             cursor.execute(

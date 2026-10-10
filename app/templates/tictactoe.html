@@ -1,15 +1,15 @@
 {% extends "base.html" %}
 
-{% block title %}{% if match_id %}Watch Match{% else %}Gomoku{% endif %}{% endblock %}
+{% block title %}{% if match_id %}Watch Match{% else %}Tic Tac Toe{% endif %}{% endblock %}
 
 {% block sidebar_left %}
 <aside class="sider-left">
   <div style="padding: 2rem;">
     {% if match_id %}
-    <h2 style="font-size: 1.25rem; font-weight: bold;">Black</h2>
+    <h2 style="font-size: 1.25rem; font-weight: bold;">X</h2>
     <div id="blackPlayerName" style="margin-top: 0.5rem; font-size: 1rem; color: #555;">Loading...</div>
     {% else %}
-    <h2 style="font-size: 1.25rem; font-weight: bold;">Black</h2>
+    <h2 style="font-size: 1.25rem; font-weight: bold;">X</h2>
     <select id="aiSelectBlack" class="block w-full border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
       {% for bot in bots %}
       <option value="{{ bot.id }}">{{ bot.bot_name }}</option>
@@ -28,10 +28,10 @@
 <aside class="sider-right">
   <div style="padding: 2rem;">
     {% if match_id %}
-    <h2 style="font-size: 1.25rem; font-weight: bold;">White</h2>
+    <h2 style="font-size: 1.25rem; font-weight: bold;">O</h2>
     <div id="whitePlayerName" style="margin-top: 0.5rem; font-size: 1rem; color: #555;">Loading...</div>
     {% else %}
-    <h2 style="font-size: 1.25rem; font-weight: bold;">White</h2>
+    <h2 style="font-size: 1.25rem; font-weight: bold;">O</h2>
     <select id="aiSelectWhite" class="block w-full border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
       {% for bot in bots %}
       <option value="{{ bot.id }}">{{ bot.bot_name }}</option>
@@ -56,11 +56,10 @@
 
 <style>
   canvas {
-    background: #f5deb3;
+    background: #ffffff;
     margin-top: 20px;
     border: 2px solid #333;
   }
-
   .replay-controls {
     display: none;
     align-items: center;
@@ -84,29 +83,11 @@
     font-size: 0.9rem;
     min-width: 2.5rem;
   }
-  .replay-controls button:hover {
-    background: #e9e9e9;
-  }
-  .replay-controls button:disabled {
-    opacity: 0.4;
-    cursor: not-allowed;
-  }
-  .replay-progress {
-    flex: 1;
-    max-width: 300px;
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-  }
-  .replay-progress input[type="range"] {
-    flex: 1;
-  }
-  .replay-status {
-    text-align: center;
-    margin-top: 0.5rem;
-    font-size: 0.85rem;
-    color: #666;
-  }
+  .replay-controls button:hover { background: #e9e9e9; }
+  .replay-controls button:disabled { opacity: 0.4; cursor: not-allowed; }
+  .replay-progress { flex: 1; max-width: 300px; display: flex; align-items: center; gap: 0.5rem; }
+  .replay-progress input[type="range"] { flex: 1; }
+  .replay-status { text-align: center; margin-top: 0.5rem; font-size: 0.85rem; color: #666; }
   .spectator-badge {
     display: none;
     text-align: center;
@@ -120,29 +101,19 @@
     margin-left: auto;
     margin-right: auto;
   }
-
   @media (max-width: 1200px) {
-    .layout-main {
-      flex-direction: column;
-      align-items: center;
-    }
-    .main-content {
-      order: -1; 
-    }
+    .layout-main { flex-direction: column; align-items: center; }
+    .main-content { order: -1; }
     .sider-left, .sider-right {
-      position: static;
-      width: 100%;
-      max-width: 500px;
-      margin-top: 1rem;
-      border-radius: 1rem;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+      position: static; width: 100%; max-width: 500px; margin-top: 1rem;
+      border-radius: 1rem; box-shadow: 0 4px 12px rgba(0,0,0,0.08);
     }
   }
 </style>
 
 <div class="bg-gray-100 py-10">
   <div class="max-w-screen-xl mx-auto">
-    <div style="position:relative;width:100%;max-width:600px;height:auto;margin:auto;box-sizing:border-box;">
+    <div style="position:relative;width:100%;max-width:420px;height:auto;margin:auto;box-sizing:border-box;">
       <div id="phaser-container" style="width:100%;height:100%;"></div>
     </div>
 
@@ -178,22 +149,16 @@
       <pre class="bg-gray-100 p-4 rounded-lg border border-gray-300" style="white-space: pre-wrap; word-break: break-word;"><code class="language-python">import json
 import random
 
-EMPTY = 0
-
 def main():
     data = json.loads(input())
     move_history = data.get("move_history", [])
-    board = [[EMPTY] * 15 for _ in range(15)]
-    for i, m in enumerate(move_history):
-        board[m["y"]][m["x"]] = 1 if i % 2 == 0 else 2
-    options = [
-        (x, y) for y in range(15) for x in range(15) if board[y][x] == EMPTY
-    ]
+    board = [[0] * 3 for _ in range(3)]
+    for m in move_history:
+        board[m["y"]][m["x"]] = m["player"]
+    options = [(x, y) for y in range(3) for x in range(3) if board[y][x] == 0]
     if options:
         x, y = random.choice(options)
         print(json.dumps({"x": x, "y": y}))
-    else:
-        print(json.dumps({"error": "No valid move found or board is full."}))
 
 if __name__ == "__main__":
     main()</code></pre>
@@ -201,42 +166,18 @@ if __name__ == "__main__":
 
     <section class="io-section bg-white p-6 rounded-lg shadow-md hidden lg:block">
         <h2 class="text-xl font-bold mb-4">I/O Format Specification</h2>
-        
         <div class="prose max-w-none">
-            <p>This document details the standard data exchange format between your AI bot and the referee system. Your bot must read a JSON string from standard input (stdin) and write its move as a JSON string to standard output (stdout).</p>
-
-            <h3 class="font-bold mt-4">1. Board Coordinate System</h3>
-            <p>The platform uses a 15x15 board. The coordinate system is defined as `board[y][x]`, where `y` is the row (0-14, top to bottom) and `x` is the column (0-14, left to right).</p>
-
-            <h3 class="font-bold mt-4">2. Input Format (Referee -> Bot)</h3>
-            <p>On your turn, the referee sends a single-line JSON string to your program's **stdin**. It contains:</p>
+            <p>Your bot reads one JSON line from stdin and writes one JSON line to stdout.</p>
+            <h3 class="font-bold mt-4">1. Board</h3>
+            <p>A 3x3 grid, indexed <code>board[y][x]</code> (y=row top→bottom, x=col left→right). Cell values: 0 empty, 1 = X (you, first), 2 = O.</p>
+            <h3 class="font-bold mt-4">2. Input (Referee -&gt; Bot)</h3>
             <ul>
-                <li><code>move_history</code> (Array): An ordered list of all moves. Each move is an object: <code>{"x": int, "y": int, "player": int}</code> (1=Black, 2=White).</li>
-                <li><code>your_side</code> (Integer): The side you are currently playing (1 for Black, 2 for White).</li>
+                <li><code>move_history</code> (Array): ordered moves, each <code>{"x": int, "y": int, "player": int}</code>.</li>
+                <li><code>your_side</code> (Integer): 1 for X, 2 for O.</li>
             </ul>
-
-            <h3 class="font-bold mt-4">3. Output Format (Bot -> Referee)</h3>
-            <p>Your AI must print a single-line JSON string to **stdout** with your chosen move:</p>
-            <pre class="bg-gray-100 p-2 rounded"><code>{"x": 8, "y": 7}</code></pre>
-
-            <h3 class="font-bold mt-4">Example: Turn 3 (Black to move)</h3>
-            <p>If Black played at (7,7) and White at (7,8), the board is:</p>
-            <pre class="bg-gray-100 p-2 rounded font-mono">
-    ... (x) ...
-       6 7 8
- (y)┌─────────
-  6 │  . . .
-  7 │  . B .
-  8 │  . W .
-  9 │  . . .</pre>
-            <p>The referee sends this JSON to your Bot (as Black):</p>
-            <pre class="bg-gray-100 p-2 rounded"><code class="language-json">{
-  "move_history": [
-    {"x": 7, "y": 7, "player": 1},
-    {"x": 7, "y": 8, "player": 2}
-  ],
-  "your_side": 1
-}</code></pre>
+            <h3 class="font-bold mt-4">3. Output (Bot -&gt; Referee)</h3>
+            <p>Print your chosen empty cell:</p>
+            <pre class="bg-gray-100 p-2 rounded"><code>{"x": 1, "y": 1}</code></pre>
         </div>
     </section>
     {% endif %}
@@ -250,10 +191,10 @@ const MATCH_STATUS = "{{ match.status if match_id and match else '' }}";
 
 function getBoardSize() {
   const padding = window.innerWidth < 600 ? 24 : 70;
-  return Math.min(window.innerWidth - padding - 48, 600);
+  return Math.min(window.innerWidth - padding - 48, 420);
 }
 
-let SIZE = 15;
+let SIZE = 3;
 let BOARD_SIZE = getBoardSize();
 let GRID = BOARD_SIZE / SIZE;
 
@@ -273,7 +214,7 @@ const config = {
   width: BOARD_SIZE,
   height: BOARD_SIZE,
   parent: 'phaser-container',
-  backgroundColor: '#f5deb3',
+  backgroundColor: '#ffffff',
   scene: { create, preload }
 };
 let phaserGame = new Phaser.Game(config);
@@ -283,8 +224,6 @@ function preload() {}
 function create() {
   graphics = this.add.graphics();
   drawBoard();
-  // showPhaserMask();
-
   this.input.on('pointerdown', pointer => {
     if (gameOver || maskRect || isSpectator || isReplayMode) return;
     const x = Math.floor(pointer.x / GRID);
@@ -296,34 +235,31 @@ function create() {
 
 function drawBoard() {
   graphics.clear();
-  graphics.lineStyle(1, 0x333333, 1);
-  for (let i = 0; i < SIZE; i++) {
-    graphics.lineBetween(GRID / 2, GRID / 2 + i * GRID, GRID * (SIZE - 0.5), GRID / 2 + i * GRID);
-    graphics.lineBetween(GRID / 2 + i * GRID, GRID / 2, GRID / 2 + i * GRID, GRID * (SIZE - 0.5));
-  }
-  const starPoints = [[3, 3], [3, 11], [7, 7], [11, 3], [11, 11]];
-  for (let [x, y] of starPoints) {
-    graphics.fillStyle(0x333333, 1);
-    graphics.fillCircle(GRID / 2 + x * GRID, GRID / 2 + y * GRID, 5);
+  graphics.lineStyle(3, 0x333333, 1);
+  for (let i = 1; i < SIZE; i++) {
+    graphics.lineBetween(i * GRID, 8, i * GRID, BOARD_SIZE - 8);
+    graphics.lineBetween(8, i * GRID, BOARD_SIZE - 8, i * GRID);
   }
   for (let y = 0; y < SIZE; y++) {
     for (let x = 0; x < SIZE; x++) {
-      if (board[y][x] !== 0) drawStone(x, y, board[y][x] === 1);
+      if (board[y][x] === 1) drawX(x, y);
+      else if (board[y][x] === 2) drawO(x, y);
     }
   }
-  if (lastMove) highlightMove(lastMove.x, lastMove.y);
 }
 
-function drawStone(x, y, isBlack) {
-  graphics.fillStyle(isBlack ? 0x000000 : 0xffffff, 1);
-  graphics.fillCircle(GRID / 2 + x * GRID, GRID / 2 + y * GRID, GRID / 2.5);
-  graphics.lineStyle(1, 0x333333, 1);
-  graphics.strokeCircle(GRID / 2 + x * GRID, GRID / 2 + y * GRID, GRID / 2.5);
+function drawX(x, y) {
+  const cx = x * GRID, cy = y * GRID;
+  const m = GRID * 0.28;
+  graphics.lineStyle(6, 0x2563eb, 1);
+  graphics.lineBetween(cx + m, cy + m, cx + GRID - m, cy + GRID - m);
+  graphics.lineBetween(cx + GRID - m, cy + m, cx + m, cy + GRID - m);
 }
 
-function highlightMove(x, y) {
-  graphics.fillStyle(0xff3333, 1);
-  graphics.fillCircle(GRID / 2 + x * GRID, GRID / 2 + y * GRID, GRID / 10);
+function drawO(x, y) {
+  const cx = x * GRID + GRID / 2, cy = y * GRID + GRID / 2;
+  graphics.lineStyle(6, 0xdc2626, 1);
+  graphics.strokeCircle(cx, cy, GRID * 0.28);
 }
 
 let maskRect = null;
@@ -332,7 +268,7 @@ let maskText = null;
 function showPhaserMask(msg = "") {
   hidePhaserMask();
   maskRect = graphics.scene.add.rectangle(BOARD_SIZE / 2, BOARD_SIZE / 2, BOARD_SIZE, BOARD_SIZE, 0x000000, 0.25).setDepth(1000);
-  maskText = graphics.scene.add.text(BOARD_SIZE / 2, BOARD_SIZE / 2, msg, { fontSize: Math.floor(BOARD_SIZE / 18) + 'px', color: '#fff', fontStyle: 'bold' }).setOrigin(0.5).setDepth(1001);
+  maskText = graphics.scene.add.text(BOARD_SIZE / 2, BOARD_SIZE / 2, msg, { fontSize: Math.floor(BOARD_SIZE / 12) + 'px', color: '#fff', fontStyle: 'bold' }).setOrigin(0.5).setDepth(1001);
 }
 
 function hidePhaserMask() {
@@ -341,7 +277,7 @@ function hidePhaserMask() {
 }
 
 // --- SocketIO ---
-const socket = io('/gomoku');
+const socket = io('/tictactoe');
 socket.on('connect', () => {});
 socket.on('init', (data) => { userId = data.user_id; });
 
@@ -361,13 +297,11 @@ socket.on('update', (data) => {
   } else {
     if (!currentGameId || data.game_id !== currentGameId) return;
   }
-
   board = data.board;
   lastMove = data.ai_move || null;
   drawBoard();
-
   if (data.winner) {
-    let msg = data.winner === 1 ? 'Black wins!' : (data.winner === 2 ? 'White wins!' : 'Draw!');
+    let msg = data.winner === 1 ? 'X wins!' : (data.winner === 2 ? 'O wins!' : 'Draw!');
     showPhaserMask(msg);
     gameOver = true;
   }
@@ -375,7 +309,6 @@ socket.on('update', (data) => {
 
 socket.on('match_status', (data) => {
   if (data.match_id !== MATCH_ID) return;
-
   if (data.status === 'playing') {
     isSpectator = true;
     currentGameId = data.game_id;
@@ -399,30 +332,27 @@ socket.on('match_finished', (data) => {
 });
 
 // --- Replay ---
-// 重建到第 index 帧：重放 replayMoves[0..index) 到空棋盘
 const replayController = new ReplayController({
-    counterId: 'moveCounter',
-    baseIntervalMs: 800,
-    onRender: (index) => {
-        board = Array.from({ length: SIZE }, () => Array(SIZE).fill(0));
-        lastMove = null;
-        for (let i = 0; i < index; i++) {
-            const m = replayMoves[i];
-            board[m.y][m.x] = m.player;
-            lastMove = { x: m.x, y: m.y };
-        }
-        drawBoard();
+  counterId: 'moveCounter',
+  baseIntervalMs: 700,
+  onRender: (index) => {
+    board = Array.from({ length: SIZE }, () => Array(SIZE).fill(0));
+    lastMove = null;
+    for (let i = 0; i < index; i++) {
+      const m = replayMoves[i];
+      board[m.y][m.x] = m.player;
+      lastMove = { x: m.x, y: m.y };
     }
+    drawBoard();
+  }
 });
 
 function startReplay(moves, winner) {
   isReplayMode = true;
   replayMoves = moves;
-
   const controls = document.getElementById('replayControls');
   controls.style.display = 'flex';
-
-  let msg = winner === 1 ? 'Black wins!' : (winner === 2 ? 'White wins!' : 'Draw!');
+  let msg = winner === 1 ? 'X wins!' : (winner === 2 ? 'O wins!' : 'Draw!');
   replayController.load(moves.length);
   replayController.setStatus(msg + ' (' + moves.length + ' moves)');
   replayController.play();
@@ -435,21 +365,15 @@ function autoStartMatch(playersJson) {
     const normalize = (p) => (typeof p === 'string' ? { name: p } : (p || {}));
     if (Array.isArray(parsed)) {
       players = parsed.map(normalize);
-    } else if (parsed && typeof parsed === 'object' && parsed.player_1) {
+    } else if (parsed && parsed.player_1) {
       players = [normalize(parsed.player_1), normalize(parsed.player_2)];
     }
   } catch (e) {
     console.error('Failed to parse match players:', e);
     return;
   }
-
   if (players.length < 2) return;
-
-  // showPhaserMask('Starting match...');
-
-  const p1 = players[0];
-  const p2 = players[1];
-
+  const p1 = players[0], p2 = players[1];
   socket.emit('new_game', {
     user_id: userId,
     black_bot: p1.bot_id || null,
@@ -466,9 +390,6 @@ function newGame() {
   const whiteBot = document.getElementById('aiSelectWhite').value;
   const blackisHuman = document.getElementById('left-checkbox').checked;
   const whiteisHuman = document.getElementById('right-checkbox').checked;
-  
-  // showPhaserMask("Starting new game..."); 
-  
   socket.emit('new_game', {
     user_id: userId,
     black_bot: blackBot,
@@ -488,15 +409,10 @@ window.addEventListener('resize', () => {
   GRID = BOARD_SIZE / SIZE;
   phaserGame.scale.resize(BOARD_SIZE, BOARD_SIZE);
   drawBoard();
-  // if (maskRect || maskText) {
-  //   let msg = maskText ? maskText.text : "Waiting for new game...";
-  //   showPhaserMask(msg);
-  // }
 });
 
 // --- Init ---
 document.addEventListener('DOMContentLoaded', function() {
-  // Wire replay controls (transport buttons, slider, speed selector)
   replayController.attach();
 
   {% if not match_id %}
@@ -524,19 +440,11 @@ document.addEventListener('DOMContentLoaded', function() {
   } catch (e) {
     console.error('Failed to parse match players:', e);
   }
-
-  const labelFor = (p, fallback) => {
-    if (!p || !p.name) return fallback;
-    return p.version ? `${p.name} v${p.version}` : p.name;
-  };
-  const p1 = matchPlayers[0];
-  const p2 = matchPlayers[1];
-  const blackName = labelFor(p1, 'Player 1');
-  const whiteName = labelFor(p2, 'Player 2');
+  const labelFor = (p, fallback) => (!p || !p.name) ? fallback : (p.version ? `${p.name} v${p.version}` : p.name);
   const blackEl = document.getElementById('blackPlayerName');
   const whiteEl = document.getElementById('whitePlayerName');
-  if (blackEl) blackEl.textContent = blackName;
-  if (whiteEl) whiteEl.textContent = whiteName;
+  if (blackEl) blackEl.textContent = labelFor(matchPlayers[0], 'Player 1');
+  if (whiteEl) whiteEl.textContent = labelFor(matchPlayers[1], 'Player 2');
 
   if (matchStatus === 'finished') {
     let moveHistory = [];
@@ -544,8 +452,8 @@ document.addEventListener('DOMContentLoaded', function() {
     moveHistory = {{ match.move_history | tojson }};
     {% endif %}
     const winner = {{ match.winner if match.winner is not none else -1 }};
-    const gomokuWinner = winner === 0 ? 1 : (winner === 1 ? 2 : 0);
-    setTimeout(() => startReplay(moveHistory, gomokuWinner), 300);
+    const gameWinner = winner === 0 ? 1 : (winner === 1 ? 2 : 0);
+    setTimeout(() => startReplay(moveHistory, gameWinner), 300);
   } else {
     const waitForSocket = () => {
       if (socket.connected && userId) {

@@ -202,6 +202,11 @@ def snake():
     bots = get_latest_bots_for_game('Snake')
     return render_template('snake.html', bots=bots)
 
+@main_bp.route('/tictactoe')
+def tictactoe():
+    bots = get_latest_bots_for_game('Tic Tac Toe')
+    return render_template('tictactoe.html', bots=bots)
+
 @main_bp.route('/msnake')
 def msnake():
     bots = get_latest_bots_for_game('Mini Snake')
@@ -273,6 +278,7 @@ GAME_TEMPLATES = {
     'Tank Battle': 'tank.html',
     'Snake': 'snake.html',
     'Mini Snake': 'snake.html',
+    'Tic Tac Toe': 'tictactoe.html',
 }
 
 @main_bp.route('/api/matches', methods=['POST'])

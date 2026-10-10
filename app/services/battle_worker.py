@@ -6,6 +6,7 @@ import time
 from ..gomoku import run_auto_gomoku_match
 from ..snake import run_auto_snake_match
 from ..tank2 import run_auto_tank_match
+from ..tictactoe import run_auto_tictactoe_match
 from .utils import get_db_connection
 
 
@@ -43,12 +44,13 @@ def select_bots_for_game(game_name):
 
 def schedule_all_games():
     """遍历所有游戏，并安排一场对战，供 APScheduler 调用。"""
-    games_to_run = ['Gomoku', 'Snake', 'Tank Battle']
+    games_to_run = ['Gomoku', 'Snake', 'Tank Battle', 'Tic Tac Toe']
 
     auto_match_runners = {
         'Gomoku': run_auto_gomoku_match,
         'Snake': run_auto_snake_match,
         'Tank Battle': run_auto_tank_match,
+        'Tic Tac Toe': run_auto_tictactoe_match,
     }
 
     for game in games_to_run:

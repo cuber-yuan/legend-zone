@@ -32,10 +32,12 @@ def create_app():
     from .gomoku import register_gomoku_events
     from .tank2 import register_tank_events
     from .snake import register_snake_events
+    from .tictactoe import register_tictactoe_events
     register_home_events(socketio)
     register_gomoku_events(socketio)
     register_tank_events(socketio)
     register_snake_events(socketio)
+    register_tictactoe_events(socketio)
 
     from .main import main_bp
     from .home import home_bp
@@ -44,6 +46,7 @@ def create_app():
     from .gomoku import gomoku_bp
     from .tank2 import tank_bp
     from .snake import snake_bp
+    from .tictactoe import tictactoe_bp
 
     app.register_blueprint(main_bp)
     app.register_blueprint(home_bp)
@@ -52,6 +55,7 @@ def create_app():
     app.register_blueprint(gomoku_bp)
     app.register_blueprint(tank_bp)
     app.register_blueprint(snake_bp)
+    app.register_blueprint(tictactoe_bp)
 
     start_scheduler(app)
     
