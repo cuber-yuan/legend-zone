@@ -8,6 +8,7 @@ from flask_login import current_user
 from flask_socketio import emit, join_room
 
 from .cpp_judge_executor import CppJudgeExecutor
+from judges.build import judge_binary_path
 from .db import get_db_connection
 from .services.rating_service import update_bot_ratings
 from .services.bot_service import get_bot_executor as _get_bot_executor, build_players_json
@@ -88,10 +89,10 @@ def register_snake_events(socketio):
 
         match_id = data.get('match_id')
 
-        cpp_path = os.path.join(os.path.dirname(__file__), '../judges/snake_judge.exe')
+        cpp_path = judge_binary_path('snake_judge')
         game_name = data.get('game_name', 'Snake')
         if game_name == 'Mini Snake' or '/msnake' in data.get('page_path', ''):
-            cpp_path = os.path.join(os.path.dirname(__file__), '../judges/msnake_judge.exe')
+            cpp_path = judge_binary_path('msnake_judge')
 
         game = SnakeGameSession(cpp_path)
         sid = request.sid
@@ -282,7 +283,7 @@ def run_auto_snake_match(player_1_id, player_2_id):
         return
 
     # 2) 跑对战
-    cpp_path = os.path.join(os.path.dirname(__file__), '../judges/snake_judge.exe')
+    cpp_path = judge_binary_path('snake_judge')
     cpp_judge = CppJudgeExecutor(cpp_path)
 
     displays = []

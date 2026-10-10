@@ -83,14 +83,14 @@ def _store_version_files(version_dir, language, source_code, bot_file):
             with zipfile.ZipFile(zip_path, 'r') as zf:
                 _safe_extract_zip(zf, extract_dir)
             os.remove(zip_path)
-            return os.path.join(extract_dir)
+            return os.path.join(extract_dir).replace('\\', '/')
         entry_name = LANGUAGE_TO_ENTRY[language]
         bot_file.save(os.path.join(version_dir, entry_name))
     elif source_code:
         entry_name = LANGUAGE_TO_ENTRY[language]
         with open(os.path.join(version_dir, entry_name), 'w', encoding='utf-8') as f:
             f.write(source_code)
-    return version_dir
+    return version_dir.replace('\\', '/')
 
 
 def _next_version_number(cursor, bot_id):

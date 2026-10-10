@@ -27,7 +27,11 @@ def create_app():
     socketio.init_app(app)
     login_manager.init_app(app)
     login_manager.login_view = 'auth.login'
-    
+
+    # Build any C++ game judge binary that is missing or stale for this platform.
+    from judges.build import ensure_judges_built
+    ensure_judges_built()
+
     from .home import register_home_events
     from .gomoku import register_gomoku_events
     from .tank2 import register_tank_events

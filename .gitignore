@@ -31,6 +31,11 @@ test.py
 *.exe
 bots/
 
+# Linux-compiled judge binaries (Windows ones are covered by *.exe)
+judges/snake_judge
+judges/msnake_judge
+judges/tank2_judge
+
 *.db
 
 AGENTS.md

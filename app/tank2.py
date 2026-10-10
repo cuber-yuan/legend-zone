@@ -2,6 +2,7 @@ from flask import Blueprint, request
 from flask_login import current_user
 from . import socketio
 from .cpp_judge_executor import CppJudgeExecutor
+from judges.build import judge_binary_path
 from flask_socketio import emit, join_room
 from uuid import uuid4
 import os
@@ -87,7 +88,7 @@ def register_tank_events(socketio):
 
         match_id = data.get('match_id')
 
-        cpp_path = os.path.join(os.path.dirname(__file__), '../judges/tank2_judge.exe')
+        cpp_path = judge_binary_path('tank2_judge')
         game = TankGameSession(cpp_path)
         sid = request.sid
 
@@ -297,7 +298,7 @@ def run_auto_tank_match(player_1_id, player_2_id):
         return
 
     # 2) 跑对战
-    cpp_path = os.path.join(os.path.dirname(__file__), '../judges/tank2_judge.exe')
+    cpp_path = judge_binary_path('tank2_judge')
     cpp_judge = CppJudgeExecutor(cpp_path)
 
     displays = []
