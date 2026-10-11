@@ -101,6 +101,19 @@
     margin-left: auto;
     margin-right: auto;
   }
+  .turn-hint {
+    display: none;
+    text-align: center;
+    margin-top: 0.5rem;
+    padding: 0.3rem 0.8rem;
+    background: #dbeafe;
+    color: #1e40af;
+    border-radius: 0.25rem;
+    font-size: 0.85rem;
+    max-width: 320px;
+    margin-left: auto;
+    margin-right: auto;
+  }
   .replay-controls {
     display: none;
     align-items: center;
@@ -166,6 +179,7 @@
     {% endif %}
 
     <div id="spectatorBadge" class="spectator-badge">Spectating</div>
+    <div id="turnHint" class="turn-hint"></div>
 
     <div id="replayControls" class="replay-controls">
       <button id="btnFirst" title="First turn">|&lt;</button>

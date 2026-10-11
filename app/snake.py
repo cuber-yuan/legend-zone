@@ -28,6 +28,25 @@ class SnakeGameSession:
         pass
 
 
+def snake_payload(game_id, match_id, player_1_type, player_2_type, state=None, extra=None):
+    """Build the per-turn client payload.
+
+    Both snakes move on every turn, so snake has no 'whose turn' the way the
+    board games do — but the browser still needs to know whether a seat is
+    human, or keypresses would be swallowed by a bot's executor.
+    """
+    payload = {
+        'game_id': game_id,
+        'match_id': match_id,
+        'player_types': {'1': player_1_type, '2': player_2_type},
+    }
+    if state is not None:
+        payload['state'] = state
+    if extra:
+        payload.update(extra)
+    return payload
+
+
 def register_snake_events(socketio):
     @socketio.on('connect', namespace='/snake')
     def handle_connect():
@@ -51,6 +70,7 @@ def register_snake_events(socketio):
                 'status': 'playing',
                 'game_id': match_info['game_id'],
                 'latest_display': match_info.get('latest_display'),
+                'player_types': {'1': match_info['player_1_type'], '2': match_info['player_2_type']},
             }, room=request.sid)
         else:
             conn = None
@@ -102,6 +122,21 @@ def register_snake_events(socketio):
         player_1_type = 'human' if data.get('left_is_human') or data.get('p1_is_human') else 'bot'
         player_2_type = 'human' if data.get('right_is_human') or data.get('p2_is_human') else 'bot'
 
+        if player_1_type == 'human' and player_2_type == 'human':
+            # Both snakes are steered from the one pending-move slot this session
+            # owns, so a single keyboard cannot answer for two seats. The standalone
+            # page's checkboxes already enforce one human; a match built from the
+            # homepage has to be refused here, or it would stall forever.
+            target = match_id if match_id else request.sid
+            emit('finish', snake_payload(game.game_id, match_id, player_1_type, player_2_type,
+                                         extra={'winner': -1,
+                                                'error_msg': 'Snake supports one human seat per match.'}),
+                 room=target)
+            if match_id:
+                players = build_players_json(player_1_id_str, player_1_type, player_2_id_str, player_2_type)
+                finalize_match_record(match_id, 'Snake', players, -1, '[]', 'displays')
+            return
+
         executor_1 = _get_bot_executor(player_1_id_str) if player_1_type == 'bot' else None
         executor_2 = _get_bot_executor(player_2_id_str) if player_2_type == 'bot' else None
 
@@ -123,6 +158,37 @@ def register_snake_events(socketio):
         print(f"Starting snake game {game.game_id} (match={match_id}): "
               f"{player_1_id_str} ({player_1_type}) vs {player_2_id_str} ({player_2_type})")
 
+        displays = []
+        ended = False
+
+        def end_match(winner, error_msg=None):
+            """Close the match out once: tell the room, persist the record, rate the bots."""
+            nonlocal ended
+            if ended:
+                return
+            ended = True
+
+            extra = {'winner': winner}
+            if error_msg:
+                extra['error_msg'] = error_msg
+            emit('finish', snake_payload(game.game_id, match_id, player_1_type, player_2_type, extra=extra),
+                 room=broadcast_target)
+
+            players = build_players_json(player_1_id_str, player_1_type, player_2_id_str, player_2_type)
+            finalize_match_record(match_id, 'Snake', players, winner, json.dumps(displays), 'displays')
+
+            if player_1_type == 'bot' and player_2_type == 'bot':
+                update_bot_ratings(player_1_id_str, player_2_id_str, winner if winner in (0, 1) else -1, match_id)
+
+            if match_id:
+                socketio.emit('match_finished', {
+                    'match_id': match_id,
+                    'winner': winner,
+                    'displays': displays,
+                }, room=match_id, namespace='/snake')
+
+            print(f"Snake game finished (match={match_id}). Winner: {winner}")
+
         try:
             game_state_dict = game.cpp_judge.run_raw_json({})
 
@@ -131,13 +197,8 @@ def register_snake_events(socketio):
             input_dict_1 = {"requests": [game_state_dict['content']['0']], "responses": []}
             input_dict_2 = {"requests": [game_state_dict['content']['1']], "responses": []}
 
-            displays = []
-
-            emit('game_started', {
-                'state': game_state_dict['display'],
-                'game_id': game.game_id,
-                'match_id': match_id,
-            }, room=broadcast_target)
+            emit('game_started', snake_payload(game.game_id, match_id, player_1_type, player_2_type,
+                                               state=game_state_dict['display']), room=broadcast_target)
             displays.append(game_state_dict['display'])
 
             if match_id and match_id in active_matches:
@@ -147,30 +208,26 @@ def register_snake_events(socketio):
                 session_gone = user_id not in sessions or sessions[user_id].get('sid') != sid
                 if session_gone and (player_1_type == 'human' or player_2_type == 'human'):
                     print(f"Human player {user_id} disconnected, terminating snake game loop.")
+                    end_match(1 if player_1_type == 'human' else 0, 'Opponent left the game.')
                     break
 
                 input_str_1 = json.dumps(input_dict_1)
                 input_str_2 = json.dumps(input_dict_2)
 
+                def wait_for_human():
+                    """Pop this turn's direction, or return None if the player walked away."""
+                    while 'pending_move' not in sessions.get(user_id, {}):
+                        if user_id not in sessions or sessions[user_id].get('sid') != sid:
+                            return None
+                        socketio.sleep(0.05)
+                    session = sessions.get(user_id) or {}
+                    return json.dumps(session.pop('pending_move')) if 'pending_move' in session else None
+
                 def get_output_1():
-                    if player_1_type == 'human':
-                        while 'pending_move' not in sessions[user_id]:
-                            if user_id not in sessions or sessions[user_id].get('sid') != sid:
-                                break
-                            socketio.sleep(0.05)
-                        return json.dumps(sessions[user_id].pop('pending_move'))
-                    else:
-                        return executor_1.run(input_str_1)
+                    return wait_for_human() if player_1_type == 'human' else executor_1.run(input_str_1)
 
                 def get_output_2():
-                    if player_2_type == 'human':
-                        while 'pending_move' not in sessions[user_id]:
-                            if user_id not in sessions or sessions[user_id].get('sid') != sid:
-                                break
-                            socketio.sleep(0.05)
-                        return json.dumps(sessions[user_id].pop('pending_move'))
-                    else:
-                        return executor_2.run(input_str_2)
+                    return wait_for_human() if player_2_type == 'human' else executor_2.run(input_str_2)
 
                 with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
                     future1 = pool.submit(get_output_1)
@@ -178,17 +235,18 @@ def register_snake_events(socketio):
                     output_1 = future1.result()
                     output_2 = future2.result()
 
+                if output_1 is None or output_2 is None:
+                    # The human vanished mid-turn; 0 = Blue won, 1 = Red won.
+                    end_match(1 if output_1 is None else 0, 'Opponent left the game.')
+                    break
+
                 judge_input_dict['log'].append({})
                 judge_input_dict['log'].append({"0": json.loads(output_1), "1": json.loads(output_2)})
                 game_state_dict = game.cpp_judge.run_raw_json(judge_input_dict)
                 displays.append(game_state_dict['display'])
 
-                response = {
-                    'state': game_state_dict['display'],
-                    'game_id': game.game_id,
-                    'match_id': match_id,
-                }
-                emit('update', response, room=broadcast_target)
+                emit('update', snake_payload(game.game_id, match_id, player_1_type, player_2_type,
+                                             state=game_state_dict['display']), room=broadcast_target)
 
                 if match_id and match_id in active_matches:
                     active_matches[match_id]['latest_display'] = game_state_dict['display']
@@ -198,33 +256,16 @@ def register_snake_events(socketio):
                         winner = int(game_state_dict['display']['winner'])
                     else:
                         winner = -1
-
-                    emit('finish', {
-                        'winner': winner,
-                        'game_id': game.game_id,
-                        'match_id': match_id,
-                    }, room=broadcast_target)
-
-                    players = build_players_json(player_1_id_str, player_1_type, player_2_id_str, player_2_type)
-                    finalize_match_record(match_id, 'Snake', players, winner, json.dumps(displays), 'displays')
-
-                    if player_1_type == 'bot' and player_2_type == 'bot':
-                        update_bot_ratings(player_1_id_str, player_2_id_str, winner if winner in (0, 1) else -1, match_id)
-
-                    if match_id:
-                        socketio.emit('match_finished', {
-                            'match_id': match_id,
-                            'winner': winner,
-                            'displays': displays,
-                        }, room=match_id)
-
-                    print(f"Snake game finished (match={match_id}). Winner: {winner}")
+                    end_match(winner)
                     break
 
                 input_dict_1['requests'].append(json.loads(output_2)['response'])
                 input_dict_1['responses'].append(json.loads(output_1)['response'])
                 input_dict_2['requests'].append(json.loads(output_1)['response'])
                 input_dict_2['responses'].append(json.loads(output_2)['response'])
+
+            if not ended:
+                end_match(-1, 'Turn limit reached.')
 
         finally:
             if match_id:

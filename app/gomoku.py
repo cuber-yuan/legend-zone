@@ -9,7 +9,8 @@ import uuid
 from .db import get_db_connection
 from .services.rating_service import update_bot_ratings
 from .services.bot_service import get_bot_executor as _get_bot_executor, build_players_json
-from .services.match_service import create_match_record, finalize_match_record, update_match_result
+from .services.match_service import (create_match_record, finalize_match_record,
+                                     update_match_result, state_payload)
 
 gomoku_bp = Blueprint('gomoku', __name__)
 
@@ -90,14 +91,10 @@ def run_auto_gomoku_match(player_1_id, player_2_id):
             if winner != 0:
                 game.winner = winner
 
-            response = {
-                'board': game.board,
+            socketio.emit('update', state_payload(game, {
                 'ai_move': {'x': x, 'y': y, 'player': 3 - game.current_player},
-                'winner': game.winner,
-                'game_id': game.game_id,
                 'match_id': match_id
-            }
-            socketio.emit('update', response, room=match_id)
+            }), room=match_id)
 
             if game.winner != 0 or game.is_board_full() or game.is_terminated:
                 print(f"Game ended after {turn + 1} turns. Winner: {game.winner}")
@@ -137,13 +134,11 @@ def register_gomoku_events(socketio):
         if match_id in active_matches:
             match_info = active_matches[match_id]
             game = match_info['judge']
-            emit('match_status', {
+            emit('match_status', state_payload(game, {
                 'match_id': match_id,
                 'status': 'playing',
-                'board': game.board,
-                'game_id': game.game_id,
                 'move_history': game.move_history
-            }, room=request.sid)
+            }), room=request.sid)
         else:
             conn = None
             try:
@@ -219,7 +214,7 @@ def register_gomoku_events(socketio):
                 'player_2_type': player_2_type,
             }
 
-        emit('game_started', {'board': game.board, 'game_id': game.game_id}, room=broadcast_target)
+        emit('game_started', state_payload(game), room=broadcast_target)
 
 
         current_player_type = game.black_player_type if game.current_player == 1 else game.white_player_type
@@ -262,7 +257,7 @@ def register_gomoku_events(socketio):
                 except (json.JSONDecodeError, KeyError):
                     print(f"AI for player {game.current_player} returned invalid data: {output_str}.")
                     game.winner = 3 - game.current_player
-                    emit('update', {'board': game.board, 'winner': game.winner, 'error_msg': 'AI returned invalid move.', 'game_id': game.game_id, 'match_id': match_id}, room=broadcast_target)
+                    emit('update', state_payload(game, {'error_msg': 'AI returned invalid move.', 'match_id': match_id}), room=broadcast_target)
                     return
                 if game.is_terminated:
                     break
@@ -270,21 +265,17 @@ def register_gomoku_events(socketio):
 
                 if not game.apply_move(x, y):
                     game.winner = 3 - game.current_player
-                    emit('update', {'board': game.board, 'winner': game.winner, 'error_msg': 'AI made an invalid move.', 'game_id': game.game_id, 'match_id': match_id}, room=broadcast_target)
+                    emit('update', state_payload(game, {'error_msg': 'AI made an invalid move.', 'match_id': match_id}), room=broadcast_target)
                     return
 
                 winner = game.check_win(x, y)
                 if winner != 0:
                     game.winner = winner
 
-                response = {
-                    'board': game.board,
+                emit('update', state_payload(game, {
                     'ai_move': {'x': x, 'y': y, 'player': 3 - game.current_player},
-                    'winner': game.winner,
-                    'game_id': game.game_id,
                     'match_id': match_id
-                }
-                emit('update', response, room=broadcast_target)
+                }), room=broadcast_target)
                 if game.winner != 0 or game.is_board_full() or game.is_terminated:
                     print(f"Game ended after {turn + 1} turns. Winner: {game.winner}")
                     break

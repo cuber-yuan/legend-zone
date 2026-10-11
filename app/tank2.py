@@ -27,6 +27,25 @@ class TankGameSession:
         pass
 
 
+def tank_payload(game_id, match_id, player_1_type, player_2_type, state=None, extra=None):
+    """Build the per-turn client payload.
+
+    Both sides command their two tanks before the judge advances, so the browser
+    needs `player_types` to know which seat (if any) it is supposed to steer, and
+    it must never offer an action the judge would reject outright.
+    """
+    payload = {
+        'game_id': game_id,
+        'match_id': match_id,
+        'player_types': {'1': player_1_type, '2': player_2_type},
+    }
+    if state is not None:
+        payload['state'] = state
+    if extra:
+        payload.update(extra)
+    return payload
+
+
 def register_tank_events(socketio):
     @socketio.on('connect', namespace='/tank2')
     def handle_connect():
@@ -50,6 +69,7 @@ def register_tank_events(socketio):
                 'status': 'playing',
                 'game_id': match_info['game_id'],
                 'latest_display': match_info.get('latest_display'),
+                'player_types': {'1': match_info['player_1_type'], '2': match_info['player_2_type']},
             }, room=request.sid)
         else:
             conn = None
@@ -128,11 +148,8 @@ def register_tank_events(socketio):
 
             displays = []
 
-            emit('game_started', {
-                'state': game_state_dict['display'],
-                'game_id': game.game_id,
-                'match_id': match_id,
-            }, room=broadcast_target)
+            emit('game_started', tank_payload(game.game_id, match_id, player_1_type, player_2_type,
+                                              state=game_state_dict['display']), room=broadcast_target)
             displays.append(game_state_dict['display'])
 
             if match_id and match_id in active_matches:
@@ -143,30 +160,26 @@ def register_tank_events(socketio):
                 session_gone = user_id not in sessions or sessions[user_id].get('sid') != sid
                 if session_gone and (player_1_type == 'human' or player_2_type == 'human'):
                     print(f"Human player {user_id} disconnected, terminating tank game loop.")
+                    winner = 1 if player_1_type == 'human' else 0
                     break
 
                 input_str_1 = json.dumps(input_dict_1)
                 input_str_2 = json.dumps(input_dict_2)
 
+                def wait_for_human(seat):
+                    """Pop one seat's command, or return None if the player walked away."""
+                    while seat not in (sessions.get(user_id, {}).get('pending_moves') or {}):
+                        if user_id not in sessions or sessions[user_id].get('sid') != sid:
+                            return None
+                        socketio.sleep(0.05)
+                    session = sessions.get(user_id) or {}
+                    return json.dumps((session.get('pending_moves') or {}).pop(seat))
+
                 def get_output_1():
-                    if player_1_type == 'human':
-                        while 'pending_move' not in sessions[user_id]:
-                            if user_id not in sessions or sessions[user_id].get('sid') != sid:
-                                break
-                            socketio.sleep(0.05)
-                        return json.dumps(sessions[user_id].pop('pending_move'))
-                    else:
-                        return executor_1.run(input_str_1)
+                    return wait_for_human('1') if player_1_type == 'human' else executor_1.run(input_str_1)
 
                 def get_output_2():
-                    if player_2_type == 'human':
-                        while 'pending_move' not in sessions[user_id]:
-                            if user_id not in sessions or sessions[user_id].get('sid') != sid:
-                                break
-                            socketio.sleep(0.05)
-                        return json.dumps(sessions[user_id].pop('pending_move'))
-                    else:
-                        return executor_2.run(input_str_2)
+                    return wait_for_human('2') if player_2_type == 'human' else executor_2.run(input_str_2)
 
                 try:
                     with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
@@ -186,17 +199,18 @@ def register_tank_events(socketio):
                         winner = 0
                     break
 
+                if output_1 is None or output_2 is None:
+                    # A human walked away mid-turn; the other side takes the win.
+                    winner = 1 if output_1 is None else 0
+                    break
+
                 judge_input_dict['log'].append({})
                 judge_input_dict['log'].append({"0": json.loads(output_1), "1": json.loads(output_2)})
                 game_state_dict = game.cpp_judge.run_raw_json(judge_input_dict)
                 displays.append(game_state_dict['display'])
 
-                response = {
-                    'state': game_state_dict['display'],
-                    'game_id': game.game_id,
-                    'match_id': match_id,
-                }
-                emit('update', response, room=broadcast_target)
+                emit('update', tank_payload(game.game_id, match_id, player_1_type, player_2_type,
+                                            state=game_state_dict['display']), room=broadcast_target)
 
                 if match_id and match_id in active_matches:
                     active_matches[match_id]['latest_display'] = game_state_dict['display']
@@ -219,11 +233,8 @@ def register_tank_events(socketio):
                 input_dict_2['responses'].append(json.loads(output_2)['response'])
 
             if winner is not None:
-                emit('finish', {
-                    'winner': winner,
-                    'game_id': game.game_id,
-                    'match_id': match_id,
-                }, room=broadcast_target)
+                emit('finish', tank_payload(game.game_id, match_id, player_1_type, player_2_type,
+                                            extra={'winner': winner}), room=broadcast_target)
 
                 players = build_players_json(player_1_id_str, player_1_type, player_2_id_str, player_2_type)
                 finalize_match_record(match_id, 'Tank Battle', players, winner, json.dumps(displays), 'displays')
@@ -236,7 +247,7 @@ def register_tank_events(socketio):
                         'match_id': match_id,
                         'winner': winner,
                         'displays': displays,
-                    }, room=match_id)
+                    }, room=match_id, namespace='/tank2')
 
                 print(f"Tank game finished (match={match_id}). Winner: {winner}")
 
@@ -261,13 +272,16 @@ def register_tank_events(socketio):
     def handle_player_move(data):
         user_id = data.get('user_id')
         game_id = data.get('game_id')
+        seat = str(data.get('seat') or '1')
         user_session = sessions.get(user_id)
 
         if not user_id or not game_id or not user_session:
             return
 
         move = json.loads(data.get('move'))
-        sessions[user_id]['pending_move'] = move
+        # One mailbox slot per seat: a hot-seat match has this one browser answering
+        # for both sides, and each side's getter must take its own command.
+        user_session.setdefault('pending_moves', {})[seat] = move
 
 
 def run_auto_tank_match(player_1_id, player_2_id):

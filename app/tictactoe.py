@@ -8,7 +8,8 @@ import json
 import uuid
 from .services.rating_service import update_bot_ratings
 from .services.bot_service import get_bot_executor as _get_bot_executor, build_players_json
-from .services.match_service import create_match_record, finalize_match_record, update_match_result
+from .services.match_service import (create_match_record, finalize_match_record,
+                                     update_match_result, state_payload)
 
 tictactoe_bp = Blueprint('tictactoe', __name__)
 
@@ -19,15 +20,10 @@ MAX_TURNS = 9
 
 
 def _emit_state(game, match_id, room, extra=None):
-    response = {
-        'board': game.board,
-        'winner': game.winner,
-        'game_id': game.game_id,
-        'match_id': match_id,
-    }
+    payload = {'match_id': match_id}
     if extra:
-        response.update(extra)
-    emit('update', response, room=room)
+        payload.update(extra)
+    emit('update', state_payload(game, payload), room=room)
 
 
 def run_auto_tictactoe_match(player_1_id, player_2_id):
@@ -87,13 +83,10 @@ def run_auto_tictactoe_match(player_1_id, player_2_id):
             if winner != 0:
                 game.winner = winner
 
-            socketio.emit('update', {
-                'board': game.board,
+            socketio.emit('update', state_payload(game, {
                 'ai_move': {'x': x, 'y': y, 'player': 3 - game.current_player},
-                'winner': game.winner,
-                'game_id': game.game_id,
                 'match_id': match_id,
-            }, room=match_id)
+            }), room=match_id)
 
             if game.winner != 0 or game.is_board_full():
                 break
@@ -132,13 +125,11 @@ def register_tictactoe_events(socketio):
         if match_id in active_matches:
             match_info = active_matches[match_id]
             game = match_info['judge']
-            emit('match_status', {
+            emit('match_status', state_payload(game, {
                 'match_id': match_id,
                 'status': 'playing',
-                'board': game.board,
-                'game_id': game.game_id,
                 'move_history': game.move_history
-            }, room=request.sid)
+            }), room=request.sid)
         else:
             from .db import get_db_connection
             conn = None
@@ -207,7 +198,7 @@ def register_tictactoe_events(socketio):
                 'player_2_type': player_2_type,
             }
 
-        emit('game_started', {'board': game.board, 'game_id': game.game_id}, room=broadcast_target)
+        emit('game_started', state_payload(game), room=broadcast_target)
 
         def get_output_1(input_str=None):
             if player_1_type == 'human':

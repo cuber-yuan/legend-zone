@@ -98,6 +98,19 @@
     margin-left: auto;
     margin-right: auto;
   }
+  .turn-hint {
+    display: none;
+    text-align: center;
+    margin-top: 0.5rem;
+    padding: 0.3rem 0.8rem;
+    background: #dbeafe;
+    color: #1e40af;
+    border-radius: 0.25rem;
+    font-size: 0.85rem;
+    max-width: 260px;
+    margin-left: auto;
+    margin-right: auto;
+  }
 
   @media (max-width: 1200px) {
     .layout-main {
@@ -130,6 +143,7 @@
     {% endif %}
 
     <div id="spectatorBadge" class="spectator-badge">Spectating</div>
+    <div id="turnHint" class="turn-hint"></div>
 
     <div id="replayControls" class="replay-controls">
       <button id="btnFirst" title="First move">|&lt;</button>
@@ -240,11 +254,43 @@ let lastMove = null;
 let gameOver = true;
 let userId = null;
 let currentGameId = null;
+let currentPlayer = 1;
+let playerTypes = { '1': 'bot', '2': 'bot' };
+let awaitingMove = false;
 let graphics;
 
 let isSpectator = false;
 let isReplayMode = false;
 let replayMoves = [];
+
+// A click only means something when the seat to move is a human seat: the server
+// parks the game loop until player_move arrives, so clicking on the bot's turn
+// would be dropped. current_player and player_types come from the judge.
+function isHumanTurn() {
+  return playerTypes[String(currentPlayer)] === 'human';
+}
+
+function hasHumanSeat() {
+  return playerTypes['1'] === 'human' || playerTypes['2'] === 'human';
+}
+
+function applyState(data) {
+  if (data.board) board = data.board;
+  if (data.current_player) currentPlayer = data.current_player;
+  if (data.player_types) playerTypes = data.player_types;
+}
+
+function renderTurnHint() {
+  const el = document.getElementById('turnHint');
+  if (!el) return;
+  if (isReplayMode || isSpectator || gameOver || !hasHumanSeat()) {
+    el.style.display = 'none';
+    return;
+  }
+  el.style.display = 'block';
+  const name = currentPlayer === 1 ? 'Black' : 'White';
+  el.textContent = isHumanTurn() ? `${name} to move — click the board` : `Waiting for ${name.toLowerCase()}…`;
+}
 
 const config = {
   type: Phaser.AUTO,
@@ -264,7 +310,7 @@ function create() {
   // showPhaserMask();
 
   this.input.on('pointerdown', pointer => {
-    if (gameOver || maskRect || isSpectator || isReplayMode) return;
+    if (gameOver || maskRect || isSpectator || isReplayMode || awaitingMove || !isHumanTurn()) return;
     const x = Math.floor(pointer.x / GRID);
     const y = Math.floor(pointer.y / GRID);
     if (x < 0 || x >= SIZE || y < 0 || y >= SIZE || board[y][x] !== 0) return;
@@ -325,12 +371,15 @@ socket.on('init', (data) => { userId = data.user_id; });
 
 socket.on('game_started', (data) => {
   hidePhaserMask();
-  if (IS_MATCH_PAGE && !isSpectator) return;
   currentGameId = data.game_id;
-  board = data.board;
+  awaitingMove = false;
+  applyState(data);
   lastMove = null;
   gameOver = false;
+  isSpectator = false;
+  document.getElementById('spectatorBadge').style.display = 'none';
   drawBoard();
+  renderTurnHint();
 });
 
 socket.on('update', (data) => {
@@ -340,7 +389,8 @@ socket.on('update', (data) => {
     if (!currentGameId || data.game_id !== currentGameId) return;
   }
 
-  board = data.board;
+  awaitingMove = false;
+  applyState(data);
   lastMove = data.ai_move || null;
   drawBoard();
 
@@ -349,19 +399,24 @@ socket.on('update', (data) => {
     showPhaserMask(msg);
     gameOver = true;
   }
+  renderTurnHint();
 });
 
 socket.on('match_status', (data) => {
   if (data.match_id !== MATCH_ID) return;
 
   if (data.status === 'playing') {
+    // A match already running was started by another session, whose human seat
+    // owns the pending-move mailbox server-side, so this browser can only watch.
     isSpectator = true;
     currentGameId = data.game_id;
-    board = data.board;
+    awaitingMove = false;
+    applyState(data);
     gameOver = false;
     drawBoard();
     hidePhaserMask();
     document.getElementById('spectatorBadge').style.display = 'block';
+    renderTurnHint();
   } else if (data.status === 'finished') {
     startReplay(data.move_history || [], data.winner);
   } else if (data.status === 'not_started') {
@@ -396,6 +451,7 @@ const replayController = new ReplayController({
 function startReplay(moves, winner) {
   isReplayMode = true;
   replayMoves = moves;
+  renderTurnHint();
 
   const controls = document.getElementById('replayControls');
   controls.style.display = 'flex';
@@ -440,6 +496,9 @@ function autoStartMatch(playersJson) {
 
 
 function sendPlayerMove(x, y) {
+  // The server holds one pending-move slot per session, so a second click before
+  // the reply would be spent on our *next* turn and lose the game on an occupied cell.
+  awaitingMove = true;
   socket.emit('player_move', { user_id: userId, x, y, game_id: currentGameId });
 }
 

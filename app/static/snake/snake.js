@@ -191,6 +191,36 @@ const socket = io('/snake');
 let isSpectator = false;
 let isReplayMode = false;
 let replayDisplays = [];
+let playerTypes = { '1': 'bot', '2': 'bot' };
+
+// Snake moves both seats on every turn, so there is no 'whose turn' to wait for;
+// what matters is whether the local seat is human at all. Two human seats are
+// refused server-side, so at most one colour is steerable from this browser.
+function humanSeatName() {
+    if (playerTypes['1'] === 'human') return 'Blue';
+    if (playerTypes['2'] === 'human') return 'Red';
+    return null;
+}
+
+function canSteer() {
+    return !!currentGameId && !gameOver && !isSpectator && !isReplayMode && humanSeatName() !== null;
+}
+
+function applySeatTypes(data) {
+    if (data && data.player_types) playerTypes = data.player_types;
+    renderSteerHint();
+}
+
+function renderSteerHint() {
+    const el = document.getElementById('turnHint');
+    if (!el) return;
+    if (!canSteer()) {
+        el.style.display = 'none';
+        return;
+    }
+    el.style.display = 'block';
+    el.textContent = `You steer ${humanSeatName()} — press W/A/S/D or the arrow keys each turn`;
+}
 
 // --- Canvas Size Helpers ---
 function getCanvasSize() {
@@ -230,11 +260,12 @@ socket.on('game_started', (data) => {
     currentGameId = data.game_id;
     gameOver = false;
     hidePhaserMask();
+    applySeatTypes(data);
     const scene = phaserGame.scene.getScene('SnakeScene');
     if (scene && typeof scene.updateFromState === 'function') {
         scene.updateFromState(data.state);
         const fc = document.getElementById('floating-corner');
-        if (fc && !(typeof IS_MATCH_PAGE !== 'undefined' && IS_MATCH_PAGE)) {
+        if (fc && canSteer()) {
             fc.classList.remove('hidden');
         }
         gameoverAudio.pause();
@@ -255,12 +286,13 @@ socket.on('update', (data) => {
             return;
         }
     }
+    applySeatTypes(data);
     const scene = phaserGame.scene.getScene('SnakeScene');
     if (scene && typeof scene.updateFromState === 'function') {
         scene.updateFromState(data.state);
     }
     const fc = document.getElementById('floating-corner');
-    if (fc) fc.classList.remove('hidden');
+    if (fc && canSteer()) fc.classList.remove('hidden');
     moveAudio.play();
 });
 
@@ -273,6 +305,10 @@ socket.on('finish', (data) => {
             return;
         }
     }
+    gameOver = true;
+    applySeatTypes(data);
+    const fc = document.getElementById('floating-corner');
+    if (fc) fc.classList.add('hidden');
     if (bgmAudio) {
         bgmAudio.pause();
         bgmAudio.currentTime = 0;
@@ -280,14 +316,9 @@ socket.on('finish', (data) => {
     explosionAudio.play();
     gameoverAudio.play();
     let winner = data.winner;
-    if (winner == 0) {
-        showPhaserMask('Blue wins!');
-    } else if (winner == 1) {
-        showPhaserMask('Red wins!');
-    } else {
-        showPhaserMask('Draw!');
-    }
-    gameOver = true;
+    let msg = winner == 0 ? 'Blue wins!' : (winner == 1 ? 'Red wins!' : 'Draw!');
+    if (data.error_msg) msg = data.error_msg;
+    showPhaserMask(msg);
 });
 
 socket.on('match_status', (data) => {
@@ -298,8 +329,11 @@ socket.on('match_status', (data) => {
         isSpectator = true;
         currentGameId = data.game_id;
         gameOver = false;
+        applySeatTypes(data);
         hidePhaserMask();
         document.getElementById('spectatorBadge').style.display = 'block';
+        const fc = document.getElementById('floating-corner');
+        if (fc) fc.classList.add('hidden');
         if (data.latest_display) {
             const scene = phaserGame.scene.getScene('SnakeScene');
             if (scene) scene.updateFromState(data.latest_display);
@@ -397,6 +431,9 @@ const replayController = new ReplayController({
 function startReplay(displays, winner) {
     isReplayMode = true;
     replayDisplays = displays;
+    renderSteerHint();
+    const fc = document.getElementById('floating-corner');
+    if (fc) fc.classList.add('hidden');
 
     const controls = document.getElementById('replayControls');
     if (controls) controls.style.display = 'flex';
@@ -577,22 +614,30 @@ function showMatchPlayerNames() {
     if (redEl) redEl.textContent = fmt(players[1]) || 'Player 2';
 }
 
-// Keyboard control for human player (WASD)
+// Keyboard control for the human seat: WASD or the arrow keys.
+// direction 0=up, 1=right, 2=down, 3=left (matches DX/DY in the bot spec).
+const KEY_DIRECTIONS = {
+    'w': 0, 'W': 0, 'ArrowUp': 0,
+    'd': 1, 'D': 1, 'ArrowRight': 1,
+    's': 2, 'S': 2, 'ArrowDown': 2,
+    'a': 3, 'A': 3, 'ArrowLeft': 3,
+};
+
 document.addEventListener('keydown', (e) => {
-    if (typeof IS_MATCH_PAGE !== 'undefined' && IS_MATCH_PAGE) return;
-    let dir = null;
-    if (e.key === 'a' || e.key === 'A') dir = 3;
-    else if (e.key === 's' || e.key === 'S') dir = 2;
-    else if (e.key === 'd' || e.key === 'D') dir = 1;
-    else if (e.key === 'w' || e.key === 'W') dir = 0;
-    if (dir !== null) {
-        sendHumanDirection(dir);
-    }
+    const dir = KEY_DIRECTIONS[e.key];
+    if (dir === undefined || !canSteer()) return;
+    // Don't steal keys while the user is typing in a field somewhere on the page.
+    const tag = e.target && e.target.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+    e.preventDefault();  // arrow keys would otherwise scroll the page
+    sendHumanDirection(dir);
 });
 
 // Send human player's direction to server
 function sendHumanDirection(dir) {
-    document.getElementById('floating-corner').classList.add('hidden');
+    if (!canSteer()) return;
+    const fc = document.getElementById('floating-corner');
+    if (fc) fc.classList.add('hidden');
     socket.emit('player_move', {
         user_id: userId,
         game_id: currentGameId,

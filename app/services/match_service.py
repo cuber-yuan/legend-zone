@@ -6,6 +6,30 @@ from .utils import utc_now_iso
 _PAYLOAD_COLS = {'move_history', 'displays'}
 
 
+def state_payload(game, extra=None):
+    """Serialize judge state into a client update payload.
+
+    current_player and player_types are what let the browser decide whether a
+    click is actually a legal move. Without them a human cannot tell whose turn
+    it is, so either every click is accepted (letting a player move out of
+    turn) or none are (which is the bug that made human games unplayable).
+    Deriving both from the judge keeps the three games from drifting apart.
+    """
+    payload = {
+        'board': game.board,
+        'winner': game.winner,
+        'game_id': game.game_id,
+        'current_player': game.current_player,
+        'player_types': {
+            '1': game.black_player_type,
+            '2': game.white_player_type,
+        },
+    }
+    if extra:
+        payload.update(extra)
+    return payload
+
+
 def create_match_record(game, players_json, status='playing'):
     """Insert a fresh matches row and return its generated id."""
     match_id = uuid.uuid4().hex

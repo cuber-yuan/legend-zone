@@ -22,6 +22,7 @@ class TankScene extends Phaser.Scene {
         this.mapLayer = null;
         this.baseLayer = null;
         this.tankLayer = null;
+        this.markLayer = null;
         this.mapDrawn = false;
         this.CELL_SIZE = 0;
 
@@ -35,6 +36,98 @@ class TankScene extends Phaser.Scene {
         // Bullet flight time in ms; all bullets in a turn still land together.
         // tank.html sets this dynamically from the replay speed during playback.
         this.bulletDurationMs = 200;
+
+        // Actions the judge saw last turn, per side per tank: -1 stay, 0-3 move,
+        // 4-7 fire. Two turns of firing in a row is illegal, so the human panel
+        // needs this to disable buttons instead of letting a click lose the match.
+        this.lastActions = [[-1, -1], [-1, -1]];
+    }
+
+    // --- Human control helpers (used by tank.html's control panel) ---
+
+    tankAlive(side, tank) {
+        return !!(this.localTanks[side * 2 + tank] && this.localTanks[side * 2 + tank].alive);
+    }
+
+    // Mirrors tank2_judge.cpp's ActionIsValid: the judge ends the match on the
+    // first illegal action, so illegal ones are never offered to a human.
+    actionLegal(side, tank, act) {
+        if (act < -1 || act > 7) return false;
+        if (!this.tankAlive(side, tank)) return true;
+        if (act >= 4 && this.lastActions[side][tank] >= 4) return false;
+        if (act === -1 || act >= 4) return true;
+        if (!this.mapData) return false;
+        const dx = [0, 1, 0, -1], dy = [-1, 0, 1, 0];
+        const t = this.localTanks[side * 2 + tank];
+        const x = t.x + dx[act], y = t.y + dy[act];
+        return x >= 0 && x < FIELD_WIDTH && y >= 0 && y < FIELD_HEIGHT && this.mapData[y][x] === 0;
+    }
+
+    tankAt(pointerX, pointerY) {
+        if (!this.CELL_SIZE) return null;
+        const col = Math.floor(pointerX / this.CELL_SIZE);
+        const row = Math.floor(pointerY / this.CELL_SIZE);
+        for (let i = 0; i < this.localTanks.length; i++) {
+            const t = this.localTanks[i];
+            if (t.alive && t.x === col && t.y === row) return { side: Math.floor(i / 2), tank: i % 2 };
+        }
+        return null;
+    }
+
+    onTankPicked(handler) {
+        if (this._pickBound) return;
+        this._pickBound = true;
+        this.input.on('pointerdown', (pointer) => {
+            const hit = this.tankAt(pointer.x, pointer.y);
+            if (hit) handler(hit.side, hit.tank);
+        });
+    }
+
+    // Hover is reported only when the tank under the cursor changes, so the
+    // control popover can open on a tank and stay open while the pointer walks
+    // from the board onto the popover itself.
+    onTankHover(enter, leave) {
+        if (this._hoverBound) return;
+        this._hoverBound = true;
+        let current = null;
+        const report = (pointer) => {
+            const hit = this.tankAt(pointer.x, pointer.y);
+            const key = hit ? hit.side + ':' + hit.tank : null;
+            const oldKey = current ? current.side + ':' + current.tank : null;
+            if (key === oldKey) return;
+            current = hit;
+            if (hit) enter(hit.side, hit.tank); else leave();
+        };
+        this.input.on('pointermove', report);
+        this.input.on('pointerout', () => { current = null; leave(); });
+    }
+
+    // Corner brackets on the board marking the tanks whose order is already locked:
+    // amber for a move, red for a shot, grey for a hold. The cluster only shows one
+    // tank at a time, so this is how the outstanding one stays visible.
+    setOrderMarks(marks) {
+        if (!this.markLayer) return;
+        this.markLayer.clear(true, true);
+        const colors = { move: 0xf59e0b, fire: 0xef4444, hold: 0x9ca3af };
+        (marks || []).forEach((m) => {
+            const t = this.localTanks[m.side * 2 + m.tank];
+            if (!t || !t.alive) return;
+            const s = this.CELL_SIZE;
+            const x = t.x * s, y = t.y * s;
+            const len = s * 0.28, pad = s * 0.07;
+            const g = this.add.graphics();
+            g.lineStyle(Math.max(2, s * 0.07), colors[m.kind] || colors.move, 1);
+            [[x + pad, y + pad, 1, 1], [x + s - pad, y + pad, -1, 1],
+             [x + pad, y + s - pad, 1, -1], [x + s - pad, y + s - pad, -1, -1]].forEach(([cx, cy, sx, sy]) => {
+                g.beginPath();
+                g.moveTo(cx, cy + sy * len);
+                g.lineTo(cx, cy);
+                g.lineTo(cx + sx * len, cy);
+                g.strokePath();
+            });
+            g.setDepth(40);
+            this.markLayer.add(g);
+        });
     }
 
     preload() {
@@ -56,6 +149,7 @@ class TankScene extends Phaser.Scene {
         this.mapLayer = this.add.group();
         this.baseLayer = this.add.group();
         this.tankLayer = this.add.group();
+        this.markLayer = this.add.group();
 
         this.mapDrawn = false;
         
@@ -78,9 +172,11 @@ class TankScene extends Phaser.Scene {
             // Re-initialize local tanks and bases
             this.localTanks = INIT_TANKS.map(t => ({ ...t }));
             this.localBases = INIT_BASES.map(b => ({ ...b }));
+            this.lastActions = [[-1, -1], [-1, -1]];
             this.turn = 1;
             this.tankLayer.clear(true, true);
             this.baseLayer.clear(true, true);
+            if (this.markLayer) this.markLayer.clear(true, true);
             this.renderTanksAndBases();
             // Update the turn counter display
             const turnCounter = document.getElementById('turnCounter');
@@ -92,6 +188,7 @@ class TankScene extends Phaser.Scene {
 
         // Each turn only delivers both sides' actions
         if (state['0'] && state['1']) {
+            this.lastActions = [state['0'].slice(0, 2), state['1'].slice(0, 2)];
             this.applyActions(state['0'], state['1']);
             this.turn += 1;
             this.tankLayer.clear(true, true);

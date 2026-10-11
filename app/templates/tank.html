@@ -12,8 +12,8 @@
       {% endfor %}
     </select>
     <div style="margin-top:1.5rem;">
-      <input type="checkbox" id="top-is-human" disabled />
-      <label for="top-is-human" style="margin-left:0.5rem;">Human (disabled)</label>
+      <input type="checkbox" id="top-is-human" />
+      <label for="top-is-human" style="margin-left:0.5rem;">Human</label>
     </div>
   </div>
 </aside>
@@ -29,8 +29,8 @@
       {% endfor %}
     </select>
     <div style="margin-top:1.5rem;">
-      <input type="checkbox" id="bottom-is-human" disabled />
-      <label for="bottom-is-human" style="margin-left:0.5rem;">Human (disabled)</label>
+      <input type="checkbox" id="bottom-is-human" />
+      <label for="bottom-is-human" style="margin-left:0.5rem;">Human</label>
     </div>
   </div>
 </aside>
@@ -49,6 +49,187 @@
     background: #c2d1a2; /* A grassy green for tanks */
     margin-top: 20px;
     border: 2px solid #333;
+  }
+
+  /* --- Orders status line --- */
+  .order-bar {
+    display: none;
+    max-width: 600px;
+    margin: 10px auto 0;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: #374151;
+  }
+  .order-bar.show { display: flex; }
+  .order-bar .ob-seat { color: #1d4ed8; }
+  .order-bar .ob-count {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    letter-spacing: 0.06em;
+    padding: 2px 9px;
+    border-radius: 999px;
+    background: #eef2ff;
+    border: 1px solid #c7d2fe;
+    color: #3730a3;
+  }
+  .order-bar.locked { color: #065f46; }
+  .order-bar.locked .ob-seat { color: #047857; }
+  .order-bar.locked .ob-count { background: #ecfdf5; border-color: #a7f3d0; color: #047857; }
+
+  /* --- Hover orders: the keys land on the board's own cells around the tank --- */
+  .tank-pad {
+    --cell: 60px;
+    display: none;
+    position: absolute;
+    z-index: 30;
+    width: calc(var(--cell) * 3);
+    height: calc(var(--cell) * 3);
+    pointer-events: none;
+  }
+  .tank-pad::before {
+    /* Dimmed halo so the hardware reads against the grass */
+    content: '';
+    position: absolute;
+    inset: 4%;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(11, 16, 22, 0.66) 0%, rgba(11, 16, 22, 0.36) 56%, rgba(11, 16, 22, 0) 74%);
+  }
+  .tank-pad .tp-cell {
+    position: absolute;
+    width: var(--cell);
+    height: var(--cell);
+    display: grid;
+    place-items: center;
+  }
+  .tp-cell--up { top: 0; left: var(--cell); }
+  .tp-cell--down { top: calc(var(--cell) * 2); left: var(--cell); }
+  .tp-cell--left { top: var(--cell); left: 0; }
+  .tp-cell--right { top: var(--cell); left: calc(var(--cell) * 2); }
+  .tp-cell--core { top: var(--cell); left: var(--cell); }
+
+  .tp-key {
+    pointer-events: auto;
+    width: calc(var(--cell) * 0.62);
+    height: calc(var(--cell) * 0.62);
+    display: grid;
+    place-items: center;
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    border-radius: calc(var(--cell) * 0.16);
+    background: linear-gradient(165deg, #4f5c6b 0%, #2f3944 60%, #262f38 100%);
+    color: #f3f4f6;
+    font-size: calc(var(--cell) * 0.26);
+    line-height: 1;
+    cursor: pointer;
+    box-shadow:
+      0 calc(var(--cell) * 0.06) 0 #151b21,
+      0 calc(var(--cell) * 0.13) calc(var(--cell) * 0.2) rgba(0, 0, 0, 0.45),
+      inset 0 1px 0 rgba(255, 255, 255, 0.22);
+    transition: transform 0.1s ease, box-shadow 0.1s ease, background 0.15s ease, color 0.15s ease;
+    animation: keyDeploy 0.2s ease backwards;
+    animation-delay: calc(var(--i, 0) * 35ms);
+  }
+  .tp-key:hover:not(:disabled) {
+    transform: translateY(-2px);
+    background: linear-gradient(165deg, #617183 0%, #3a4653 60%, #2c353f 100%);
+  }
+  .tp-key:active:not(:disabled) {
+    transform: translateY(2px);
+    box-shadow: 0 1px 0 #151b21, inset 0 2px 6px rgba(0, 0, 0, 0.5);
+  }
+  .tp-key:disabled {
+    opacity: 0.24;
+    cursor: not-allowed;
+    box-shadow: 0 2px 0 #151b21;
+  }
+  .tp-key:focus-visible, .tp-core:focus-visible, .tp-hold:focus-visible {
+    outline: 2px solid #fbbf24;
+    outline-offset: 2px;
+  }
+  .tank-pad.armed .tp-key { color: #fecaca; border-color: rgba(248, 113, 113, 0.55); }
+  .tank-pad.armed .tp-key:hover:not(:disabled) { background: linear-gradient(165deg, #7f3d3d, #451f1f); }
+
+  .tp-core {
+    pointer-events: auto;
+    width: calc(var(--cell) * 0.86);
+    height: calc(var(--cell) * 0.86);
+    border-radius: 50%;
+    border: calc(var(--cell) * 0.05) solid #f59e0b;
+    background: transparent;
+    cursor: pointer;
+    display: grid;
+    place-items: center;
+    box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.4), 0 0 18px rgba(245, 158, 11, 0.5);
+    transition: border-color 0.15s ease, transform 0.12s ease;
+    animation: keyDeploy 0.2s ease backwards;
+  }
+  .tp-core:hover { transform: scale(1.07); }
+  .tp-core .tp-muzzle {
+    width: calc(var(--cell) * 0.16);
+    height: calc(var(--cell) * 0.16);
+    border-radius: 50%;
+    background: #f59e0b;
+    box-shadow: 0 0 10px rgba(245, 158, 11, 0.9);
+    transition: background 0.15s ease, box-shadow 0.15s ease;
+  }
+  .tank-pad.armed .tp-core { border-color: #ef4444; animation: corePulse 1.15s ease-in-out infinite; }
+  .tank-pad.armed .tp-muzzle { background: #ef4444; box-shadow: 0 0 12px rgba(239, 68, 68, 0.95); }
+
+  .tp-caption {
+    position: absolute;
+    top: calc(var(--cell) * 3);
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 3px 10px;
+    border-radius: 999px;
+    background: rgba(11, 16, 22, 0.88);
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4);
+    font-size: 0.6rem;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #e5e7eb;
+    white-space: nowrap;
+  }
+  .tank-pad.tp-flip .tp-caption { top: auto; bottom: calc(var(--cell) * 3); }
+  .tp-caption .tp-coord {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    letter-spacing: 0;
+    text-transform: none;
+    color: #94a3b8;
+  }
+  .tp-caption .tp-mode { color: #fbbf24; }
+  .tank-pad.armed .tp-caption .tp-mode { color: #f87171; }
+  .tp-hold {
+    pointer-events: auto;
+    border: 1px solid rgba(255, 255, 255, 0.24);
+    border-radius: 999px;
+    background: transparent;
+    color: #e5e7eb;
+    padding: 1px 8px;
+    font-size: 0.55rem;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    cursor: pointer;
+  }
+  .tp-hold:hover:not(:disabled) { background: rgba(255, 255, 255, 0.12); }
+  .tp-hold:disabled { opacity: 0.3; cursor: not-allowed; }
+
+  @keyframes keyDeploy { from { opacity: 0; transform: scale(0.6); } to { opacity: 1; transform: none; } }
+  @keyframes corePulse {
+    0%, 100% { box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.4), 0 0 14px rgba(239, 68, 68, 0.55); }
+    50% { box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.4), 0 0 28px rgba(239, 68, 68, 0.95); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .tp-key, .tp-core { animation: none !important; transition: none !important; }
   }
 
   /* --- Responsive Layout Control (from Gomoku) --- */
@@ -94,6 +275,22 @@
     <!-- Game Canvas Section -->
     <div style="position:relative;width:100%;max-width:600px;height:auto;margin:auto;box-sizing:border-box;">
       <div id="phaser-container" style="width:100%;height:100%;"></div>
+      <!-- Orders cluster: keys sit on the cells around the hovered tank -->
+      <div id="tankPad" class="tank-pad" role="group" aria-label="Tank orders">
+        <span class="tp-cell tp-cell--up"><button type="button" class="tp-key" data-act="0" style="--i:1" aria-label="Move up" title="Move up">&#9650;</button></span>
+        <span class="tp-cell tp-cell--right"><button type="button" class="tp-key" data-act="1" style="--i:2" aria-label="Move right" title="Move right">&#9654;</button></span>
+        <span class="tp-cell tp-cell--down"><button type="button" class="tp-key" data-act="2" style="--i:3" aria-label="Move down" title="Move down">&#9660;</button></span>
+        <span class="tp-cell tp-cell--left"><button type="button" class="tp-key" data-act="3" style="--i:4" aria-label="Move left" title="Move left">&#9664;</button></span>
+        <span class="tp-cell tp-cell--core">
+          <button type="button" class="tp-core" id="tpArm" aria-label="Toggle fire mode" title="Toggle fire mode"><span class="tp-muzzle"></span></button>
+        </span>
+        <div class="tp-caption">
+          <span id="tpTag">Tank 1</span>
+          <span class="tp-coord" id="tpCoord"></span>
+          <span class="tp-mode" id="tpMode">move</span>
+          <button type="button" class="tp-hold" id="tpHold" title="Hold position">hold</button>
+        </div>
+      </div>
     </div>
     <br>
     <div style="text-align:center;">
@@ -101,6 +298,11 @@
         {% if not match_id %}
         <button id="newGameBtn" type="button" class="mt-4 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600">New Game</button>
         {% endif %}
+    </div>
+
+    <div id="orderBar" class="order-bar">
+      <span class="ob-seat" id="obSeat"></span>
+      <span class="ob-count" id="obCount"></span>
     </div>
 
     <!-- Replay Controls (match page only) -->
@@ -169,12 +371,284 @@ let isSpectator = false;
 let isReplayMode = false;
 let replayDisplays = [];
 
+// --- Human orders ---
+// Each side commands two tanks and the judge runs the turn only once both sides
+// have answered, so the cluster collects one action per tank and submits the pair.
+// On a hot seat the seats are ordered in turn, seat 1 first.
+let playerTypes = { '1': 'bot', '2': 'bot' };
+let commandSeat = null;
+let commandQueue = [];
+let commands = { '1': [null, null], '2': [null, null] };
+let activeTank = 0;
+let padWired = false;
+let padOpen = false;
+let padPinned = false;
+let fireArmed = false;
+let padCloseTimer = null;
+let lastPointer = { x: -1, y: -1 };
+
+const SEAT_LABEL = { '1': 'Top player · blue', '2': 'Bottom player · red' };
+const DIR_NAME = { 0: 'up', 1: 'right', 2: 'down', 3: 'left' };
+const seatSide = (seat) => (seat === '1' ? 0 : 1);
+const seatOfSide = (side) => (side === 0 ? '1' : '2');
+
+function humanSeats() { return ['1', '2'].filter((s) => playerTypes[s] === 'human'); }
+
+function canCommand() {
+  return !!currentGameId && !gameOver && !isSpectator && !isReplayMode && humanSeats().length > 0;
+}
+
+function tankScene() { return phaserGame ? phaserGame.scene.getScene('TankScene') : null; }
+
+function applySeatTypes(data) {
+  if (data && data.player_types) playerTypes = data.player_types;
+}
+
+function beginCommandPhase() {
+  commandQueue = humanSeats();
+  commands = { '1': [null, null], '2': [null, null] };
+  activeTank = 0;
+  cancelPadClose();
+  padOpen = false;
+  fireArmed = false;
+  nextCommandSeat();
+}
+
+// A destroyed tank owes no order; the judge ignores its slot, so park it at -1.
+function firstUnorderedTank(seat) {
+  const sc = tankScene();
+  const side = seatSide(seat);
+  for (let t = 0; t < 2; t++) {
+    if (sc && !sc.tankAlive(side, t)) { commands[seat][t] = -1; continue; }
+    if (commands[seat][t] === null) return t;
+  }
+  return null;
+}
+
+function nextCommandSeat() {
+  commandSeat = commandQueue.length ? commandQueue[0] : null;
+  if (commandSeat) {
+    activeTank = firstUnorderedTank(commandSeat);
+    if (activeTank === null) { submitSeat(commandSeat); return; }
+  }
+  renderCommandPanel();
+}
+
+function submitSeat(seat) {
+  const payload = { response: commands[seat].map((a) => (a === null ? -1 : a)) };
+  socket.emit('player_move', {
+    user_id: userId, game_id: currentGameId, seat: seat, move: JSON.stringify(payload)
+  });
+  commandQueue = commandQueue.filter((s) => s !== seat);
+  commandSeat = null;
+  // Close the cluster on handover: the next seat should have to summon its own.
+  padOpen = false;
+  fireArmed = false;
+  nextCommandSeat();
+}
+
+function chooseAction(act) {
+  if (!commandSeat) return;
+  const sc = tankScene();
+  if (!sc || !sc.actionLegal(seatSide(commandSeat), activeTank, act)) return;
+  commands[commandSeat][activeTank] = act;
+  fireArmed = false;
+  const next = firstUnorderedTank(commandSeat);
+  if (next === null) { submitSeat(commandSeat); return; }
+  // Follow the pad to the tank that still owes an order, so the player is not
+  // left hunting for it after each click.
+  activeTank = next;
+  padOpen = true;
+  renderCommandPanel();
+}
+
+function padKeys() {
+  return Array.prototype.slice.call(document.querySelectorAll('#tankPad .tp-key'));
+}
+
+function cancelPadClose() {
+  if (padCloseTimer) { clearTimeout(padCloseTimer); padCloseTimer = null; }
+}
+
+function openPadOn(side, tank, pin) {
+  const sc = tankScene();
+  if (!commandSeat || seatOfSide(side) !== commandSeat) { schedulePadClose(); return; }
+  if (!sc || !sc.tankAlive(side, tank)) return;
+  cancelPadClose();
+  if (pin) padPinned = true;
+  padOpen = true;
+  activeTank = tank;
+  renderCommandPanel();
+}
+
+// The cluster's own hit area, caption included. Phaser reports pointerout the
+// moment the cursor steps onto any of the keys or the hold pill, so closing has
+// to be decided by geometry rather than by event order, or the pad vanishes while
+// the pointer is still on the control the player is reaching for.
+function pointerInsideCluster() {
+  const pad = document.getElementById('tankPad');
+  const caption = document.querySelector('#tankPad .tp-caption');
+  const boxes = [pad, caption].filter(Boolean).map((el) => el.getBoundingClientRect());
+  return boxes.some((r) => r && lastPointer.x >= r.left && lastPointer.x <= r.right
+    && lastPointer.y >= r.top && lastPointer.y <= r.bottom);
+}
+
+function schedulePadClose() {
+  cancelPadClose();
+  padCloseTimer = setTimeout(() => {
+    padCloseTimer = null;
+    if (padPinned || pointerInsideCluster()) return;
+    padOpen = false;
+    fireArmed = false;
+    renderCommandPanel();
+  }, 150);
+}
+
+function hidePad() {
+  const pad = document.getElementById('tankPad');
+  padPinned = false;
+  if (!pad) return;
+  pad.style.display = 'none';
+  pad.classList.remove('armed');
+}
+
+// The cluster is three board cells wide and centred on the targeted tank, so each
+// key sits on the very cell its direction would move the tank into.
+function positionPad(pad, sc) {
+  const canvas = document.querySelector('#phaser-container canvas');
+  if (!canvas || !canvas.getBoundingClientRect || !pad.parentElement) return;
+  const box = canvas.getBoundingClientRect();
+  if (!box.width) return;
+  const wrap = pad.parentElement.getBoundingClientRect();
+  const cell = box.width / 9;
+  const spot = sc.localTanks[seatSide(commandSeat) * 2 + activeTank];
+  if (!spot) return;
+  pad.style.setProperty('--cell', cell + 'px');
+  pad.style.left = ((box.left - wrap.left) + (spot.x + 0.5) * cell - cell * 1.5) + 'px';
+  pad.style.top = ((box.top - wrap.top) + (spot.y + 0.5) * cell - cell * 1.5) + 'px';
+  // Keep the caption over the board when the tank sits on the bottom rows.
+  pad.classList.toggle('tp-flip', spot.y >= 7);
+}
+
+function renderPad() {
+  const pad = document.getElementById('tankPad');
+  if (!pad) return;
+  const sc = tankScene();
+  if (!padOpen || !canCommand() || !commandSeat || !sc) { hidePad(); return; }
+  const side = seatSide(commandSeat);
+  if (!sc.tankAlive(side, activeTank)) { hidePad(); return; }
+
+  pad.style.display = 'block';
+  pad.classList.toggle('armed', fireArmed);
+  padKeys().forEach((b) => {
+    const base = parseInt(b.getAttribute('data-act'), 10);
+    b.disabled = !sc.actionLegal(side, activeTank, fireArmed ? base + 4 : base);
+    b.title = `${fireArmed ? 'Fire' : 'Move'} ${DIR_NAME[base]}`;
+  });
+
+  const mode = document.getElementById('tpMode');
+  if (mode) mode.textContent = fireArmed ? 'fire' : 'move';
+  const tag = document.getElementById('tpTag');
+  if (tag) tag.textContent = `Tank ${activeTank + 1}`;
+  const coord = document.getElementById('tpCoord');
+  const spot = sc.localTanks[side * 2 + activeTank];
+  if (coord && spot) coord.textContent = `${spot.x},${spot.y}`;
+  const arm = document.getElementById('tpArm');
+  if (arm) arm.setAttribute('aria-label', fireArmed ? 'Switch back to move mode' : 'Switch to fire mode');
+  const hold = document.getElementById('tpHold');
+  if (hold) hold.disabled = !sc.actionLegal(side, activeTank, -1);
+  positionPad(pad, sc);
+}
+
+function ensurePadWired() {
+  if (padWired) return;
+  padWired = true;
+  padKeys().forEach((btn) => {
+    btn.onclick = () => {
+      const base = parseInt(btn.getAttribute('data-act'), 10);
+      chooseAction(fireArmed ? base + 4 : base);
+    };
+  });
+  const arm = document.getElementById('tpArm');
+  if (arm) arm.onclick = () => { fireArmed = !fireArmed; renderCommandPanel(); };
+  const hold = document.getElementById('tpHold');
+  if (hold) hold.onclick = () => chooseAction(-1);
+  // Every move re-checks the cluster: Phaser only reports the tank-to-nothing
+  // transition once, so a suppressed close would otherwise never be re-armed and
+  // the pad would stick open after the cursor wanders off the board.
+  document.addEventListener('mousemove', (e) => {
+    lastPointer = { x: e.clientX, y: e.clientY };
+    if (padOpen) schedulePadClose();
+  });
+  const sc = tankScene();
+  if (sc) {
+    // A tap pins the cluster (touch users have no hover); hovering opens it outright.
+    if (sc.onTankPicked) sc.onTankPicked((side, tank) => openPadOn(side, tank, true));
+    if (sc.onTankHover) sc.onTankHover((side, tank) => openPadOn(side, tank, false), schedulePadClose);
+  }
+}
+
+function renderCommandPanel() {
+  ensurePadWired();
+  renderOrderBar();
+  markOrders();
+  renderPad();
+}
+
+// One quiet line under the board replaces the old control strip: who is ordering,
+// and how many of the two tanks still owe an order.
+function renderOrderBar() {
+  const bar = document.getElementById('orderBar');
+  if (!bar) return;
+  const seatEl = document.getElementById('obSeat');
+  const countEl = document.getElementById('obCount');
+  if (!canCommand()) {
+    bar.className = 'order-bar';
+    return;
+  }
+  const sc = tankScene();
+  if (!commandSeat) {
+    bar.className = 'order-bar show locked';
+    if (seatEl) seatEl.textContent = 'Orders locked in';
+    if (countEl) countEl.textContent = 'waiting';
+    return;
+  }
+  const side = seatSide(commandSeat);
+  const done = [0, 1].filter((t) => {
+    if (sc && !sc.tankAlive(side, t)) return true;
+    return commands[commandSeat][t] !== null;
+  }).length;
+  bar.className = 'order-bar show';
+  if (seatEl) seatEl.textContent = humanSeats().length > 1 ? SEAT_LABEL[commandSeat] : 'Hover a tank to order it';
+  if (countEl) countEl.textContent = `orders ${done}/2`;
+}
+
+// Amber / red brackets drawn on the board mark the tanks whose order is locked,
+// which is what the removed status cards used to say. Only the seat being ordered
+// now is shown, so a hot seat never exposes one player's plan to the other.
+function markOrders() {
+  const sc = tankScene();
+  if (!sc || !sc.setOrderMarks) return;
+  const marks = [];
+  if (commandSeat) {
+    const side = seatSide(commandSeat);
+    for (let t = 0; t < 2; t++) {
+      const act = commands[commandSeat][t];
+      if (act === null || !sc.tankAlive(side, t)) continue;
+      marks.push({ side, tank: t, kind: act >= 4 ? 'fire' : (act === -1 ? 'hold' : 'move'), act });
+    }
+  }
+  sc.setOrderMarks(marks);
+}
+
 // --- Game Logic & Server Communication ---
 socket.on('init', (data) => { userId = data.user_id; });
 
 socket.on('game_started', (data) => {
     currentGameId = data.game_id;
     gameOver = false;
+    isSpectator = false;
+    applySeatTypes(data);
 
     const scene = phaserGame.scene.getScene('TankScene');
     if (scene && typeof scene.updateFromState === 'function') {
@@ -182,6 +656,10 @@ socket.on('game_started', (data) => {
     } else {
         console.error("TankScene or its updateFromState method is not available!");
     }
+    const badge = document.getElementById('spectatorBadge');
+    if (badge) badge.style.display = 'none';
+    hidePhaserMask();
+    beginCommandPhase();
 });
 
 socket.on('update', (data) => {
@@ -193,10 +671,12 @@ socket.on('update', (data) => {
             return;
         }
     }
+    applySeatTypes(data);
     const scene = phaserGame.scene.getScene('TankScene');
     if (scene && typeof scene.updateFromState === 'function') {
         scene.updateFromState(data.state);
     }
+    beginCommandPhase();
 });
 
 socket.on('finish', (data) => {
@@ -206,6 +686,8 @@ socket.on('finish', (data) => {
         if (!currentGameId || data.game_id !== currentGameId) return;
     }
     gameOver = true;
+    applySeatTypes(data);
+    renderCommandPanel();
     let winner = data.winner;
     if (winner == 0) {
         showPhaserMask('Blue wins!');
@@ -224,12 +706,14 @@ socket.on('match_status', (data) => {
         isSpectator = true;
         currentGameId = data.game_id;
         gameOver = false;
+        applySeatTypes(data);
         hidePhaserMask();
         document.getElementById('spectatorBadge').style.display = 'block';
         if (data.latest_display) {
             const scene = phaserGame.scene.getScene('TankScene');
             if (scene) scene.updateFromState(data.latest_display);
         }
+        renderCommandPanel();
     } else if (data.status === 'finished') {
         startReplay(data.displays || [], data.winner);
     } else if (data.status === 'not_started') {
@@ -305,6 +789,7 @@ const replayController = new ReplayController({
 function startReplay(displays, winner) {
     isReplayMode = true;
     replayDisplays = displays;
+    renderCommandPanel();
 
     const controls = document.getElementById('replayControls');
     if (controls) controls.style.display = 'flex';
@@ -353,7 +838,9 @@ function newGame() {
   socket.emit('new_game', {
     user_id: userId,
     top_player_id: topPlayerId,
-    bottom_player_id: bottomPlayerId
+    bottom_player_id: bottomPlayerId,
+    top_is_human: !!(document.getElementById('top-is-human') || {}).checked,
+    bottom_is_human: !!(document.getElementById('bottom-is-human') || {}).checked
   });
 }
 
