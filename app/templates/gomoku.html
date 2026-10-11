@@ -5,20 +5,9 @@
 {% block sidebar_left %}
 <aside class="sider-left">
   <div style="padding: 2rem;">
+    <h2 style="font-size: 1.25rem; font-weight: bold;">Black</h2>
     {% if match_id %}
-    <h2 style="font-size: 1.25rem; font-weight: bold;">Black</h2>
     <div id="blackPlayerName" style="margin-top: 0.5rem; font-size: 1rem; color: #555;">Loading...</div>
-    {% else %}
-    <h2 style="font-size: 1.25rem; font-weight: bold;">Black</h2>
-    <select id="aiSelectBlack" class="block w-full border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
-      {% for bot in bots %}
-      <option value="{{ bot.id }}">{{ bot.bot_name }}</option>
-      {% endfor %}
-    </select>
-    <div style="margin-top:1.5rem;">
-      <input type="checkbox" id="left-checkbox" />
-      <label for="left-checkbox" style="margin-left:0.5rem;">Human</label>
-    </div>
     {% endif %}
   </div>
 </aside>
@@ -27,20 +16,9 @@
 {% block sidebar_right %}
 <aside class="sider-right">
   <div style="padding: 2rem;">
+    <h2 style="font-size: 1.25rem; font-weight: bold;">White</h2>
     {% if match_id %}
-    <h2 style="font-size: 1.25rem; font-weight: bold;">White</h2>
     <div id="whitePlayerName" style="margin-top: 0.5rem; font-size: 1rem; color: #555;">Loading...</div>
-    {% else %}
-    <h2 style="font-size: 1.25rem; font-weight: bold;">White</h2>
-    <select id="aiSelectWhite" class="block w-full border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
-      {% for bot in bots %}
-      <option value="{{ bot.id }}">{{ bot.bot_name }}</option>
-      {% endfor %}
-    </select>
-    <div style="margin-top:1.5rem;">
-      <input type="checkbox" id="right-checkbox" />
-      <label for="right-checkbox" style="margin-left:0.5rem;">Human</label>
-    </div>
     {% endif %}
   </div>
 </aside>
@@ -460,23 +438,6 @@ function autoStartMatch(playersJson) {
   });
 }
 
-// --- Normal game ---
-function newGame() {
-  const blackBot = document.getElementById('aiSelectBlack').value;
-  const whiteBot = document.getElementById('aiSelectWhite').value;
-  const blackisHuman = document.getElementById('left-checkbox').checked;
-  const whiteisHuman = document.getElementById('right-checkbox').checked;
-  
-  // showPhaserMask("Starting new game..."); 
-  
-  socket.emit('new_game', {
-    user_id: userId,
-    black_bot: blackBot,
-    white_bot: whiteBot,
-    black_is_human: blackisHuman,
-    white_is_human: whiteisHuman
-  });
-}
 
 function sendPlayerMove(x, y) {
   socket.emit('player_move', { user_id: userId, x, y, game_id: currentGameId });
@@ -499,14 +460,6 @@ document.addEventListener('DOMContentLoaded', function() {
   // Wire replay controls (transport buttons, slider, speed selector)
   replayController.attach();
 
-  {% if not match_id %}
-  const left = document.getElementById('left-checkbox');
-  const right = document.getElementById('right-checkbox');
-  if (left && right) {
-    left.addEventListener('change', () => { if (left.checked) right.checked = false; });
-    right.addEventListener('change', () => { if (right.checked) left.checked = false; });
-  }
-  {% endif %}
 
   {% if match_id and match %}
   const matchId = "{{ match_id }}";

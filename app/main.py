@@ -211,6 +211,11 @@ def tictactoe():
     bots = get_latest_bots_for_game('Tic Tac Toe')
     return render_template('tictactoe.html', bots=bots)
 
+@main_bp.route('/connect4')
+def connect4():
+    bots = get_latest_bots_for_game('Connect Four')
+    return render_template('connect4.html', bots=bots)
+
 @main_bp.route('/msnake')
 def msnake():
     bots = get_latest_bots_for_game('Mini Snake')
@@ -283,6 +288,7 @@ GAME_TEMPLATES = {
     'Snake': 'snake.html',
     'Mini Snake': 'snake.html',
     'Tic Tac Toe': 'tictactoe.html',
+    'Connect Four': 'connect4.html',
 }
 
 @main_bp.route('/api/matches', methods=['POST'])
