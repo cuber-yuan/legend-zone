@@ -12,7 +12,7 @@ from .utils import get_db_connection
 
 
 
-# ... (可以为其他游戏导入 run_auto_snake_match 等)
+# ... (import run_auto_snake_match etc. for other games)
 
 def select_bots_for_game(game_name):
     """Pick two distinct bots for an auto match.
@@ -43,7 +43,7 @@ def select_bots_for_game(game_name):
 
 
 def schedule_all_games():
-    """遍历所有游戏，并安排一场对战，供 APScheduler 调用。"""
+    """Iterate over all games and schedule one match each; called by APScheduler."""
     games_to_run = ['Gomoku', 'Snake', 'Tank Battle', 'Tic Tac Toe']
 
     auto_match_runners = {
@@ -66,4 +66,4 @@ def schedule_all_games():
 
         time.sleep(1)
 
-# ... (在主应用启动文件 (app.py 或 __init__.py) 中设置 APScheduler 定期调用 schedule_all_games)
+# ... (APScheduler is set up in the app startup file (app.py or __init__.py) to call schedule_all_games periodically)

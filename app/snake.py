@@ -258,11 +258,11 @@ def register_snake_events(socketio):
 
 def run_auto_snake_match(player_1_id, player_2_id):
     """
-    自动（AI vs AI）Snake 对战。由 battle_worker 后台调用。
-    与 register_snake_events 里的对战循环同构，但：
-      - 不依赖 socket/human
-      - 创建 matches 记录并在结束后写回 winner / displays
-      - 调用 update_bot_ratings 更新 ELO
+    Automated (AI vs AI) Snake match, invoked in the background by battle_worker.
+    Mirrors the match loop in register_snake_events, except:
+      - no socket/human dependency
+      - creates a matches record and writes back winner / displays when finished
+      - calls update_bot_ratings to update ELO
     """
     print(f"Running auto Snake match: {player_1_id} vs {player_2_id}")
 
@@ -272,7 +272,7 @@ def run_auto_snake_match(player_1_id, player_2_id):
         print("Error: Failed to load both bot executors for auto Snake match.")
         return
 
-    # 1) 创建 matches 记录
+    # 1) Create the matches record
     players = build_players_json(player_1_id, 'bot', player_2_id, 'bot')
     try:
         match_id = create_match_record('Snake', players)
@@ -282,7 +282,7 @@ def run_auto_snake_match(player_1_id, player_2_id):
         executor_2.cleanup()
         return
 
-    # 2) 跑对战
+    # 2) Run the match
     cpp_path = judge_binary_path('snake_judge')
     cpp_judge = CppJudgeExecutor(cpp_path)
 
@@ -323,7 +323,7 @@ def run_auto_snake_match(player_1_id, player_2_id):
         executor_1.cleanup()
         executor_2.cleanup()
 
-    # winner 标准化：0/1/-1
+    # Normalize winner to 0/1/-1
     elo_winner = winner if winner in (0, 1) else -1
     update_bot_ratings(player_1_id, player_2_id, elo_winner, match_id)
     update_match_result(match_id, elo_winner, json.dumps(displays), 'displays')

@@ -100,22 +100,6 @@ def init_db():
             ON rating_history (bot_id, created_at)
     """)
 
-    # Columns added after a table first shipped. CREATE TABLE IF NOT EXISTS never
-    # alters an existing table, so databases created before the change (including
-    # production) need an idempotent ALTER. Re-running is harmless: SQLite reports
-    # "duplicate column name" once the column is present.
-    #
-    # DEFAULT 0 keeps every pre-existing bot public. New bots are private because
-    # upload_bot passes is_private=1 explicitly rather than leaning on this default.
-    for table, column, ddl in (
-        ('bots', 'is_private', 'INTEGER NOT NULL DEFAULT 0'),
-    ):
-        try:
-            cursor.execute(f"ALTER TABLE {table} ADD COLUMN {column} {ddl}")
-            print(f"Added column {table}.{column}")
-        except sqlite3.OperationalError as exc:
-            if 'duplicate column' not in str(exc).lower():
-                raise
 
     conn.commit()
     

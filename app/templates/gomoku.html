@@ -399,7 +399,7 @@ socket.on('match_finished', (data) => {
 });
 
 // --- Replay ---
-// 重建到第 index 帧：重放 replayMoves[0..index) 到空棋盘
+// Rebuild state at frame index: replay replayMoves[0..index) onto an empty board
 const replayController = new ReplayController({
     counterId: 'moveCounter',
     baseIntervalMs: 800,

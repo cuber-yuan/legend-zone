@@ -10,11 +10,11 @@ MAX_CACHED_BINARIES = 50
 
 class CppCompiler:
     """
-    用于编译和运行C++源代码的工具类。
+    Utility class for compiling and running C++ source code.
     """
 
     def __init__(self, cache_dir=None):
-        # 可选：缓存已编译的二进制，避免重复编译
+        # Optional: cache compiled binaries to avoid recompiling
         if cache_dir is None:
             cache_dir = os.path.join(tempfile.gettempdir(), "cpp_code_cache")
         self.cache_dir = cache_dir
@@ -51,10 +51,10 @@ class CppCompiler:
 
     def compile(self, code: str, extra_args=None) -> str:
         """
-        编译C++代码，返回可执行文件路径。
-        :param code: C++源代码字符串
-        :param extra_args: 额外的g++参数（如头文件路径等）
-        :return: 可执行文件路径
+        Compile C++ code and return the executable path.
+        :param code: C++ source code string
+        :param extra_args: extra g++ arguments (e.g. include paths)
+        :return: executable file path
         """
         code_hash = hashlib.sha256(code.encode('utf-8')).hexdigest()
         exe_path = os.path.join(self.cache_dir, f"cpp_{code_hash}.exe")
@@ -111,11 +111,11 @@ class CppCompiler:
 
     def run(self, exe_path: str, input_str: str = "", timeout=10) -> str:
         """
-        运行已编译的可执行文件，返回输出。
-        :param exe_path: 可执行文件路径
-        :param input_str: 传递给程序的输入
-        :param timeout: 超时时间（秒）
-        :return: 程序标准输出
+        Run a compiled executable and return its output.
+        :param exe_path: path to the executable
+        :param input_str: input passed to the program
+        :param timeout: timeout in seconds
+        :return: program standard output
         """
         result = subprocess.run(
             [exe_path],

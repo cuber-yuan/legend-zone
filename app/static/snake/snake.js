@@ -366,7 +366,7 @@ function autoStartMatch(playersJson) {
 }
 
 // --- Replay ---
-// 重建到第 index 帧：displays[0] 是初始状态，1..index 逐帧应用
+// Rebuild state at frame index: displays[0] is the initial state, then frames 1..index are applied one by one
 function renderReplayFrame(index) {
     if (!replayDisplays.length) return;
     const scene = phaserGame.scene.getScene('SnakeScene');

@@ -3,14 +3,14 @@
 
 const FIELD_WIDTH = 9, FIELD_HEIGHT = 9;
 const INIT_TANKS = [
-    { x: 2, y: 0, side: 0, alive: true }, // 蓝0
-    { x: 6, y: 0, side: 0, alive: true }, // 蓝1
-    { x: 6, y: 8, side: 1, alive: true }, // 红0
-    { x: 2, y: 8, side: 1, alive: true }, // 红1
+    { x: 2, y: 0, side: 0, alive: true }, // Blue 0
+    { x: 6, y: 0, side: 0, alive: true }, // Blue 1
+    { x: 6, y: 8, side: 1, alive: true }, // Red 0
+    { x: 2, y: 8, side: 1, alive: true }, // Red 1
 ];
 const INIT_BASES = [
-    { x: 4, y: 0, side: 0, alive: true }, // 蓝基地
-    { x: 4, y: 8, side: 1, alive: true }, // 红基地
+    { x: 4, y: 0, side: 0, alive: true }, // Blue base
+    { x: 4, y: 8, side: 1, alive: true }, // Red base
 ];
 
 // --- Extend the main Phaser scene with our game logic ---
@@ -29,11 +29,11 @@ class TankScene extends Phaser.Scene {
         this.localBases = [];
         this.turn = 1;
 
-        // 飞行中的子弹（用于切回合 / 重置时强制清理，避免残留）
+        // In-flight bullets (force-cleared on turn change / reset so none linger)
         this.activeBullets = [];
 
-        // 子弹飞行时长（毫秒），同一回合所有子弹仍然同步到达。
-        // 回放时由 tank.html 按回放速度动态设置。
+        // Bullet flight time in ms; all bullets in a turn still land together.
+        // tank.html sets this dynamically from the replay speed during playback.
         this.bulletDurationMs = 200;
     }
 
@@ -68,21 +68,21 @@ class TankScene extends Phaser.Scene {
     updateFromState(state) {
         if (!state) return;
 
-        // 初始化地图和本地状态（每次新游戏都要重置所有状态）
+        // Init map and local state (every new game resets all state)
         if (state.brick && state.steel && state.water) {
-            // 新游戏：立刻清掉上一局的飞行中子弹，避免残留
+            // New game: drop the previous game's in-flight bullets at once so none linger
             this.clearAllBullets();
-            this.mapDrawn = false; // 允许重新绘制地图
+            this.mapDrawn = false; // allow the map to be redrawn
             this.drawMap(state.brick, state.water, state.steel);
             this.mapDrawn = true;
-            // 重新初始化本地坦克和基地
+            // Re-initialize local tanks and bases
             this.localTanks = INIT_TANKS.map(t => ({ ...t }));
             this.localBases = INIT_BASES.map(b => ({ ...b }));
             this.turn = 1;
             this.tankLayer.clear(true, true);
             this.baseLayer.clear(true, true);
             this.renderTanksAndBases();
-            // 更新回合数显示
+            // Update the turn counter display
             const turnCounter = document.getElementById('turnCounter');
             if (turnCounter) {
                 turnCounter.textContent = `Turn: ${this.turn}`;
@@ -90,14 +90,14 @@ class TankScene extends Phaser.Scene {
             return;
         }
 
-        // 每回合只收到双方行动
+        // Each turn only delivers both sides' actions
         if (state['0'] && state['1']) {
             this.applyActions(state['0'], state['1']);
             this.turn += 1;
             this.tankLayer.clear(true, true);
             this.baseLayer.clear(true, true);
             this.renderTanksAndBases();
-            // 更新回合数显示
+            // Update the turn counter display
             const turnCounter = document.getElementById('turnCounter');
             if (turnCounter) {
                 turnCounter.textContent = `Turn: ${this.turn}`;
@@ -107,7 +107,7 @@ class TankScene extends Phaser.Scene {
     }
 
     renderTanksAndBases() {
-        // 渲染坦克
+        // Render tanks
         this.localTanks.forEach(tank => {
             if (tank.alive) {
                 const spriteKey = tank.side === 0 ? 'tank_blue' : 'tank_red';
@@ -118,7 +118,7 @@ class TankScene extends Phaser.Scene {
                 this.tankLayer.add(tankSprite);
             }
         });
-        // 渲染基地
+        // Render bases
         this.localBases.forEach(base => {
             if (base.alive) {
                 const x = (base.x + 0.5) * this.CELL_SIZE;
@@ -132,50 +132,50 @@ class TankScene extends Phaser.Scene {
 
     
     applyActions(actions0, actions1) {
-        // 切到下一回合：把上一回合没飞完的子弹立刻飞到终点并销毁，
-        // 这样本回合的子弹能在干净的画布上起飞，不会与旧子弹视觉叠加。
+        // Switching to the next turn: snap bullets still in flight straight to their targets and
+        // destroy them, so this turn's bullets fly over a clean canvas with no visual overlap.
         this.forceFinishAllBullets();
 
-        // 坦克行动顺序：蓝0、蓝1、红0、红1
+        // Tank action order: Blue 0, Blue 1, Red 0, Red 1
         const dx = [0, 1, 0, -1], dy = [-1, 0, 1, 0];
         const tanks = this.localTanks;
         const bases = this.localBases;
         const allActions = [actions0[0], actions0[1], actions1[0], actions1[1]];
 
-        // 1. 处理移动
-        // 记录原位置
+        // 1. Handle movement
+        // Remember the original positions
         const origPos = tanks.map(t => ({ x: t.x, y: t.y, alive: t.alive }));
 
-        // 先处理所有移动
+        // Resolve all moves first
         for (let i = 0; i < 4; i++) {
             const tank = tanks[i];
             if (!tank.alive) continue;
             const act = allActions[i];
-            if (act >= 0 && act <= 3) { // 移动
+            if (act >= 0 && act <= 3) { // move
                 const nx = tank.x + dx[act], ny = tank.y + dy[act];
-                // 边界检测
+                // Bounds check
                 if (nx < 0 || nx >= FIELD_WIDTH || ny < 0 || ny >= FIELD_HEIGHT) {
-                    tank.alive = false; // 越界死亡
+                    tank.alive = false; // moving off the board kills the tank
                     continue;
                 }
-                // 不能移动到水、钢、砖
+                // Cannot move onto water, steel or brick
                 if (this.mapData[ny][nx] && this.mapData[ny][nx] !== 0) {
-                    tank.alive = false; // 撞障碍死亡
+                    tank.alive = false; // crashing into an obstacle kills the tank
                     continue;
                 }
                 tank.x = nx;
                 tank.y = ny;
             }
-            // Stay 或射击不动
+            // Stay, or shooting: the tank does not move
         }
 
-        // 3. 处理射击（严格模拟 Tank2 规则）
+        // 3. Handle shooting (strictly follows the Tank2 rules)
         let bulletHits = []; // {x, y, type, shooter, dir, target?}
         for (let i = 0; i < 4; i++) {
             const tank = tanks[i];
             if (!tank.alive) continue;
             const act = allActions[i];
-            if (act >= 4 && act <= 7) { // 射击
+            if (act >= 4 && act <= 7) { // shoot
                 const dir = act % 4;
                 let x = tank.x, y = tank.y;
                 while (true) {
@@ -185,27 +185,27 @@ class TankScene extends Phaser.Scene {
                         bulletHits.push({x, y, type: 'out', shooter: i, dir});
                         break;
                     }
-                    if (this.mapData[y][x] === 3) { // 钢
+                    if (this.mapData[y][x] === 3) { // steel
                         bulletHits.push({x, y, type: 'steel', shooter: i, dir});
                         break;
                     }
-                    if (this.mapData[y][x] === 2) { // 砖
+                    if (this.mapData[y][x] === 2) { // brick
                         bulletHits.push({x, y, type: 'brick', shooter: i, dir});
                         break;
                     }
-                    // 检查是否击中坦克
+                    // Check whether a tank is hit
                     let hitTank = false;
                     for (let j = 0; j < 4; j++) {
                         if (tanks[j].alive && tanks[j].x === x && tanks[j].y === y) {
-                            // 新增：对射判断
+                            // Head-to-head check
                             const theirAction = allActions[j];
                             const theirDir = theirAction % 4;
-                            // 如果对方也反向射击，则子弹抵消
+                            // If the other tank fires straight back, the bullets cancel out
                             if (theirAction >= 4 && theirAction <= 7 && (dir + 2) % 4 === theirDir) {
-                                // 记录一个抵消事件，用于动画
+                                // Record a cancel event so the animation can show it
                                 bulletHits.push({x, y, type: 'cancel', shooter: i, dir});
                             } else {
-                                // 否则正常命中
+                                // Otherwise it is a plain hit
                                 bulletHits.push({x, y, type: 'tank', shooter: i, dir, target: j});
                             }
                             hitTank = true;
@@ -213,7 +213,7 @@ class TankScene extends Phaser.Scene {
                         }
                     }
                     if (hitTank) break;
-                    // 击中基地
+                    // Check whether a base is hit
                     let hitBase = false;
                     for (let b = 0; b < 2; b++) {
                         if (bases[b].alive && bases[b].x === x && bases[b].y === y) {
@@ -227,34 +227,34 @@ class TankScene extends Phaser.Scene {
             }
         }
 
-        // 统计所有被击中的砖块（只摧毁一次）
+        // Collect every brick that was hit (each one is destroyed only once)
         let bricksToDestroy = new Set();
         bulletHits.forEach(hit => {
             if (hit.type === 'brick') bricksToDestroy.add(`${hit.x},${hit.y}`);
         });
 
-        // 播放所有子弹动画（命中砖块的都停在砖块前，不会穿透）
+        // Play all bullet animations (bullets hitting brick stop in front of it, never through)
         bulletHits.forEach(hit => {
-            // 计算动画终点
+            // Compute the animation endpoint
             let endX = hit.x, endY = hit.y;
             if (hit.type === 'brick' || hit.type === 'steel') {
-                // 子弹停在砖块/钢块前一格
+                // The bullet stops one cell before the brick/steel block
                 endX -= dx[hit.dir];
                 endY -= dy[hit.dir];
             }
-            // 其余类型（坦克/基地/越界）停在命中点
+            // Other hit types (tank / base / out of bounds) stop at the hit cell
             this.fireBullet(tanks[hit.shooter].x, tanks[hit.shooter].y, hit.dir, endX, endY);
         });
 
-        // 统一处理命中效果
+        // Apply the hit effects in one pass
         bricksToDestroy.forEach(key => {
             const [x, y] = key.split(',').map(Number);
             this.mapData[y][x] = 0;
         });
 
-        // 处理坦克和基地被击毁
+        // Handle tanks and bases being destroyed
         bulletHits.forEach(hit => {
-            // 只有类型为 'tank' 的命中才会摧毁坦克
+            // Only a hit of type 'tank' destroys a tank
             if (hit.type === 'tank') {
                 tanks[hit.target].alive = false;
             }
@@ -278,7 +278,7 @@ class TankScene extends Phaser.Scene {
                         if (chunk & mask) {
                             const y = i * 3 + y_offset;
                             const x = x_offset;
-                            this.mapData[y][x] = code; // 1=水,2=砖,3=钢
+                            this.mapData[y][x] = code; // 1=water, 2=brick, 3=steel
                             const tileX = (x + 0.5) * this.CELL_SIZE;
                             const tileY = (y + 0.5) * this.CELL_SIZE;
                             const tile = this.add.sprite(tileX, tileY, spriteKey);
@@ -331,14 +331,14 @@ class TankScene extends Phaser.Scene {
     }
 
     fireBullet(fromX, fromY, dir, toX, toY) {
-        // dir: 0=上, 1=右, 2=下, 3=左
+        // dir: 0=up, 1=right, 2=down, 3=left
         //
-        // 设计要点：
-        //  - 移动的是一个小方块（不是拉长的线段），后方跟一段固定长度的尾巴
-        //  - 同一回合所有子弹使用同一个固定 duration，add 到 tween 队列后
-        //    Phaser 会在同一时间轴上推进，因此所有子弹在同一刻同时到达终点
-        //  - 速度 = 距离 / duration：路径空 → 距离远 → 单位时间移动距离大 → 视觉上"快"；
-        //    路径短 / 被砖块挡 → 距离近 → 视觉上"慢"
+        // Design notes:
+        //  - What moves is a small block (not a stretched line) with a fixed-length tail behind it
+        //  - All bullets in one turn use the same fixed duration; once queued they advance on the
+        //    same Phaser timeline, so every bullet reaches its target at the very same instant
+        //  - Speed = distance / duration: an open path means a long distance, so the bullet covers
+        //    more cells per tick and looks "fast"; a short path or one blocked by brick looks "slow"
         const startX = (fromX + 0.5) * this.CELL_SIZE;
         const startY = (fromY + 0.5) * this.CELL_SIZE;
         const endX = (toX + 0.5) * this.CELL_SIZE;
@@ -346,18 +346,18 @@ class TankScene extends Phaser.Scene {
 
         const cell = this.CELL_SIZE;
         const bulletSize = cell * 0.28;
-        const trailLen = cell * 0.8; // 尾巴固定 0.8 格，不随距离拉长 → 没有"残留线"
+        const trailLen = cell * 0.8; // tail is a fixed 0.8 cells, never stretched by distance -> no leftover line
 
-        // 子弹方块（黄）
+        // The bullet block (yellow)
         const bullet = this.add.rectangle(startX, startY, bulletSize, bulletSize, 0xffeb3b);
         bullet.setDepth(20);
 
-        // 尾巴 graphics（黄、半透明）
+        // The tail graphics (yellow, semi-transparent)
         const trail = this.add.graphics();
         trail.setDepth(19);
         trail.lineStyle(bulletSize * 0.8, 0xffeb3b, 0.55);
 
-        // 方向单位向量（用于尾巴定位）
+        // Unit direction vector (used to place the tail)
         const ddx = endX - startX, ddy = endY - startY;
         const dist = Math.hypot(ddx, ddy) || 1;
         const ux = ddx / dist, uy = ddy / dist;
@@ -376,7 +376,7 @@ class TankScene extends Phaser.Scene {
             duration: BULLET_DURATION_MS,
             ease: 'Linear',
             onUpdate: () => {
-                // 尾巴：从子弹位置往反方向延伸 trailLen
+                // Tail: extends trailLen backwards from the bullet's position
                 trail.clear();
                 trail.lineStyle(bulletSize * 0.8, 0xffeb3b, 0.55);
                 trail.beginPath();
@@ -394,26 +394,26 @@ class TankScene extends Phaser.Scene {
     }
 
     setBulletDuration(ms) {
-        // 供回放速度控制调用：设置子弹飞行时长（毫秒）。
-        // 同一回合所有子弹仍然同步到达（所有 tween 用同一 duration）。
+        // Called by the replay speed control to set the bullet flight time in ms.
+        // Bullets in one turn still arrive together (every tween uses the same duration).
         this.bulletDurationMs = Math.max(50, ms);
     }
 
     forceFinishAllBullets() {
-        // 把所有飞行中的子弹立刻飞到终点并销毁（不等待 duration 走完）。
-        // 用于：切到下一回合、replay 跳步等场景，避免视觉叠加。
+        // Snap every in-flight bullet straight to its target and destroy it (no waiting for the duration).
+        // Used when moving to the next turn or seeking in a replay, so nothing visually piles up.
         if (!this.activeBullets || this.activeBullets.length === 0) return;
-        // 拷贝，因为 tween.complete() 会触发 onComplete 修改 activeBullets
+        // Take a copy, because tween.complete() fires onComplete, which mutates activeBullets
         const list = this.activeBullets.slice();
         for (const entry of list) {
             if (entry.tween) entry.tween.complete();
         }
-        // onComplete 已逐个 splice，但保险起见
+        // onComplete already spliced each entry, but reset it anyway to be safe
         this.activeBullets = [];
     }
 
     clearAllBullets() {
-        // 立即销毁所有飞行中的子弹，不等 tween 完成（用于新游戏 / 场景重置）。
+        // Destroy every in-flight bullet at once, without waiting for its tween (new game / scene reset).
         if (!this.activeBullets) return;
         for (const entry of this.activeBullets) {
             if (entry.tween) entry.tween.remove();

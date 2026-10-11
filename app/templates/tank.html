@@ -39,9 +39,9 @@
 {% block content %}
 <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/phaser@3.55.2/dist/phaser.js"></script>
-<!-- 通用回放播放器 -->
+<!-- Shared replay player -->
 <script src="{{ url_for('static', filename='replay-player.js') }}"></script>
-<!-- 先加载我们的游戏场景逻辑 -->
+<!-- Load our game scene logic first -->
 <script src="{{ url_for('static', filename='tank2/tank2.js') }}"></script>
 
 <style>
@@ -274,7 +274,7 @@ function autoStartMatch(playersJson) {
 }
 
 // --- Replay ---
-// 重建到第 index 帧：displays[0] 是初始状态，1..index 逐帧应用
+// Rebuild state at frame index: displays[0] is the initial state, then frames 1..index are applied one by one
 function renderReplayFrame(index) {
     if (!replayDisplays.length) return;
     const scene = phaserGame.scene.getScene('TankScene');
@@ -289,7 +289,7 @@ function renderReplayFrame(index) {
     }
 }
 
-// 1x = 1 秒/回合；子弹飞行时长随速度伸缩：慢速看细节，快速不拖沓
+// 1x = 1 second per turn; bullet flight time scales with speed: slow shows detail, fast stays snappy
 const replayController = new ReplayController({
     onRender: renderReplayFrame,
     baseIntervalMs: 1000,

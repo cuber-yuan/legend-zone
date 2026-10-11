@@ -85,19 +85,19 @@ def create_app():
 
 def start_scheduler(app):
     """
-    配置并启动 APScheduler 后台调度器。
+    Configure and start the APScheduler background scheduler.
     """
     from .services.battle_worker import schedule_all_games
-    # 避免调度器日志污染您的控制台 (可选)
+    # Keep scheduler logs from cluttering the console (optional)
     logging.getLogger('apscheduler').setLevel(logging.WARNING)
 
-    # 使用 BackgroundScheduler，因为它在主线程之外运行，非常适合 Flask/SocketIO 应用
+    # BackgroundScheduler runs outside the main thread, which suits Flask/SocketIO apps
     scheduler = BackgroundScheduler()
     
-    # === 添加定时任务 ===
-    # 任务: 定期运行所有游戏的自动对战
-    # trigger="interval" 表示间隔执行
-    # minutes=30 表示每 30 分钟运行一次。您可以根据需求调整
+    # === Add scheduled jobs ===
+    # Job: periodically run automated matches for all games
+    # trigger="interval" means run at a fixed interval
+    # minutes=30 runs every 30 minutes; adjust as needed
     scheduler.add_job(
         func=schedule_all_games,
         trigger="interval",
@@ -106,10 +106,10 @@ def start_scheduler(app):
         name='Run Automated Game Matches'
     )
     
-    # 启动调度器
+    # Start the scheduler
     scheduler.start()
 
-    # 注册一个退出函数，确保在 Flask 进程关闭时，调度器也安全停止
+    # Register an exit hook so the scheduler shuts down cleanly when the Flask process stops
     atexit.register(lambda: scheduler.shutdown())
     
     print("APScheduler started: Automated match runner scheduled.")

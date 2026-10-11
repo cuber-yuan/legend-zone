@@ -1,9 +1,9 @@
 import json
-# from .. import CodeExecutor # 假设 CodeExecutor 在这里
+# from .. import CodeExecutor # assume CodeExecutor lives here
 
 BOARD_SIZE = 15
 
-## TODO： all judges should implement in same way
+## TODO: all judges should implement in same way
 
 class GomokuJudge:
     def __init__(self):
@@ -34,22 +34,22 @@ class GomokuJudge:
         # Example: board[3][7] is the center star point
         
         self.board = [[0 for _ in range(BOARD_SIZE)] for _ in range(BOARD_SIZE)]
-        self.current_player = 1  # 1: 黑, 2: 白
+        self.current_player = 1  # 1: black, 2: white
         self.move_history = []
         
-        # 新增：玩家类型和执行器
+        # Player types and executors
         self.black_player_type = 'human'
         self.white_player_type = 'bot'
         self.black_executor = None
         self.white_executor = None
         self.winner = 0
         self.game_id = None
-        self.is_terminated = False # <-- 新增终止标志
+        self.is_terminated = False # <-- termination flag
 
     def terminate(self):
         """Mark the game as terminated to stop its execution loop."""
         self.is_terminated = True
-        # 可以在这里清理和此游戏相关的特定资源
+        # Game-specific resources could be cleaned up here
         # if self.black_executor:
         #     self.black_executor.cleanup()
         # if self.white_executor:
@@ -74,7 +74,7 @@ class GomokuJudge:
         if not self.is_valid_move(x, y):
             return False
         self.board[y][x] = self.current_player
-        self.move_history.append({'x':x, 'y':y, 'player': self.current_player}) # 记录下棋方
+        self.move_history.append({'x':x, 'y':y, 'player': self.current_player}) # record which side played
         self.current_player = 3 - self.current_player  # 1<->2
         return True
 
@@ -115,7 +115,7 @@ class GomokuJudge:
         return json.dumps(data)
 
     def receive_action_from_ai(self):
-        # 读取AI的落子
+        # Read the AI's move
         raw = input()
         move = json.loads(raw)
         x, y = move["x"], move["y"]
@@ -127,10 +127,10 @@ if __name__ == "__main__":
     judge = GomokuJudge()
     winner = 0
     while True:
-        # 发送当前状态给当前玩家AI
+        # Send the current state to the current player's AI
         last_move = judge.move_history[-1] if judge.move_history else None
         judge.send_action_to_ai(judge.current_player, last_move)
-        # 接收AI的落子
+        # Receive the AI's move
         x, y = judge.receive_action_from_ai()
         if not judge.apply_move(x, y):
             print(json.dumps({"error": "Invalid move"}))
@@ -140,5 +140,5 @@ if __name__ == "__main__":
             print(json.dumps({"winner": winner}))
             break
         if len(judge.move_history) == BOARD_SIZE * BOARD_SIZE:
-            print(json.dumps({"winner": 0}))  # 平局
+            print(json.dumps({"winner": 0}))  # draw
             break

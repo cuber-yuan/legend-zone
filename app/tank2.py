@@ -272,12 +272,12 @@ def register_tank_events(socketio):
 
 def run_auto_tank_match(player_1_id, player_2_id):
     """
-    自动（AI vs AI）Tank Battle 对战。由 battle_worker 后台调用。
-    与 register_tank_events 里的对战循环同构，但：
-      - 不依赖 socket/human
-      - 创建 matches 记录并在结束后写回 winner / displays
-      - 调用 update_bot_ratings 更新 ELO
-    winner 语义：0=Top Player 胜, 1=Bottom Player 胜, -1=平局
+    Automated (AI vs AI) Tank Battle match, invoked in the background by battle_worker.
+    Mirrors the match loop in register_tank_events, except:
+      - no socket/human dependency
+      - creates a matches record and writes back winner / displays when finished
+      - calls update_bot_ratings to update ELO
+    Winner semantics: 0 = Top Player wins, 1 = Bottom Player wins, -1 = draw
     """
     print(f"Running auto Tank match: {player_1_id} (Top) vs {player_2_id} (Bottom)")
 
@@ -287,7 +287,7 @@ def run_auto_tank_match(player_1_id, player_2_id):
         print("Error: Failed to load both bot executors for auto Tank match.")
         return
 
-    # 1) 创建 matches 记录
+    # 1) Create the matches record
     players = build_players_json(player_1_id, 'bot', player_2_id, 'bot')
     try:
         match_id = create_match_record('Tank Battle', players)
@@ -297,7 +297,7 @@ def run_auto_tank_match(player_1_id, player_2_id):
         executor_2.cleanup()
         return
 
-    # 2) 跑对战
+    # 2) Run the match
     cpp_path = judge_binary_path('tank2_judge')
     cpp_judge = CppJudgeExecutor(cpp_path)
 
@@ -344,7 +344,7 @@ def run_auto_tank_match(player_1_id, player_2_id):
         executor_1.cleanup()
         executor_2.cleanup()
 
-    # winner 标准化：0/1/-1
+    # Normalize winner to 0/1/-1
     elo_winner = winner if winner in (0, 1) else -1
     update_bot_ratings(player_1_id, player_2_id, elo_winner, match_id)
     update_match_result(match_id, elo_winner, json.dumps(displays), 'displays')
