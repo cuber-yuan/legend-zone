@@ -37,6 +37,7 @@ def init_db():
             bot_name TEXT NOT NULL,
             game TEXT NOT NULL,
             language TEXT NOT NULL DEFAULT 'cpp',
+            is_private INTEGER NOT NULL DEFAULT 0,
             created_at TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
             UNIQUE (bot_name, game)
         )
@@ -98,6 +99,23 @@ def init_db():
         CREATE INDEX IF NOT EXISTS idx_rating_history_bot
             ON rating_history (bot_id, created_at)
     """)
+
+    # Columns added after a table first shipped. CREATE TABLE IF NOT EXISTS never
+    # alters an existing table, so databases created before the change (including
+    # production) need an idempotent ALTER. Re-running is harmless: SQLite reports
+    # "duplicate column name" once the column is present.
+    #
+    # DEFAULT 0 keeps every pre-existing bot public. New bots are private because
+    # upload_bot passes is_private=1 explicitly rather than leaning on this default.
+    for table, column, ddl in (
+        ('bots', 'is_private', 'INTEGER NOT NULL DEFAULT 0'),
+    ):
+        try:
+            cursor.execute(f"ALTER TABLE {table} ADD COLUMN {column} {ddl}")
+            print(f"Added column {table}.{column}")
+        except sqlite3.OperationalError as exc:
+            if 'duplicate column' not in str(exc).lower():
+                raise
 
     conn.commit()
     

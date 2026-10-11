@@ -394,6 +394,7 @@ def bot_detail(bot_id):
                     b.language,
                     b.created_at,
                     b.user_id,
+                    b.is_private,
                     u.username AS owner
                 FROM bots b
                 LEFT JOIN users u ON b.user_id = u.id
@@ -423,7 +424,12 @@ def bot_detail(bot_id):
                     bot['latest_version'] = latest['version_number']
                     bot['rating'] = latest['rating']
                     bot['description'] = latest['description']
-                    bot['source_code'] = latest['source_code']
+                    bot['is_owner'] = bool(
+                        current_user.is_authenticated and current_user.id == bot['user_id'])
+                    # Gate here rather than in the markup, so a hidden source never
+                    # enters the template context for a stranger to find.
+                    if bot['is_owner'] or not bot['is_private']:
+                        bot['source_code'] = latest['source_code']
                     # Expose only whether files exist — the absolute workdir would
                     # leak the server's directory layout to any visitor.
                     bot['has_files'] = bool(latest['file_path'])

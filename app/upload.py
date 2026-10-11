@@ -166,8 +166,10 @@ def upload_bot():
 
         now = utc_now_iso()
         bot_id = uuid.uuid4().hex
+        # Explicitly private: the column default is 0 only so that pre-existing
+        # bots stay public when the ALTER adds it to an old database.
         cursor.execute(
-            "INSERT INTO bots (id, user_id, bot_name, game, language, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+            "INSERT INTO bots (id, user_id, bot_name, game, language, is_private, created_at) VALUES (?, ?, ?, ?, ?, 1, ?)",
             (bot_id, current_user.id, bot_name, game, language, now)
         )
 
@@ -422,3 +424,43 @@ def delete_bot(bot_id):
         })
 
     return jsonify({"message": "Bot deleted."})
+
+
+@upload_bp.route('/bots/<string:bot_id>/visibility', methods=['POST'])
+@login_required
+def set_visibility(bot_id):
+    """Flip whether this bot's source is visible to other users.
+
+    The bot itself stays public — it appears in rankings and match listings, and
+    only its source code is gated. Note this governs the webpage alone: another
+    user's running bot can still read files off disk until the execution
+    sandbox is tightened.
+    """
+    payload = request.get_json(silent=True) or {}
+    if not isinstance(payload.get('is_private'), bool):
+        return jsonify({"message": "is_private must be a boolean."}), 400
+
+    conn = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, user_id FROM bots WHERE id = ?", (bot_id,))
+        bot = cursor.fetchone()
+        if not bot:
+            return jsonify({"message": "Bot not found."}), 404
+        if bot['user_id'] != current_user.id:
+            return jsonify({"message": "Not your bot."}), 403
+
+        cursor.execute("UPDATE bots SET is_private = ? WHERE id = ?",
+                       (1 if payload['is_private'] else 0, bot_id))
+        conn.commit()
+    except Exception as e:
+        print("Failed to update bot visibility:", e)
+        if conn:
+            conn.rollback()
+        return jsonify({"message": "Failed to update visibility."}), 500
+    finally:
+        if conn:
+            conn.close()
+
+    return jsonify({"message": "Visibility updated.", "is_private": payload['is_private']})

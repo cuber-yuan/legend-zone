@@ -102,17 +102,37 @@
   <!-- Source code -->
   <div class="bg-white rounded-lg shadow overflow-hidden">
     <div class="flex items-center justify-between bg-gray-800 px-4 py-2">
-      <h2 class="text-white font-semibold">Source code</h2>
-      {% if bot.source_code %}
-        <button type="button" id="copy-code"
-                class="px-3 py-1 rounded bg-gray-600 text-white text-sm hover:bg-gray-500 transition-colors duration-200">
-          Copy
-        </button>
-      {% endif %}
+      <div class="flex items-center gap-2">
+        <h2 class="text-white font-semibold">Source code</h2>
+        {% if bot.is_private %}
+          <span class="px-2 py-0.5 rounded bg-yellow-600 text-white text-xs font-medium">Private</span>
+        {% else %}
+          <span class="px-2 py-0.5 rounded bg-gray-600 text-gray-200 text-xs font-medium">Public</span>
+        {% endif %}
+      </div>
+      <div class="flex items-center gap-2">
+        {% if bot.source_code %}
+          <button type="button" id="copy-code"
+                  class="px-3 py-1 rounded bg-gray-600 text-white text-sm hover:bg-gray-500 transition-colors duration-200">
+            Copy
+          </button>
+        {% endif %}
+        {% if bot.is_owner %}
+          <button type="button" id="toggle-visibility"
+                  data-private="{{ 1 if bot.is_private else 0 }}"
+                  class="px-3 py-1 rounded bg-blue-600 text-white text-sm hover:bg-blue-500 transition-colors duration-200">
+            {% if bot.is_private %}Make public{% else %}Make private{% endif %}
+          </button>
+        {% endif %}
+      </div>
     </div>
 
     {% if bot.source_code %}
       <pre class="p-4 overflow-x-auto text-sm leading-relaxed bg-gray-50 text-gray-800"><code id="bot-source">{{ bot.source_code }}</code></pre>
+    {% elif bot.is_private and not bot.is_owner %}
+      <div class="p-6 text-gray-600 text-sm">
+        This bot's source code is private. The owner has chosen not to share it.
+      </div>
     {% elif bot.has_files %}
       <div class="p-6 text-gray-600 text-sm">
         This bot was uploaded as a file package. Its source is stored on the server and is not shown here.
@@ -142,6 +162,36 @@
       };
       if (navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard.writeText(text).then(done, function () { /* clipboard unavailable */ });
+      }
+    });
+  });
+</script>
+{% endif %}
+
+{% if bot.is_owner %}
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    const btn = document.getElementById('toggle-visibility');
+    if (!btn) return;
+    btn.addEventListener('click', async function () {
+      const makePrivate = btn.dataset.private === '1' ? false : true;
+      btn.disabled = true;
+      try {
+        const resp = await fetch('{{ url_for("upload.set_visibility", bot_id=bot.id) }}', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ is_private: makePrivate })
+        });
+        const data = await resp.json().catch(() => ({}));
+        if (!resp.ok) {
+          alert(data.message || 'Failed to update visibility.');
+          btn.disabled = false;
+          return;
+        }
+        window.location.reload();
+      } catch (err) {
+        alert('Failed to update visibility: ' + err.message);
+        btn.disabled = false;
       }
     });
   });
