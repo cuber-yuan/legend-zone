@@ -57,7 +57,12 @@
   <div class="bg-white rounded-lg shadow mb-6 overflow-hidden">
     <div class="bg-gray-800 px-4 py-2 flex items-center justify-between">
       <h2 class="text-white font-semibold">Rating History</h2>
-      <span class="text-gray-400 text-xs">click a point to open its match</span>
+      <span class="text-gray-400 text-xs">
+        {% if history_total > history_limit %}
+          showing last {{ history_limit }} of {{ history_total }} &middot;
+        {% endif %}
+        click a point to open its match
+      </span>
     </div>
     <div class="p-4">
       {% if history %}

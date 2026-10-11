@@ -9,6 +9,9 @@ from .services.utils import utc_now_iso
 
 main_bp = Blueprint('main', __name__)
 
+# Cap the rating chart so a long-lived bot does not render a thousand points.
+RATING_HISTORY_LIMIT = 20
+
 messages = []
 
 def clean_expired_messages():
@@ -383,6 +386,7 @@ def bot_detail(bot_id):
     bot = None
     versions = []
     history = []
+    history_total = 0
     try:
         conn = get_db_connection()
         with conn.cursor() as cursor:
@@ -410,13 +414,21 @@ def bot_detail(bot_id):
                     ORDER BY version_number DESC
                 """, (bot_id,))
                 versions = cursor.fetchall()
+                cursor.execute("SELECT COUNT(*) AS n FROM rating_history WHERE bot_id = ?", (bot_id,))
+                history_total = cursor.fetchone()['n']
+                # Newest N points, then re-sorted oldest-first so the line still
+                # reads left to right.
                 cursor.execute("""
-                    SELECT bv.version_number, rh.match_id, rh.rating, rh.created_at
-                    FROM rating_history rh
-                    JOIN bot_versions bv ON bv.id = rh.version_id
-                    WHERE rh.bot_id = ?
-                    ORDER BY rh.created_at, rh.id
-                """, (bot_id,))
+                    SELECT version_number, match_id, rating, created_at FROM (
+                        SELECT bv.version_number, rh.match_id, rh.rating, rh.created_at, rh.id
+                        FROM rating_history rh
+                        JOIN bot_versions bv ON bv.id = rh.version_id
+                        WHERE rh.bot_id = ?
+                        ORDER BY rh.created_at DESC, rh.id DESC
+                        LIMIT ?
+                    )
+                    ORDER BY created_at ASC, id ASC
+                """, (bot_id, RATING_HISTORY_LIMIT))
                 history = cursor.fetchall()
                 if versions:
                     latest = versions[0]
@@ -443,4 +455,5 @@ def bot_detail(bot_id):
     if not bot:
         abort(404)
 
-    return render_template('bot_detail.html', bot=bot, versions=versions, history=history)
+    return render_template('bot_detail.html', bot=bot, versions=versions, history=history,
+                           history_total=history_total, history_limit=RATING_HISTORY_LIMIT)
