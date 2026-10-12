@@ -45,6 +45,17 @@
         .main-content {
             flex: 1;
             padding: 24px;
+            /* Flex items default to min-width:auto, which refuses to shrink below
+               the content's own min-content width — that is what turns a wide child
+               into a page-level horizontal scrollbar. */
+            min-width: 0;
+        }
+
+        /* Two fixed 240px rails already exceed a phone's width on their own, so they
+           come out entirely below the tablet breakpoint. */
+        @media (max-width: 768px) {
+            .sider-left, .sider-right { display: none; }
+            .main-content { padding: 16px; }
         }
 
         /* --- Top navigation ---
@@ -140,6 +151,14 @@
             transition: background 0.12s ease;
         }
         #menu-toggle:hover { background: rgba(255, 255, 255, 0.14); }
+        /* The wordmark is nowrap by design, so it alone sets the bar's minimum
+           width (measured 243px). Step it down rather than let it push the page. */
+        @media (max-width: 420px) {
+            .nav-word { font-size: 1.2rem; }
+        }
+        @media (max-width: 340px) {
+            .nav-word, .nav-kicker { display: none; }
+        }
         @keyframes navIn { from { opacity: 0; transform: translateY(-5px); } to { opacity: 1; transform: none; } }
         .nav-menu > li { animation: navIn 0.34s ease backwards; }
         .nav-menu > li:nth-child(1) { animation-delay: 0.03s; }

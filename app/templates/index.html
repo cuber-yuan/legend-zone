@@ -173,9 +173,12 @@
     padding: 0.2rem 0.5rem; border-radius: 999px; white-space: nowrap;
   }
   /* Clip the wrapper instead of the cells: preflight's border-collapse makes
-     border-radius on th/td a no-op. */
+     border-radius on th/td a no-op. The x axis must stay scrollable — a plain
+     `overflow: hidden` here would defeat the overflow-x-auto utility on the
+     element and silently cut the Time column off on narrow screens. */
   .lm-card {
-    border: 1px solid #e2e8f0; border-radius: 0.75rem; overflow: hidden;
+    border: 1px solid #e2e8f0; border-radius: 0.75rem;
+    overflow-x: auto; overflow-y: hidden;
     background: #fff; box-shadow: 0 4px 12px rgba(15, 23, 42, 0.06);
   }
   /* Body spacing matches the restored header cells' px-4/py-2 so column edges line up. */
@@ -222,7 +225,9 @@
      keep the site's teal and humans its purple. Display-only for now. */
   .gt-grid {
     --gt-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-    display: grid; grid-template-columns: repeat(auto-fill, minmax(12.5rem, 1fr)); gap: 0.9rem;
+    /* min() keeps a column from ever demanding more than the container has, which
+       a bare minmax(12.5rem, 1fr) will do on a narrow phone. */
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(min(12.5rem, 100%), 1fr)); gap: 0.9rem;
   }
   .gt-empty { padding: 1.6rem 1rem; text-align: center; color: #94a3b8; font-size: 0.82rem; }
   .gt-card {
@@ -455,7 +460,7 @@
 
     <!-- Game Tables Section -->
     <section class="bg-white p-6 rounded-lg shadow-md">
-        <div class="flex items-center justify-between mb-4">
+        <div class="flex flex-wrap items-center justify-between gap-2 mb-4">
             <h2 class="text-2xl font-semibold">Game Tables</h2>
             <div class="flex items-center space-x-3">
                 <!-- <div class="flex border border-gray-300 rounded overflow-hidden">
