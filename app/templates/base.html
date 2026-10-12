@@ -46,76 +46,173 @@
             flex: 1;
             padding: 24px;
         }
+
+        /* --- Top navigation ---
+           The site already speaks in monospace micro-labels (.dialog-step,
+           .lm-count, .gt-role), so the bar uses the same voice instead of
+           inventing one. */
+        .site-nav {
+            --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+            position: relative;
+            background: linear-gradient(90deg, #1e40af, #2563eb);
+        }
+        /* A bright edge keeps the bar from melting into the gray page below it. */
+        .site-nav::after {
+            content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 2px;
+            background: linear-gradient(90deg, #93c5fd, #38bdf8 55%, #7dd3fc);
+        }
+        .nav-logo {
+            height: 2.6rem; width: 2.6rem; border-radius: 0.6rem;
+            background: rgba(255, 255, 255, 0.1);
+            box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.18);
+            padding: 0.32rem;
+        }
+        .nav-word { font-size: 1.55rem; font-weight: 800; letter-spacing: -0.02em; color: #fff; line-height: 1.1; white-space: nowrap; }
+        /* Tracking is tuned so the kicker's last letter lands flush under the
+           wordmark's right edge. Both strings are brand text, so if either
+           changes (or the wordmark size does), re-measure this value. */
+        /* Tracking is tuned so the kicker's last letter lands flush under the
+           wordmark's right edge (measured: 0.63em → 0.6px short, 0.66em overshoots).
+           Both strings are brand text; re-measure if either, or the wordmark
+           size, ever changes. */
+        .nav-kicker {
+            font-family: var(--mono); font-size: 0.55rem; font-weight: 700;
+            letter-spacing: 0.63em; text-transform: uppercase; color: #bae6fd;
+            white-space: nowrap;
+        }
+        .nav-link {
+            position: relative; display: inline-block; padding: 0.4rem 0.2rem;
+            font-family: var(--mono); font-size: 0.72rem; font-weight: 700;
+            letter-spacing: 0.16em; text-transform: uppercase;
+            color: rgba(255, 255, 255, 0.74);
+            transition: color 0.15s ease;
+        }
+        .nav-link::after {
+            content: ''; position: absolute; left: 0.2rem; right: 0.2rem; bottom: 0.05rem;
+            height: 2px; border-radius: 2px;
+            background: linear-gradient(90deg, #e0f2fe, #7dd3fc);
+            transform: scaleX(0); transform-origin: left center;
+            transition: transform 0.24s cubic-bezier(0.2, 0.8, 0.3, 1);
+        }
+        .nav-link:hover { color: #fff; }
+        .nav-link:hover::after, .nav-link.is-active::after { transform: scaleX(1); }
+        .nav-link.is-active { color: #fff; }
+        .nav-link:focus-visible, .nav-btn:focus-visible, #menu-toggle:focus-visible {
+            outline: 2px solid #bae6fd; outline-offset: 3px; border-radius: 0.3rem;
+        }
+        .nav-btn {
+            display: inline-flex; align-items: center; gap: 0.35rem;
+            padding: 0.38rem 0.8rem; border-radius: 0.5rem;
+            font-family: var(--mono); font-size: 0.64rem; font-weight: 700;
+            letter-spacing: 0.12em; text-transform: uppercase;
+            border: 1px solid transparent;
+            transition: color 0.12s ease, background 0.12s ease, border-color 0.12s ease, transform 0.1s ease;
+        }
+        .nav-btn:active { transform: translateY(1px); }
+        .nav-btn-ghost {
+            color: #e0f2fe; background: rgba(255, 255, 255, 0.1);
+            border-color: rgba(255, 255, 255, 0.3);
+        }
+        .nav-btn-ghost:hover { color: #fff; background: rgba(255, 255, 255, 0.2); border-color: rgba(255, 255, 255, 0.5); }
+        /* Inverted: a blue pill on a blue bar would disappear. */
+        .nav-btn-primary {
+            color: #1d4ed8; background: #fff;
+            box-shadow: 0 2px 10px rgba(15, 23, 42, 0.22);
+        }
+        .nav-btn-primary:hover { background: #e0f2fe; }
+        .nav-btn-logout:hover { color: #fff; border-color: rgba(255, 255, 255, 0.55); background: rgba(190, 18, 60, 0.45); }
+        .nav-user { display: inline-flex; align-items: center; gap: 0.5rem; }
+        .nav-avatar {
+            display: inline-flex; align-items: center; justify-content: center;
+            width: 1.8rem; height: 1.8rem; border-radius: 999px;
+            font-family: var(--mono); font-size: 0.74rem; font-weight: 700; color: #0c4a6e;
+            background: linear-gradient(140deg, #bae6fd, #38bdf8);
+            box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.4);
+        }
+        .nav-username { font-size: 0.84rem; font-weight: 600; color: #fff; }
+        .nav-username:hover { text-decoration: underline; }
+        .nav-divider { width: 1px; height: 1.7rem; background: rgba(255, 255, 255, 0.26); }
+        #menu-toggle {
+            color: #fff; border-radius: 0.45rem; padding: 0.35rem;
+            transition: background 0.12s ease;
+        }
+        #menu-toggle:hover { background: rgba(255, 255, 255, 0.14); }
+        @keyframes navIn { from { opacity: 0; transform: translateY(-5px); } to { opacity: 1; transform: none; } }
+        .nav-menu > li { animation: navIn 0.34s ease backwards; }
+        .nav-menu > li:nth-child(1) { animation-delay: 0.03s; }
+        .nav-menu > li:nth-child(2) { animation-delay: 0.07s; }
+        .nav-menu > li:nth-child(3) { animation-delay: 0.11s; }
+        .nav-menu > li:nth-child(4) { animation-delay: 0.15s; }
+        .nav-menu > li:nth-child(5) { animation-delay: 0.19s; }
+        .nav-menu > li:nth-child(6) { animation-delay: 0.23s; }
+        @media (prefers-reduced-motion: reduce) {
+            .nav-menu > li { animation: none; }
+            .nav-link::after { transition: none; }
+        }
     </style>
 </head>
 
 <body class="bg-gray-100 text-gray-900">
     {% block header %}
     <!-- Header content -->
-    <nav class="bg-gradient-to-r from-blue-800 to-blue-600 text-white shadow-lg">
-        <div class="max-w-screen-xl mx-auto px-4 py-4 flex items-center justify-between">
-            <div class="flex items-center space-x-3">
-                <img src="{{ url_for('static', filename='logo.svg') }}" alt="Legend Zone Logo" class="h-10 w-10">
-                <div class="text-2xl font-bold tracking-wide">Legend Zone</div>
-            </div>
+    <nav class="site-nav text-white shadow-lg">
+        <div class="max-w-screen-xl mx-auto px-4 py-3 flex items-center justify-between">
+            <a href="{{ url_for('main.home') }}" class="flex items-center gap-3 shrink-0">
+                <img src="{{ url_for('static', filename='logo.svg') }}" alt="Legend Zone Logo" class="nav-logo">
+                <span>
+                    <span class="nav-word block">Legend Zone</span>
+                    <span class="nav-kicker block">AI Battle Arena</span>
+                </span>
+            </a>
 
             <!-- Hamburger button (hidden on large screens) -->
             <button id="menu-toggle"
-                class="lg:hidden text-white hover:bg-blue-700 focus:outline-none p-2 rounded transition-colors duration-200">
-                <svg class="w-8 h-8" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                class="lg:hidden focus:outline-none"
+                aria-label="Toggle navigation" aria-controls="menu" aria-expanded="false">
+                <svg class="w-7 h-7" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16" />
                 </svg>
             </button>
 
             <!-- Navigation links -->
-            <ul id="menu" class="hidden lg:flex flex-col lg:flex-row space-y-4 lg:space-y-0 lg:space-x-6 mt-4 lg:mt-0 items-center
-                       absolute left-0 right-0 top-[64px] bg-gradient-to-r from-blue-800 to-blue-600 shadow-lg z-40
-                       pb-4 lg:pb-0
-                       lg:static lg:bg-none lg:shadow-none">
+            <ul id="menu" class="nav-menu hidden lg:flex flex-col lg:flex-row lg:items-center
+                       space-y-3 lg:space-y-0 lg:space-x-6 px-4 pt-2 pb-5 lg:px-0 lg:pb-0
+                       absolute left-0 right-0 top-full bg-[#1e40af] shadow-2xl z-40
+                       lg:static lg:bg-transparent lg:shadow-none">
                 <li>
                     <a href="{{ url_for('main.home') }}"
-                        class="px-4 py-2 rounded-lg bg-blue-700 hover:bg-blue-500 transition-colors duration-200 block text-lg font-medium">
-                        Home
-                    </a>
+                        class="nav-link {% if request.endpoint == 'main.home' %}is-active{% endif %}">Home</a>
                 </li>
                 <li>
                     <a href="{{ url_for('main.games') }}"
-                        class="px-4 py-2 rounded-lg bg-blue-700 hover:bg-blue-500 transition-colors duration-200 block text-lg font-medium">
-                        Games
-                    </a>
+                        class="nav-link {% if request.endpoint == 'main.games' %}is-active{% endif %}">Games</a>
                 </li>
                 <li>
                     <a href="{{ url_for('main.rating') }}"
-                        class="px-4 py-2 rounded-lg bg-blue-700 hover:bg-blue-500 transition-colors duration-200 block text-lg font-medium">
-                        Rating
-                    </a>
+                        class="nav-link {% if request.endpoint == 'main.rating' %}is-active{% endif %}">Rating</a>
                 </li>
                 <li>
                     <a href="{{ url_for('main.chat') }}"
-                        class="px-4 py-2 rounded-lg bg-blue-700 hover:bg-blue-500 transition-colors duration-200 block text-lg font-medium">
-                        Chat
-                    </a>
+                        class="nav-link {% if request.endpoint == 'main.chat' %}is-active{% endif %}">Chat</a>
                 </li>
+                <li class="nav-divider hidden lg:block" aria-hidden="true"></li>
                 {% if current_user.is_authenticated %}
-                <li class="flex items-center ml-4 mb-4 lg:ml-0 lg:mb-0">
-                    <span class="text-sm text-gray-200">
-                        Logged in as:
+                <li>
+                    <span class="nav-user">
+                        <span class="nav-avatar" aria-hidden="true">{{ current_user.username[0] | upper }}</span>
                         <a href="{{ url_for('main.profile', username=current_user.username) }}"
-                           class="text-white font-semibold hover:underline ml-1">{{ current_user.username }}</a>
+                           class="nav-username">{{ current_user.username }}</a>
                     </span>
                 </li>
-                <li class="flex items-center ml-4 mb-4 lg:ml-0 lg:mb-0">
-                    <a href="{{ url_for('auth.logout') }}"
-                        class="px-2 py-1 rounded bg-red-600 text-white hover:bg-red-500 transition-colors duration-200 text-sm">Logout</a>
+                <li>
+                    <a href="{{ url_for('auth.logout') }}" class="nav-btn nav-btn-ghost nav-btn-logout">Logout</a>
                 </li>
                 {% else %}
-                <li class="flex items-center ml-4 mb-4 lg:ml-0 lg:mb-0">
-                    <a href="{{ url_for('auth.login') }}"
-                        class="px-2 py-1 rounded bg-green-600 text-white hover:bg-green-500 transition-colors duration-200 text-sm">Login</a>
+                <li>
+                    <a href="{{ url_for('auth.login') }}" class="nav-btn nav-btn-ghost">Login</a>
                 </li>
-                <li class="flex items-center ml-4 mb-4 lg:ml-0 lg:mb-0">
-                    <a href="{{ url_for('auth.register') }}"
-                        class="px-2 py-1 rounded bg-gray-600 text-white hover:bg-gray-500 transition-colors duration-200 text-sm">Register</a>
+                <li>
+                    <a href="{{ url_for('auth.register') }}" class="nav-btn nav-btn-primary">Register</a>
                 </li>
                 {% endif %}
             </ul>
@@ -172,7 +269,8 @@
             const menu = document.getElementById('menu');
 
             toggle.addEventListener('click', () => {
-                menu.classList.toggle('hidden');
+                const hidden = menu.classList.toggle('hidden');
+                toggle.setAttribute('aria-expanded', String(!hidden));
             });
 
             document.querySelectorAll('[data-utc]').forEach(function (el) {
