@@ -159,14 +159,34 @@
     const source = document.getElementById('bot-source');
     if (!button || !source) return;
 
-    button.addEventListener('click', function () {
+    button.addEventListener('click', async function () {
       const text = source.textContent;
-      const done = function () {
-        button.textContent = 'Copied!';
+      const flash = function (label) {
+        button.textContent = label;
         setTimeout(function () { button.textContent = 'Copy'; }, 1500);
       };
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(text).then(done, function () { /* clipboard unavailable */ });
+      try {
+        // navigator.clipboard is only exposed on secure origins, so a page served
+        // over plain http on a LAN address needs the execCommand fallback.
+        if (navigator.clipboard && window.isSecureContext) {
+          await navigator.clipboard.writeText(text);
+        } else {
+          const ta = document.createElement('textarea');
+          ta.value = text;
+          ta.setAttribute('readonly', '');
+          ta.style.position = 'fixed';
+          ta.style.left = '-9999px';
+          document.body.appendChild(ta);
+          ta.select();
+          if (!document.execCommand('copy')) {
+            document.body.removeChild(ta);
+            throw new Error('copy command rejected');
+          }
+          document.body.removeChild(ta);
+        }
+        flash('Copied!');
+      } catch (err) {
+        flash('Copy failed');
       }
     });
   });
