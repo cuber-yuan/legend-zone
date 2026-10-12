@@ -236,7 +236,7 @@ def register_tank_events(socketio):
                 emit('finish', tank_payload(game.game_id, match_id, player_1_type, player_2_type,
                                             extra={'winner': winner}), room=broadcast_target)
 
-                players = build_players_json(player_1_id_str, player_1_type, player_2_id_str, player_2_type)
+                players = build_players_json(player_1_id_str, player_1_type, player_2_id_str, player_2_type, human_name=current_user.username)
                 finalize_match_record(match_id, 'Tank Battle', players, winner, json.dumps(displays), 'displays')
 
                 if player_1_type == 'bot' and player_2_type == 'bot':

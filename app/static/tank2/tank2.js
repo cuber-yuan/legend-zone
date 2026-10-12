@@ -60,7 +60,14 @@ class TankScene extends Phaser.Scene {
         const dx = [0, 1, 0, -1], dy = [-1, 0, 1, 0];
         const t = this.localTanks[side * 2 + tank];
         const x = t.x + dx[act], y = t.y + dy[act];
-        return x >= 0 && x < FIELD_WIDTH && y >= 0 && y < FIELD_HEIGHT && this.mapData[y][x] === 0;
+        if (x < 0 || x >= FIELD_WIDTH || y < 0 || y >= FIELD_HEIGHT) return false;
+        // The judge keeps terrain, bases and tanks in one bitmask per cell and only
+        // allows moving onto an empty one, so all three block. Two tanks can still
+        // end up stacked, but only by both moving into the same empty cell on the
+        // same turn - which is why this is checked against the current positions.
+        if (this.mapData[y][x] !== 0) return false;
+        if (this.localBases.some((b) => b.alive && b.x === x && b.y === y)) return false;
+        return !this.localTanks.some((o) => o !== t && o.alive && o.x === x && o.y === y);
     }
 
     tankAt(pointerX, pointerY) {

@@ -61,8 +61,16 @@ def get_bot_executor(bot_id):
     return CodeExecutor(workdir=rec['file_path'], language=rec['language'])
 
 
-def build_players_json(p1_id, p1_type, p2_id, p2_type):
-    """Serialize the matches.players JSON object for two slots (bot or human)."""
-    p1 = player_json_for_bot(p1_id) if p1_type == 'bot' else player_json_for_human()
-    p2 = player_json_for_bot(p2_id) if p2_type == 'bot' else player_json_for_human()
+def build_players_json(p1_id, p1_type, p2_id, p2_type, human_name=None):
+    """Serialize the matches.players JSON object for two slots (bot or human).
+
+    A human match is always started by one signed-in session, which steers both
+    seats of a hot seat, so a single name covers every human slot. Without it the
+    slot falls back to the generic label the UI has shown historically.
+    """
+    def human():
+        return player_json_for_human(human_name or 'HUMAN')
+
+    p1 = player_json_for_bot(p1_id) if p1_type == 'bot' else human()
+    p2 = player_json_for_bot(p2_id) if p2_type == 'bot' else human()
     return json.dumps({'player_1': p1, 'player_2': p2})

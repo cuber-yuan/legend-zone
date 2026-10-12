@@ -15,16 +15,18 @@ sessions = {}
 
 
 def _player_entry(payload):
-    """Return (name, bot_id, version) from one players-JSON slot.
+    """Return (name, bot_id, version, is_human) from one players-JSON slot.
 
-    Old rows stored a bare string; new rows store {name, bot_id, version}.
-    Accept both so pre-versioning matches don't disappear from the homepage.
+    Old rows stored a bare string; new rows store {name, bot_id, version} or
+    {name, type: "human"}. Accept both so pre-versioning matches don't disappear
+    from the homepage.
     """
     if isinstance(payload, str):
-        return payload, None, None
+        return payload, None, None, False
     if isinstance(payload, dict):
-        return payload.get('name'), payload.get('bot_id'), payload.get('version')
-    return None, None, None
+        return (payload.get('name'), payload.get('bot_id'), payload.get('version'),
+                payload.get('type') == 'human')
+    return None, None, None, False
 
 
 def register_home_events(socketio):
@@ -42,14 +44,16 @@ def register_home_events(socketio):
                         p = json.loads(match['players']) if match['players'] else {}
                     except (json.JSONDecodeError, TypeError):
                         p = {}
-                    p1_name, p1_bot, p1_ver = _player_entry(p.get('player_1'))
-                    p2_name, p2_bot, p2_ver = _player_entry(p.get('player_2'))
+                    p1_name, p1_bot, p1_ver, p1_human = _player_entry(p.get('player_1'))
+                    p2_name, p2_bot, p2_ver, p2_human = _player_entry(p.get('player_2'))
                     match['player_1'] = p1_name
                     match['player_2'] = p2_name
                     match['player_1_id'] = p1_bot
                     match['player_2_id'] = p2_bot
                     match['player_1_version'] = p1_ver
                     match['player_2_version'] = p2_ver
+                    match['player_1_is_human'] = p1_human
+                    match['player_2_is_human'] = p2_human
         except Exception as e:
             print("Failed to fetch matches:", e)
             matches = []

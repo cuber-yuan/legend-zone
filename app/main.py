@@ -312,7 +312,9 @@ def api_create_match():
             if player.get('type') == 'bot' and player.get('botId'):
                 players_map[f"player_{idx}"] = player_json_for_bot(player['botId'])
             else:
-                players_map[f"player_{idx}"] = player_json_for_human(player.get('name') or f"Player {idx}")
+                # A human seat is the signed-in user; the client shows it read-only,
+                # so derive it here instead of trusting whatever was posted.
+                players_map[f"player_{idx}"] = player_json_for_human(current_user.username)
 
         match_id = uuid.uuid4().hex
         conn = get_db_connection()

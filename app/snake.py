@@ -133,7 +133,7 @@ def register_snake_events(socketio):
                                                 'error_msg': 'Snake supports one human seat per match.'}),
                  room=target)
             if match_id:
-                players = build_players_json(player_1_id_str, player_1_type, player_2_id_str, player_2_type)
+                players = build_players_json(player_1_id_str, player_1_type, player_2_id_str, player_2_type, human_name=current_user.username)
                 finalize_match_record(match_id, 'Snake', players, -1, '[]', 'displays')
             return
 
@@ -174,7 +174,7 @@ def register_snake_events(socketio):
             emit('finish', snake_payload(game.game_id, match_id, player_1_type, player_2_type, extra=extra),
                  room=broadcast_target)
 
-            players = build_players_json(player_1_id_str, player_1_type, player_2_id_str, player_2_type)
+            players = build_players_json(player_1_id_str, player_1_type, player_2_id_str, player_2_type, human_name=current_user.username)
             finalize_match_record(match_id, 'Snake', players, winner, json.dumps(displays), 'displays')
 
             if player_1_type == 'bot' and player_2_type == 'bot':

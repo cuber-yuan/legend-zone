@@ -275,7 +275,7 @@ def register_connect4_events(socketio):
         if player_1_type == 'bot' and player_2_type == 'bot':
             update_bot_ratings(player_1_id, player_2_id, elo_winner, match_id)
 
-        players = build_players_json(player_1_id, player_1_type, player_2_id, player_2_type)
+        players = build_players_json(player_1_id, player_1_type, player_2_id, player_2_type, human_name=current_user.username)
         finalize_match_record(match_id, GAME_NAME, players, elo_winner, json.dumps(game.move_history), 'move_history')
 
         if match_id:

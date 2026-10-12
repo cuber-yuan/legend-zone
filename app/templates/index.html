@@ -8,39 +8,265 @@
 {% endblock %}
 
 {% block content %}
-<!-- Create Game Table Modal -->
-<div id="modal-create-table" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[100]">
-    <div class="bg-white rounded-lg shadow-xl p-6 w-96">
-        <h3 class="text-xl font-semibold mb-4">Create Game Table</h3>
-        <div class="mb-4">
-            <label class="block text-gray-700 mb-2">Select Game</label>
-            <select id="select-game" class="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
-                <option value="">Loading...</option>
-            </select>
-        </div>
-        <div class="flex justify-end space-x-3">
-            <button id="btn-modal-cancel" class="px-4 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 transition-colors">Cancel</button>
-            <button id="btn-modal-create" class="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition-colors">Create</button>
+<style>
+  /* --- Create-match dialogs: two steps of one flow, shared shell --- */
+  .dialog-scrim {
+    position: fixed;
+    inset: 0;
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+    background: rgba(15, 23, 42, 0.55);
+    backdrop-filter: blur(3px);
+    animation: dialogFade 0.18s ease both;
+  }
+  .dialog-scrim.hidden { display: none; }
+  .dialog-card {
+    width: 100%;
+    max-width: 34rem;
+    background: #ffffff;
+    border: 1px solid #e5e7eb;
+    border-radius: 1rem;
+    box-shadow: 0 24px 60px rgba(15, 23, 42, 0.28);
+    overflow: hidden;
+    animation: dialogRise 0.24s cubic-bezier(0.2, 0.8, 0.3, 1) both;
+  }
+  /* The header gradient of the site, as a hairline on the dialog edge. */
+  .dialog-accent { height: 4px; background: linear-gradient(90deg, #1e40af, #2563eb); }
+  .dialog-body { padding: 1.15rem 1.4rem 1.4rem; }
+  .dialog-eyebrow { display: flex; align-items: flex-start; justify-content: space-between; gap: 0.75rem; }
+  .dialog-title { font-size: 1.2rem; font-weight: 700; letter-spacing: -0.01em; color: #111827; }
+  .dialog-sub { margin-top: 0.15rem; font-size: 0.78rem; color: #6b7280; }
+  .dialog-step {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.62rem;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #3730a3;
+    background: #eef2ff;
+    border: 1px solid #c7d2fe;
+    padding: 0.22rem 0.55rem;
+    border-radius: 999px;
+    white-space: nowrap;
+  }
+  .dialog-close {
+    display: inline-flex; padding: 0.25rem; border-radius: 0.4rem;
+    color: #9ca3af; background: transparent; border: 0; cursor: pointer;
+    transition: color 0.12s ease, background 0.12s ease;
+  }
+  .dialog-close:hover { color: #374151; background: #f3f4f6; }
+  .dialog-foot {
+    display: flex; align-items: center; justify-content: space-between; gap: 0.75rem;
+    margin-top: 1.25rem; padding-top: 1rem; border-top: 1px solid #f3f4f6;
+  }
+  .dialog-note { font-size: 0.72rem; color: #b45309; }
+  .dialog-note:empty { display: none; }
+  .dialog-actions { display: flex; align-items: center; gap: 0.5rem; margin-left: auto; }
+  .dlg-btn {
+    display: inline-flex; align-items: center; gap: 0.35rem;
+    padding: 0.45rem 0.9rem; border-radius: 0.5rem;
+    font-size: 0.82rem; font-weight: 600; cursor: pointer;
+    border: 1px solid transparent;
+    transition: transform 0.1s ease, background 0.12s ease, box-shadow 0.12s ease, border-color 0.12s ease;
+  }
+  .dlg-btn:active:not(:disabled) { transform: translateY(1px); }
+  .dlg-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+  .dlg-btn-ghost { background: #fff; border-color: #e5e7eb; color: #4b5563; }
+  .dlg-btn-ghost:hover:not(:disabled) { background: #f9fafb; border-color: #d1d5db; }
+  .dlg-btn-primary {
+    background: linear-gradient(180deg, #2563eb, #1d4ed8); color: #fff;
+    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.25) inset, 0 6px 16px rgba(37, 99, 235, 0.28);
+  }
+  .dlg-btn-primary:hover:not(:disabled) { background: linear-gradient(180deg, #1d4ed8, #1e40af); }
+  .dlg-btn-primary:focus-visible, .dlg-btn-ghost:focus-visible, .game-card:focus-visible,
+  .seg-btn:focus-visible, .seat-select:focus-visible { outline: 2px solid #1d4ed8; outline-offset: 2px; }
+
+  .dialog-head { margin-top: 1rem; }
+  .dialog-label {
+    font-size: 0.62rem; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase;
+    color: #9ca3af;
+  }
+
+  /* Step 1 - game picker */
+  .game-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.6rem; margin-top: 0.6rem; }
+  .game-card {
+    position: relative; display: flex; align-items: center; justify-content: space-between; gap: 0.5rem;
+    padding: 0.75rem 0.85rem; border: 1px solid #e5e7eb; border-radius: 0.65rem;
+    background: #f9fafb; text-align: left; cursor: pointer;
+    transition: transform 0.12s ease, box-shadow 0.12s ease, border-color 0.12s ease, background 0.12s ease;
+    animation: popIn 0.22s ease backwards; animation-delay: calc(var(--i, 0) * 45ms);
+  }
+  .game-card:hover { transform: translateY(-2px); background: #fff; border-color: #c7d2fe; box-shadow: 0 8px 18px rgba(15, 23, 42, 0.1); }
+  .game-card[aria-pressed="true"] { border-color: #2563eb; background: #eff6ff; box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.16); }
+  .game-name { font-size: 0.95rem; font-weight: 600; color: #111827; }
+  .game-idx { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.62rem; color: #9ca3af; }
+  .game-card[aria-pressed="true"] .game-idx { color: #2563eb; }
+  .game-empty { margin-top: 0.6rem; font-size: 0.8rem; color: #6b7280; }
+
+  /* Step 2 - seats */
+  .seat-stack { display: flex; flex-direction: column; gap: 0.4rem; margin-top: 0.6rem; }
+  .seat-card {
+    display: flex; flex-direction: column; gap: 0.6rem;
+    padding: 0.8rem 0.9rem; border: 1px solid #e5e7eb; border-radius: 0.7rem; background: #fff;
+    animation: popIn 0.22s ease backwards; animation-delay: calc(var(--i, 0) * 55ms);
+  }
+  /* Bot seats read teal, player seats purple - the same coding as the Latest Matches chips. */
+  .seat-card[data-type="bot"] { border-color: #99f6e4; background: #f0fdfa; }
+  .seat-card[data-type="human"] { border-color: #e9d5ff; background: #faf5ff; }
+  .seat-head { display: flex; align-items: center; justify-content: space-between; gap: 0.6rem; flex-wrap: wrap; }
+  .seat-label { font-size: 0.65rem; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: #6b7280; }
+  .seat-vs { align-self: center; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.6rem; letter-spacing: 0.2em; text-transform: uppercase; color: #9ca3af; }
+  .seg { display: inline-flex; padding: 2px; border: 1px solid #e5e7eb; border-radius: 999px; background: #f3f4f6; }
+  .seg-btn {
+    border: 0; background: transparent; border-radius: 999px; cursor: pointer;
+    padding: 0.26rem 0.7rem; font-size: 0.7rem; font-weight: 700; letter-spacing: 0.04em;
+    color: #6b7280; transition: color 0.12s ease, background 0.12s ease, box-shadow 0.12s ease;
+  }
+  .seg-btn[aria-checked="true"] { background: #fff; box-shadow: 0 1px 3px rgba(15, 23, 42, 0.2); }
+  .seg-btn.seg-bot[aria-checked="true"] { color: #0f766e; }
+  .seg-btn.seg-human[aria-checked="true"] { color: #7e22ce; }
+  .seg-btn:focus-visible { outline: 2px solid #1d4ed8; outline-offset: 2px; }
+  .seat-select {
+    width: 100%; padding: 0.4rem 0.6rem; font-size: 0.85rem;
+    border: 1px solid #d1d5db; border-radius: 0.5rem; background: #fff; color: #111827;
+  }
+  .seat-name {
+    width: 100%; padding: 0.4rem 0.6rem; font-size: 0.85rem;
+    border: 1px dashed #d8b4fe; border-radius: 0.5rem;
+    background: #faf5ff; color: #6b21a8; cursor: default;
+  }
+  .seat-hidden { display: none; }
+
+  @keyframes dialogFade { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes dialogRise { from { opacity: 0; transform: translateY(10px) scale(0.985); } to { opacity: 1; transform: none; } }
+  @keyframes popIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+  @media (prefers-reduced-motion: reduce) {
+    .dialog-scrim, .dialog-card, .game-card, .seat-card { animation: none !important; }
+    .game-card:hover { transform: none; }
+  }
+  @media (max-width: 560px) {
+    .game-grid { grid-template-columns: 1fr; }
+    .dialog-foot { flex-direction: column-reverse; align-items: stretch; }
+    .dialog-actions { margin-left: 0; }
+  }
+
+  /* --- Latest Matches table --- */
+  .lm-head { display: flex; align-items: baseline; justify-content: space-between; gap: 0.75rem; margin-bottom: 0.9rem; }
+  .lm-count {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.62rem; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase;
+    color: #475569; background: #f1f5f9; border: 1px solid #e2e8f0;
+    padding: 0.2rem 0.5rem; border-radius: 999px; white-space: nowrap;
+  }
+  /* Clip the wrapper instead of the cells: preflight's border-collapse makes
+     border-radius on th/td a no-op. */
+  .lm-card {
+    border: 1px solid #e2e8f0; border-radius: 0.75rem; overflow: hidden;
+    background: #fff; box-shadow: 0 4px 12px rgba(15, 23, 42, 0.06);
+  }
+  /* Body spacing matches the restored header cells' px-4/py-2 so column edges line up. */
+  .lm-table tbody td { padding: 0.5rem 1rem; border-top: 1px solid #f1f5f9; vertical-align: middle; }
+  .lm-table tbody tr:first-child td { border-top: 0; }
+  .lm-table tbody tr:nth-child(even) { background: #f8fafc; }
+  .lm-table tbody tr:hover { background: #eff6ff; }
+  /* The two chips sit side by side, spaced by the flex gap rather than a divider. */
+  .lm-players { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 0.35rem; }
+  .lm-watch {
+    position: relative;
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 2rem; height: 2rem; border-radius: 0.5rem;
+    border: 1px solid #bfdbfe; background: #eff6ff; color: #1d4ed8;
+    transition: background 0.12s ease, border-color 0.12s ease, transform 0.1s ease;
+  }
+  .lm-watch:hover { background: #dbeafe; border-color: #93c5fd; }
+  .lm-watch:active { transform: translateY(1px); }
+  .lm-watch:focus-visible { outline: 2px solid #1d4ed8; outline-offset: 2px; }
+  .lm-watch.live { border-color: #86efac; background: #f0fdf4; color: #15803d; }
+  .lm-watch.live:hover { background: #dcfce7; border-color: #4ade80; }
+  .lm-dot {
+    position: absolute; top: -0.25rem; right: -0.25rem;
+    width: 0.5rem; height: 0.5rem; border-radius: 999px;
+    background: #22c55e; border: 2px solid #fff;
+    animation: lmPulse 1.6s ease-out infinite;
+  }
+  .lm-time { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.72rem; color: #64748b; white-space: nowrap; }
+  .lm-dash { color: #cbd5e1; }
+  .lm-empty td { padding: 1.7rem 1rem; text-align: center; color: #94a3b8; font-size: 0.82rem; background: #fff; }
+  @keyframes lmPulse {
+    0% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.5); }
+    70% { box-shadow: 0 0 0 6px rgba(34, 197, 94, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .lm-dot { animation: none; }
+    .lm-table tbody tr:hover { background: inherit; }
+  }
+</style>
+
+<!-- Step 1: pick a game -->
+<div id="modal-create-table" class="dialog-scrim hidden" role="dialog" aria-modal="true" aria-labelledby="dialog-title-game">
+    <div class="dialog-card">
+        <div class="dialog-accent"></div>
+        <div class="dialog-body">
+            <div class="dialog-eyebrow">
+                <div>
+                    <h3 id="dialog-title-game" class="dialog-title">Create a match</h3>
+                </div>
+                <span class="dialog-step">Step 1 · Game</span>
+            </div>
+            <div class="dialog-head">
+                <span class="dialog-label">Choose a game</span>
+                <div id="game-grid" class="game-grid" role="group" aria-label="Games"></div>
+            </div>
+            <div class="dialog-foot">
+                <div class="dialog-actions">
+                    <button id="btn-modal-cancel" type="button" class="dlg-btn dlg-btn-ghost">Cancel</button>
+                    <button id="btn-modal-create" type="button" class="dlg-btn dlg-btn-primary" disabled>
+                        Continue
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M13.5 4.5 21 12l-7.5 7.5M21 12H3"/></svg>
+                    </button>
+                </div>
+            </div>
         </div>
     </div>
 </div>
 
-<!-- Player Setup Modal -->
-<div id="modal-player-setup" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[100]">
-    <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-2xl">
-        <div class="flex items-center justify-between mb-4">
-            <h3 class="text-xl font-semibold">Player List</h3>
-            <button id="btn-close-player-modal" class="text-gray-400 hover:text-gray-600">
-                <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
-                </svg>
-            </button>
-        </div>
-        <div id="player-slots" class="space-y-3 mb-4">
-            <!-- Player slots will be generated here -->
-        </div>
-        <div class="flex justify-end">
-            <button id="btn-start-game" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors">Start Game</button>
+<!-- Step 2: fill the two seats -->
+<div id="modal-player-setup" class="dialog-scrim hidden" role="dialog" aria-modal="true" aria-labelledby="dialog-title-seats">
+    <div class="dialog-card">
+        <div class="dialog-accent"></div>
+        <div class="dialog-body">
+            <div class="dialog-eyebrow">
+                <div>
+                    <h3 id="dialog-title-seats" class="dialog-title">Create a match</h3>
+                    <p class="dialog-sub" id="player-modal-game-name">Loading…</p>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span class="dialog-step">Step 2 · Seats</span>
+                    <button id="btn-close-player-modal" type="button" class="dialog-close" aria-label="Close">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" />
+                        </svg>
+                    </button>
+                </div>
+            </div>
+            <div class="dialog-head">
+                <span class="dialog-label" id="player-slots-label">Contestants</span>
+                <div id="player-slots" class="seat-stack" role="group" aria-labelledby="player-slots-label"></div>
+            </div>
+            <div class="dialog-foot">
+                <span class="dialog-note" id="lineup-note"></span>
+                <div class="dialog-actions">
+                    <button id="btn-back-to-games" type="button" class="dlg-btn dlg-btn-ghost">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M10.5 19.5 3 12l7.5-7.5M3 12h18"/></svg>
+                        Back
+                    </button>
+                    <button id="btn-start-game" type="button" class="dlg-btn dlg-btn-primary">Start game</button>
+                </div>
+            </div>
         </div>
     </div>
 </div>
@@ -57,68 +283,80 @@
     }
 
     // Compact player name card used in the Latest Matches table.
-    // Clickable when we know the bot's id (jumps to /bot/<id>);
-    // humans / deleted bots render as a plain non-link card.
+    // Bots jump to /bot/<id>, people to /profile/<username>; both are links.
     // The winner's card carries a small green "W" corner badge.
     // The version renders in a smaller, lighter font than the bot name.
-    function playerCard(name, isWinner, tone, botId, version) {
+    function playerCard(name, isWinner, tone, botId, version, isHuman) {
         if (!name) return '';
         const tones = {
             blue: 'bg-blue-100 text-blue-800 hover:bg-blue-200',
             purple: 'bg-purple-100 text-purple-800 hover:bg-purple-200'
         };
-        const cls = tones[tone] || tones.blue;
+        // Bots wear the cool chip, players the purple one; the person glyph keeps
+        // the distinction readable without relying on colour alone.
+        const cls = isHuman ? (tones[tone] || tones.blue) : 'bg-teal-100 text-teal-900 hover:bg-teal-200';
+        const glyph = isHuman
+            ? '<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-3.5 h-3.5 mr-1 opacity-80" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.997 0A17.733 17.733 0 0 0 12 19.5c-1.677 0-3.277.23-4.798.618Z"/></svg>'
+            : '';
         const badge = isWinner
             ? '<span class="absolute -top-1.5 -right-1.5 flex items-center justify-center w-4 h-4 rounded-full bg-green-500 text-white text-[10px] font-bold shadow" title="Winner">W</span>'
             : '';
         const versionHtml = version ? `<span class="ml-1 text-xs font-normal opacity-70">v${version}</span>` : '';
-        const inner = `${escapeHtml(name)}${versionHtml}${badge}`;
-        if (botId) {
-            return `<a href="/bot/${botId}" class="relative inline-flex items-center px-2.5 py-1 rounded-full ${cls} text-sm font-medium whitespace-nowrap transition-colors" title="View bot">${inner}</a>`;
+        const inner = `${glyph}${escapeHtml(name)}${versionHtml}${badge}`;
+        // Old rows recorded the seat as the literal "HUMAN" and never stored who it
+        // was, so there is no profile to open for those.
+        const href = botId ? `/bot/${encodeURIComponent(botId)}`
+            : (isHuman && name !== 'HUMAN' ? `/profile/${encodeURIComponent(name)}` : null);
+        if (href) {
+            const label = botId ? 'View bot' : 'View profile';
+            return `<a href="${escapeHtml(href)}" class="relative inline-flex items-center px-2.5 py-1 rounded-full ${cls} text-sm font-medium whitespace-nowrap transition-colors" title="${label}">${inner}</a>`;
         }
         return `<span class="relative inline-flex items-center px-2.5 py-1 rounded-full ${cls} text-sm font-medium whitespace-nowrap">${inner}</span>`;
     }
 
     socket.on('latest_matches', (data) => {
 
-        const matches = data.matches;
+        const matches = data.matches || [];
         const tbody = document.querySelector('#latest-matches-tbody');
+        const count = document.getElementById('latest-count');
+        count.textContent = matches.length ? `${matches.length} recent` : '';
+
         tbody.innerHTML = '';
+        if (!matches.length) {
+            tbody.innerHTML = '<tr class="lm-empty"><td colspan="4">No matches yet — create one to fill the arena.</td></tr>';
+            return;
+        }
 
         matches.forEach(match => {
             // home.py already flattened match.player_1 / player_2 into
             // name strings plus player_1_id / player_1_version fields.
-            const p1Card = playerCard(match.player_1, match.winner === 0, 'purple', match.player_1_id, match.player_1_version);
-            const p2Card = playerCard(match.player_2, match.winner === 1, 'purple', match.player_2_id, match.player_2_version);
+            const p1Card = playerCard(match.player_1, match.winner === 0, 'purple', match.player_1_id, match.player_1_version, match.player_1_is_human);
+            const p2Card = playerCard(match.player_2, match.winner === 1, 'purple', match.player_2_id, match.player_2_version, match.player_2_is_human);
             const cards = [p1Card, p2Card].filter(Boolean);
-            const playersStr = cards.join('<span class="mx-1.5 text-xs text-gray-400"></span>');
+            const playersStr = cards.length
+                ? `<span class="lm-players">${cards.join('')}</span>`
+                : '<span class="lm-dash">—</span>';
 
-            let winner = match.winner;
-            if (winner === null || winner === undefined) winner = 'Draw';
+            const live = match.status === 'playing';
+            let replayLink = '<span class="lm-dash">—</span>';
+            if (match.status === 'finished' || live) {
+                const label = live ? 'Watch live' : 'Watch replay';
+                // No visible text, so the accessible name comes from aria-label.
+                replayLink = `<a href="/match/${encodeURIComponent(match.id)}" class="lm-watch${live ? ' live' : ''}" title="${label}" aria-label="${label}">`
+                    + (live
+                        ? '<svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg><span class="lm-dot" aria-hidden="true"></span>'
+                        : '<svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>')
+                    + '</a>';
+            }
 
             let date = fmtLocal(match.created_at);
 
-            let replayLink = '';
-            if (match.status === 'finished') {
-                replayLink = `<a href="/match/${match.id}" class="inline-flex items-center justify-center w-9 h-9 rounded bg-blue-100 hover:bg-blue-200 text-blue-700 transition-colors" title="Watch replay">
-                    <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
-                </a>`;
-            } else if (match.status === 'playing') {
-                replayLink = `<a href="/match/${match.id}" class="inline-flex items-center justify-center w-9 h-9 rounded bg-green-100 hover:bg-green-200 text-green-700 transition-colors relative" title="Watch live">
-                    <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
-                    <span class="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full border-2 border-white"></span>
-                </a>`;
-            } else {
-                replayLink = '<span class="text-gray-400">-</span>';
-            }
-
             tbody.innerHTML += `
                 <tr>
-                    <td class="px-4 py-2 border-b">${escapeHtml(match.game)}</td>
-                    <td class="px-4 py-2 border-b">${playersStr}</td>
-                    
-                    <td class="px-4 py-2 border-b ">${replayLink}</td>
-                    <td class="px-4 py-2 border-b hidden sm:table-cell">${escapeHtml(date)}</td>
+                    <td>${escapeHtml(match.game)}</td>
+                    <td>${playersStr}</td>
+                    <td>${replayLink}</td>
+                    <td class="lm-time hidden sm:table-cell" title="${escapeHtml(match.created_at || '')}">${escapeHtml(date)}</td>
                 </tr>
             `;
         });
@@ -170,13 +408,14 @@
         <p class="text-gray-700" style="margin-bottom:1em;"><i>"User interface doesn't matter much."</i></p>
     </section>
 
-    <!-- Placeholder Section 2 -->
+    <!-- Latest Matches -->
     <section class="bg-gray-100 p-6 rounded-lg shadow-md">
-        <h2 class="text-2xl font-semibold mb-4" style="margin-bottom:1em;">Latest Matches</h2>
-        <div class="overflow-x-auto">
-            <!-- Tailwind's preflight sets border-collapse: collapse, which makes
-                 cell border-radius a no-op, so the corners stay square here. -->
-            <table class="min-w-full text-left text-gray-700 border border-gray-300 bg-white">
+        <div class="lm-head" style="margin-bottom:1em;">
+            <h2 class="text-2xl font-semibold">Latest Matches</h2>
+            <span class="lm-count" id="latest-count"></span>
+        </div>
+        <div class="lm-card overflow-x-auto">
+            <table class="lm-table min-w-full text-left text-gray-700 bg-white">
                 <thead>
                     <tr class="bg-gradient-to-r from-blue-600 to-blue-400 text-white">
                         <th class="px-4 py-2 border-b border-blue-700">Game</th>
@@ -194,127 +433,231 @@
 </div>
 
 <script>
-    // Modal logic
+    // Dialog logic: step 1 picks the game, step 2 fills the two seats.
     const modal = document.getElementById('modal-create-table');
     const playerModal = document.getElementById('modal-player-setup');
     const btnCreate = document.getElementById('btn-create-table');
     const btnCancel = document.getElementById('btn-modal-cancel');
     const btnModalCreate = document.getElementById('btn-modal-create');
-    const selectGame = document.getElementById('select-game');
+    const gameGrid = document.getElementById('game-grid');
     const playerSlots = document.getElementById('player-slots');
+    const playerGameName = document.getElementById('player-modal-game-name');
+    const lineupNote = document.getElementById('lineup-note');
     const btnClosePlayerModal = document.getElementById('btn-close-player-modal');
+    const btnBackToGames = document.getElementById('btn-back-to-games');
     const btnStartGame = document.getElementById('btn-start-game');
 
     let selectedGame = null;
     const isAuthenticated = {{ 'true' if current_user.is_authenticated else 'false' }};
+    const CURRENT_USERNAME = {{ current_user.username | tojson if current_user.is_authenticated else 'null' }};
+    const HUMAN_LABEL = CURRENT_USERNAME || 'Player';
+
+    function openDialog(el) { el.classList.remove('hidden'); }
+    function closeDialog(el) { el.classList.add('hidden'); }
+    function isDialogOpen(el) { return !el.classList.contains('hidden'); }
+
+    function renderGameCards(games, emptyText) {
+        gameGrid.innerHTML = '';
+        btnModalCreate.disabled = true;
+        if (!games.length) {
+            const p = document.createElement('p');
+            p.className = 'game-empty';
+            p.textContent = emptyText || 'No games available.';
+            gameGrid.appendChild(p);
+            return;
+        }
+        games.forEach((g, idx) => {
+            const card = document.createElement('button');
+            card.type = 'button';
+            card.className = 'game-card';
+            card.dataset.id = g.id;
+            card.dataset.name = g.name;
+            card.style.setProperty('--i', String(idx));
+            card.setAttribute('aria-pressed', 'false');
+            const name = document.createElement('span');
+            name.className = 'game-name';
+            name.textContent = g.name;
+            const ord = document.createElement('span');
+            ord.className = 'game-idx';
+            ord.textContent = String(idx + 1).padStart(2, '0');
+            card.appendChild(name);
+            card.appendChild(ord);
+            card.addEventListener('click', () => pickGame(card));
+            gameGrid.appendChild(card);
+        });
+    }
+
+    function pickGame(card) {
+        gameGrid.querySelectorAll('.game-card').forEach((c) => c.setAttribute('aria-pressed', String(c === card)));
+        selectedGame = { id: card.dataset.id, name: card.dataset.name };
+        btnModalCreate.disabled = false;
+    }
 
     btnCreate.addEventListener('click', async () => {
         if (!isAuthenticated) {
-            alert('Please log in to create a game table.');
+            alert('Please log in to create a match.');
             socket.disconnect();
             window.location.href = '/login';
             return;
         }
-        modal.classList.remove('hidden');
+        selectedGame = null;
+        gameGrid.innerHTML = '';
+        openDialog(modal);
         try {
             const resp = await fetch('/api/games');
-            const games = await resp.json();
-            selectGame.innerHTML = games.length 
-                ? games.map(g => `<option value="${g.id}" data-name="${g.name}">${g.name}</option>`).join('')
-                : '<option value="">No games available</option>';
+            renderGameCards(await resp.json());
         } catch (e) {
-            selectGame.innerHTML = '<option value="">Failed to load</option>';
+            renderGameCards([], 'Could not load the game list.');
         }
     });
 
-    btnCancel.addEventListener('click', () => {
-        modal.classList.add('hidden');
-    });
+    btnCancel.addEventListener('click', () => closeDialog(modal));
 
     modal.addEventListener('click', (e) => {
-        if (e.target === modal) modal.classList.add('hidden');
+        if (e.target === modal) closeDialog(modal);
     });
 
     btnModalCreate.addEventListener('click', () => {
-        const gameId = selectGame.value;
-        if (!gameId) return;
-        
-        selectedGame = {
-            id: gameId,
-            name: selectGame.options[selectGame.selectedIndex].dataset.name
-        };
-        
-        modal.classList.add('hidden');
+        if (!selectedGame) return;
+        closeDialog(modal);
         showPlayerSetup();
     });
 
-    function showPlayerSetup() {
+    const slotType = (slot) => slot.dataset.type || 'bot';
+
+    function playerSlotHtml(i, botOptions) {
+        return `
+            <div class="seat-card" data-type="bot" style="--i:${i - 1}">
+                <div class="seat-head">
+                    <span class="seat-label">Seat ${i}</span>
+                    <span class="seg" role="radiogroup" aria-label="Seat ${i} type">
+                        <button type="button" class="seg-btn seg-bot" role="radio" aria-checked="true">Bot</button>
+                        <button type="button" class="seg-btn seg-human" role="radio" aria-checked="false">Human</button>
+                    </span>
+                </div>
+                <select class="seat-select player-bot" aria-label="Bot for seat ${i}">${botOptions}</select>
+                <input type="text" readonly tabindex="-1" aria-disabled="true" class="seat-name player-name seat-hidden" placeholder="Player ${i}">
+            </div>
+        `;
+    }
+
+    // A human seat is always the signed-in player, so the dropdown gives way to a
+    // read-only field naming who plays, and the card takes the player's hue.
+    function syncPlayerSlot(slot) {
+        const isBot = slotType(slot) === 'bot';
+        const bot = slot.querySelector('.player-bot');
+        const name = slot.querySelector('.player-name');
+        slot.dataset.type = isBot ? 'bot' : 'human';
+        if (bot) { bot.classList.toggle('seat-hidden', !isBot); bot.disabled = !isBot; }
+        if (name) {
+            name.classList.toggle('seat-hidden', isBot);
+            if (!isBot && !name.value) name.value = HUMAN_LABEL;
+        }
+        slot.querySelectorAll('.seg-btn').forEach((b) => {
+            const humanSeat = b.classList.contains('seg-human');
+            b.setAttribute('aria-checked', String(humanSeat !== isBot));
+        });
+        updateLineupNote();
+    }
+
+    function currentLineup() {
+        const seats = [];
+        playerSlots.querySelectorAll('.seat-card').forEach((slot, idx) => {
+            if (slotType(slot) === 'bot') {
+                const sel = slot.querySelector('.player-bot');
+                const botId = sel ? sel.value : '';
+                const label = sel && sel.selectedIndex >= 0 ? sel.options[sel.selectedIndex].text : `Bot ${idx + 1}`;
+                seats.push({ type: 'bot', botId, name: botId ? label : '' });
+            } else {
+                const input = slot.querySelector('.player-name');
+                seats.push({ type: 'human', botId: null, name: (input && input.value) || HUMAN_LABEL });
+            }
+        });
+        return seats;
+    }
+
+    function updateLineupNote() {
+        // The footer only speaks up when a seat cannot be filled: a bot seat with no
+        // bot uploaded would otherwise post an empty botId and quietly become human.
+        const stuck = currentLineup().some((s) => s.type === 'bot' && !s.botId);
+        btnStartGame.disabled = stuck;
+        lineupNote.textContent = stuck ? 'A bot seat still has no bot to pick.' : '';
+    }
+
+    function renderPlayerSlots(botOptions, gameId) {
         playerSlots.innerHTML = '';
-        
+        playerSlots.dataset.forGame = String(gameId);
+        for (let i = 1; i <= 2; i++) {
+            playerSlots.innerHTML += playerSlotHtml(i, botOptions);
+        }
+        playerSlots.querySelectorAll('.seat-card').forEach((slot) => {
+            slot.querySelectorAll('.seg-btn').forEach((btn) => {
+                btn.addEventListener('click', () => {
+                    slot.dataset.type = btn.classList.contains('seg-human') ? 'human' : 'bot';
+                    syncPlayerSlot(slot);
+                });
+            });
+            slot.querySelector('.player-bot').addEventListener('change', updateLineupNote);
+            syncPlayerSlot(slot);
+        });
+        openDialog(playerModal);
+    }
+
+    function showPlayerSetup() {
+        playerGameName.textContent = selectedGame.name;
+
+        // Coming back from step 2 keeps the lineup the player already built.
+        if (playerSlots.dataset.forGame === String(selectedGame.id) && playerSlots.children.length === 2) {
+            updateLineupNote();
+            openDialog(playerModal);
+            return;
+        }
+
+        playerSlots.innerHTML = '';
+        lineupNote.textContent = '';
+        btnStartGame.disabled = false;
+
         // Fetch bot list for the selected game
-        fetch(`/api/bots?game_id=${selectedGame.id}`)
+        fetch(`/api/bots?game_id=${encodeURIComponent(selectedGame.id)}`)
             .then(resp => resp.json())
             .then(bots => {
-                const botOptions = bots.length 
-                    ? bots.map(b => `<option value="${b.id}">${b.name}</option>`).join('')
+                const botOptions = bots.length
+                    ? bots.map(b => `<option value="${escapeHtml(String(b.id))}">${escapeHtml(b.name)}</option>`).join('')
                     : '<option value="">No bots available</option>';
-                
-                for (let i = 1; i <= 2; i++) {
-                    playerSlots.innerHTML += `
-                        <div class="flex items-center space-x-3 p-3 bg-gray-50 rounded border border-gray-200">
-                            <span class="text-gray-600 w-8">P${i}</span>
-                            <select class="player-type border border-gray-300 rounded px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500">
-                                <option value="bot" selected>Bot</option>
-                                <option value="human">Human</option>
-                            </select>
-                            <select class="player-bot flex-1 border border-gray-300 rounded px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500">
-                                ${botOptions}
-                            </select>
-                        </div>
-                    `;
-                }
-                playerModal.classList.remove('hidden');
+                renderPlayerSlots(botOptions, selectedGame.id);
             })
             .catch(err => {
                 console.error('Failed to load bots:', err);
-                for (let i = 1; i <= 2; i++) {
-                    playerSlots.innerHTML += `
-                        <div class="flex items-center space-x-3 p-3 bg-gray-50 rounded border border-gray-200">
-                            <span class="text-gray-600 w-8">P${i}</span>
-                            <select class="player-type border border-gray-300 rounded px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500">
-                                <option value="bot" selected>Bot</option>
-                                <option value="human">Human</option>
-                            </select>
-                            <input type="text" class="player-name flex-1 border border-gray-300 rounded px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Player ${i} name">
-                        </div>
-                    `;
-                }
-                playerModal.classList.remove('hidden');
+                renderPlayerSlots('<option value="">No bots available</option>', selectedGame.id);
             });
     }
 
     btnClosePlayerModal.addEventListener('click', () => {
-        playerModal.classList.add('hidden');
+        closeDialog(playerModal);
+    });
+
+    btnBackToGames.addEventListener('click', () => {
+        closeDialog(playerModal);
+        openDialog(modal);
     });
 
     playerModal.addEventListener('click', (e) => {
-        if (e.target === playerModal) playerModal.classList.add('hidden');
+        if (e.target === playerModal) closeDialog(playerModal);
+    });
+
+    document.addEventListener('keydown', (e) => {
+        if (e.key !== 'Escape') return;
+        if (isDialogOpen(playerModal)) closeDialog(playerModal);
+        else if (isDialogOpen(modal)) closeDialog(modal);
     });
 
     btnStartGame.addEventListener('click', async () => {
-        const players = [];
-        document.querySelectorAll('#player-slots > div').forEach((slot, idx) => {
-            const type = slot.querySelector('.player-type').value;
-            let name, botId;
-            if (type === 'bot') {
-                const botSelect = slot.querySelector('.player-bot');
-                botId = botSelect.value;
-                name = botSelect.options[botSelect.selectedIndex]?.text || `Bot ${idx + 1}`;
-            } else {
-                name = slot.querySelector('.player-name')?.value || `Player ${idx + 1}`;
-            }
-            players.push({ type, name, botId: type === 'bot' ? botId : null });
-        });
+        const players = currentLineup().map((s) => ({ type: s.type, name: s.name, botId: s.botId }));
+        const missing = players.some((p) => !p.name);
+        if (missing) {
+            alert('Fill both seats before starting.');
+            return;
+        }
         
         try {
             const resp = await fetch('/api/matches', {
