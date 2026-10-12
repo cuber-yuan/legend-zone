@@ -75,6 +75,22 @@
     box-shadow: 0 1px 0 rgba(255, 255, 255, 0.25) inset, 0 6px 16px rgba(37, 99, 235, 0.28);
   }
   .dlg-btn-primary:hover:not(:disabled) { background: linear-gradient(180deg, #1d4ed8, #1e40af); }
+  /* A beam of light crossing the one button that invites you to start a match.
+     Scoped to the id so the dialog's own primary buttons stay calm. */
+  #btn-create-table { position: relative; overflow: hidden; }
+  #btn-create-table::after {
+    content: ''; position: absolute; top: -20%; bottom: -20%; left: 0; width: 40%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.55), transparent);
+    transform: translateX(-150%) skewX(-16deg);
+    animation: btnShine 2.6s ease-in-out infinite;
+    pointer-events: none;
+  }
+  @keyframes btnShine {
+    0%        { transform: translateX(-150%) skewX(-16deg); }
+    60%, 100% { transform: translateX(300%) skewX(-16deg); }
+  }
+  /* Once it has been clicked the invitation has landed; the beam parks off-edge. */
+  #btn-create-table.no-shine::after { animation: none; }
   .dlg-btn-primary:focus-visible, .dlg-btn-ghost:focus-visible, .game-card:focus-visible,
   .seg-btn:focus-visible, .seat-select:focus-visible { outline: 2px solid #1d4ed8; outline-offset: 2px; }
 
@@ -139,6 +155,7 @@
   @keyframes popIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
   @media (prefers-reduced-motion: reduce) {
     .dialog-scrim, .dialog-card, .game-card, .seat-card, .gt-card { animation: none !important; }
+    #btn-create-table::after { animation: none; }
     .game-card:hover { transform: none; }
   }
   @media (max-width: 560px) {
@@ -441,7 +458,7 @@
         <div class="flex items-center justify-between mb-4">
             <h2 class="text-2xl font-semibold">Game Tables</h2>
             <div class="flex items-center space-x-3">
-                <div class="flex border border-gray-300 rounded overflow-hidden">
+                <!-- <div class="flex border border-gray-300 rounded overflow-hidden">
                     <button class="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 transition-colors" title="List view">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 10h16M4 14h16M4 18h16" />
@@ -452,11 +469,9 @@
                             <path stroke-linecap="round" stroke-linejoin="round" d="M4 5a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM14 5a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1V5zM4 15a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1H5a1 1 0 01-1-1v-4zM14 15a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z" />
                         </svg>
                     </button>
-                </div>
-                <button id="btn-create-table" class="px-4 py-1.5 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors flex items-center space-x-1">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
-                    </svg>
+                </div> -->
+                <button id="btn-create-table" type="button" class="dlg-btn dlg-btn-primary">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
                     <span>Create</span>
                 </button>
             </div>
@@ -609,6 +624,7 @@
     }
 
     btnCreate.addEventListener('click', async () => {
+        btnCreate.classList.add('no-shine');
         if (!isAuthenticated) {
             alert('Please log in to create a match.');
             socket.disconnect();
