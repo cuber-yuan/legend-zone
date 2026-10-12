@@ -52,12 +52,6 @@
     border-radius: 999px;
     white-space: nowrap;
   }
-  .dialog-close {
-    display: inline-flex; padding: 0.25rem; border-radius: 0.4rem;
-    color: #9ca3af; background: transparent; border: 0; cursor: pointer;
-    transition: color 0.12s ease, background 0.12s ease;
-  }
-  .dialog-close:hover { color: #374151; background: #f3f4f6; }
   .dialog-foot {
     display: flex; align-items: center; justify-content: space-between; gap: 0.75rem;
     margin-top: 1.25rem; padding-top: 1rem; border-top: 1px solid #f3f4f6;
@@ -144,7 +138,7 @@
   @keyframes dialogRise { from { opacity: 0; transform: translateY(10px) scale(0.985); } to { opacity: 1; transform: none; } }
   @keyframes popIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
   @media (prefers-reduced-motion: reduce) {
-    .dialog-scrim, .dialog-card, .game-card, .seat-card { animation: none !important; }
+    .dialog-scrim, .dialog-card, .game-card, .seat-card, .gt-card { animation: none !important; }
     .game-card:hover { transform: none; }
   }
   @media (max-width: 560px) {
@@ -204,6 +198,80 @@
     .lm-dot { animation: none; }
     .lm-table tbody tr:hover { background: inherit; }
   }
+
+  /* --- Game Tables ---
+     The room other visitors see, so a card is drawn as a table set for two: one
+     seat at each end of a recessed top, game name tagged at the corner. Bots
+     keep the site's teal and humans its purple. Display-only for now. */
+  .gt-grid {
+    --gt-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(12.5rem, 1fr)); gap: 0.9rem;
+  }
+  .gt-empty { padding: 1.6rem 1rem; text-align: center; color: #94a3b8; font-size: 0.82rem; }
+  .gt-card {
+    position: relative; cursor: default;
+    padding: 0.55rem 0.6rem 0.65rem; border-radius: 0.8rem;
+    background: #fff; border: 1px solid #e5e7eb;
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.05);
+    animation: popIn 0.24s ease backwards; animation-delay: calc(var(--i, 0) * 55ms);
+  }
+  .gt-badge {
+    display: inline-block; max-width: calc(100% - 5.5rem); overflow: hidden; text-overflow: ellipsis;
+    white-space: nowrap; font-size: 0.7rem; font-weight: 700; color: #fff;
+    background: linear-gradient(180deg, #2563eb, #1d4ed8);
+    padding: 0.16rem 0.5rem; border-radius: 0.4rem;
+    box-shadow: 0 1px 3px rgba(37, 99, 235, 0.3);
+  }
+  .gt-host {
+    position: absolute; top: 0.68rem; right: 0.72rem;
+    font-family: var(--gt-mono); font-size: 0.56rem; letter-spacing: 0.06em; color: #94a3b8;
+  }
+  .gt-host b { color: #475569; font-weight: 600; }
+  /* The top has to survive on a white card over a white section, so it sits a
+     step darker than the page and takes an inner shadow to read as recessed. */
+  .gt-top {
+    position: relative; margin-top: 0.55rem; padding: 0.8rem 0.5rem;
+    display: flex; flex-direction: column; align-items: center; gap: 0.5rem;
+    background: #f1f5f9; border: 1px solid #cbd5e1; border-radius: 0.6rem;
+    box-shadow: inset 0 1px 3px rgba(15, 23, 42, 0.06);
+  }
+  /* A midline with a centre spot: the table's own divider, behind the seats. */
+  .gt-top::before {
+    content: ''; position: absolute; top: 50%; left: 15%; right: 15%;
+    border-top: 1px solid #cbd5e1;
+  }
+  .gt-net {
+    position: relative; z-index: 1; width: 0.5rem; height: 0.5rem; border-radius: 999px;
+    background: #fff; border: 1.5px solid #94a3b8;
+  }
+  .gt-seat {
+    position: relative; z-index: 1; display: flex; flex-direction: column;
+    align-items: center; gap: 0.2rem; max-width: 100%;
+  }
+  /* The role is spelled out so colour is not the only cue for bot vs player. */
+  .gt-role {
+    font-family: var(--gt-mono); font-size: 0.52rem; font-weight: 700;
+    letter-spacing: 0.16em; text-transform: uppercase; color: #0f766e;
+  }
+  .gt-seat[data-type="human"] .gt-role { color: #7e22ce; }
+  .gt-seat[data-type="empty"] .gt-role { color: #94a3b8; }
+  .gt-avatar {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 1.8rem; height: 1.8rem; border-radius: 0.5rem;
+    background: #fff; border: 1px solid #e5e7eb;
+  }
+  .gt-seat[data-type="bot"] .gt-avatar { color: #0f766e; border-color: #5eead4; background: #f0fdfa; }
+  .gt-seat[data-type="human"] .gt-avatar { color: #7e22ce; border-color: #d8b4fe; background: #faf5ff; }
+  .gt-name {
+    max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    font-size: 0.76rem; font-weight: 600; color: #134e4a;
+  }
+  .gt-seat[data-type="human"] .gt-name { color: #581c87; }
+  /* An unfilled seat stays visible, so the table reads as still being set. */
+  .gt-seat[data-type="empty"] .gt-avatar {
+    background: transparent; border-style: dashed; border-color: #cbd5e1; color: #cbd5e1;
+  }
+  .gt-seat[data-type="empty"] .gt-name { color: #94a3b8; font-weight: 500; font-style: italic; }
 </style>
 
 <!-- Step 1: pick a game -->
@@ -223,7 +291,6 @@
             </div>
             <div class="dialog-foot">
                 <div class="dialog-actions">
-                    <button id="btn-modal-cancel" type="button" class="dlg-btn dlg-btn-ghost">Cancel</button>
                     <button id="btn-modal-create" type="button" class="dlg-btn dlg-btn-primary" disabled>
                         Continue
                         <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M13.5 4.5 21 12l-7.5 7.5M21 12H3"/></svg>
@@ -244,14 +311,7 @@
                     <h3 id="dialog-title-seats" class="dialog-title">Create a match</h3>
                     <p class="dialog-sub" id="player-modal-game-name">Loading…</p>
                 </div>
-                <div class="flex items-center gap-2">
-                    <span class="dialog-step">Step 2 · Seats</span>
-                    <button id="btn-close-player-modal" type="button" class="dialog-close" aria-label="Close">
-                        <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" />
-                        </svg>
-                    </button>
-                </div>
+                <span class="dialog-step">Step 2 · Seats</span>
             </div>
             <div class="dialog-head">
                 <span class="dialog-label" id="player-slots-label">Contestants</span>
@@ -260,10 +320,6 @@
             <div class="dialog-foot">
                 <span class="dialog-note" id="lineup-note"></span>
                 <div class="dialog-actions">
-                    <button id="btn-back-to-games" type="button" class="dlg-btn dlg-btn-ghost">
-                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M10.5 19.5 3 12l7.5-7.5M3 12h18"/></svg>
-                        Back
-                    </button>
                     <button id="btn-start-game" type="button" class="dlg-btn dlg-btn-primary">Start game</button>
                 </div>
             </div>
@@ -282,6 +338,17 @@
         return div.innerHTML;
     }
 
+    // The contestant glyphs, shared by the Game Tables cards and the Latest
+    // Matches chips so a bot reads as a bot in both places.
+    const GLYPH = {
+        bot: 'M9 10h.01M15 10h.01M8.5 15h7M12 3v2m-6 4H4m16 0h-2M6.75 7.5h10.5a2.25 2.25 0 0 1 2.25 2.25v6a2.25 2.25 0 0 1-2.25 2.25H6.75A2.25 2.25 0 0 1 4.5 15.75v-6A2.25 2.25 0 0 1 6.75 7.5Z',
+        human: 'M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.997 0A17.733 17.733 0 0 0 12 19.5c-1.677 0-3.277.23-4.798.618Z',
+        empty: 'M6 12h12'
+    };
+    function glyphSvg(kind, attrs) {
+        return `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.7" stroke="currentColor" aria-hidden="true"${attrs}><path stroke-linecap="round" stroke-linejoin="round" d="${GLYPH[kind]}"/></svg>`;
+    }
+
     // Compact player name card used in the Latest Matches table.
     // Bots jump to /bot/<id>, people to /profile/<username>; both are links.
     // The winner's card carries a small green "W" corner badge.
@@ -292,12 +359,10 @@
             blue: 'bg-blue-100 text-blue-800 hover:bg-blue-200',
             purple: 'bg-purple-100 text-purple-800 hover:bg-purple-200'
         };
-        // Bots wear the cool chip, players the purple one; the person glyph keeps
-        // the distinction readable without relying on colour alone.
+        // Bots wear the cool chip, players the purple one; the glyph keeps the
+        // distinction readable without relying on colour alone.
         const cls = isHuman ? (tones[tone] || tones.blue) : 'bg-teal-100 text-teal-900 hover:bg-teal-200';
-        const glyph = isHuman
-            ? '<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-3.5 h-3.5 mr-1 opacity-80" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.997 0A17.733 17.733 0 0 0 12 19.5c-1.677 0-3.277.23-4.798.618Z"/></svg>'
-            : '';
+        const glyph = glyphSvg(isHuman ? 'human' : 'bot', ' class="w-3.5 h-3.5 mr-1 opacity-80"');
         const badge = isWinner
             ? '<span class="absolute -top-1.5 -right-1.5 flex items-center justify-center w-4 h-4 rounded-full bg-green-500 text-white text-[10px] font-bold shadow" title="Winner">W</span>'
             : '';
@@ -397,7 +462,8 @@
             </div>
         </div>
         <div class="border-t border-gray-200 pt-4">
-            <p class="text-gray-500 text-center py-8">No game tables yet. Create one to get started!</p>
+            <div id="game-tables" class="gt-grid"></div>
+            <p id="game-tables-empty" class="gt-empty">No tables are being set up right now.</p>
         </div>
     </section>
 
@@ -437,20 +503,69 @@
     const modal = document.getElementById('modal-create-table');
     const playerModal = document.getElementById('modal-player-setup');
     const btnCreate = document.getElementById('btn-create-table');
-    const btnCancel = document.getElementById('btn-modal-cancel');
     const btnModalCreate = document.getElementById('btn-modal-create');
     const gameGrid = document.getElementById('game-grid');
     const playerSlots = document.getElementById('player-slots');
     const playerGameName = document.getElementById('player-modal-game-name');
     const lineupNote = document.getElementById('lineup-note');
-    const btnClosePlayerModal = document.getElementById('btn-close-player-modal');
-    const btnBackToGames = document.getElementById('btn-back-to-games');
     const btnStartGame = document.getElementById('btn-start-game');
 
     let selectedGame = null;
     const isAuthenticated = {{ 'true' if current_user.is_authenticated else 'false' }};
     const CURRENT_USERNAME = {{ current_user.username | tojson if current_user.is_authenticated else 'null' }};
     const HUMAN_LABEL = CURRENT_USERNAME || 'Player';
+
+    // --- Game Tables ---------------------------------------------------------
+    // This section is what everyone else sees while a host is still seating a
+    // match, so the server keeps the list and rebroadcasts it. Cards are
+    // display-only until tables become joinable.
+    const gameTables = document.getElementById('game-tables');
+    const gameTablesEmpty = document.getElementById('game-tables-empty');
+
+    function gameTableSeat(seat) {
+        const type = seat && seat.name ? (seat.type === 'human' ? 'human' : 'bot') : 'empty';
+        const role = type === 'human' ? 'Player' : (type === 'bot' ? 'Bot' : 'Waiting');
+        const name = type === 'empty' ? 'Open seat' : seat.name;
+        return `<div class="gt-seat" data-type="${type}">
+                    <span class="gt-role">${role}</span>
+                    <span class="gt-avatar">${glyphSvg(type, ' width="15" height="15"')}</span>
+                    <span class="gt-name">${escapeHtml(name)}</span>
+                </div>`;
+    }
+
+    function renderGameTables(tables) {
+        const list = Array.isArray(tables) ? tables : [];
+        // Names arrive from other users' sockets, so only escapeHtml is trusted
+        // here; no title attributes, which escapeHtml does not quote-escape.
+        gameTables.innerHTML = list.map((t, i) => {
+            const seats = Array.isArray(t.seats) ? t.seats : [];
+            return `<div class="gt-card" style="--i:${i}">
+                        <span class="gt-badge">${escapeHtml(t.game || 'Game')}</span>
+                        <span class="gt-host">by <b>${escapeHtml(t.host || '?')}</b></span>
+                        <div class="gt-top">${gameTableSeat(seats[0])}<span class="gt-net"></span>${gameTableSeat(seats[1])}</div>
+                    </div>`;
+        }).join('');
+        gameTablesEmpty.hidden = list.length > 0;
+    }
+
+    socket.on('tables_update', (data) => renderGameTables((data || {}).tables));
+
+    // openGameTable() runs before the seats are (re)rendered, so the lineup rides
+    // along with table_open instead of a fresh table briefly showing two empty seats.
+    function openGameTable() {
+        if (!selectedGame) return;
+        socket.emit('table_open', { game: selectedGame.name, seats: currentLineup() });
+    }
+
+    function syncGameTable() {
+        if (!selectedGame) return;
+        socket.emit('table_update', { seats: currentLineup() });
+    }
+
+    function closeGameTable() {
+        selectedGame = null;
+        socket.emit('table_close');
+    }
 
     function openDialog(el) { el.classList.remove('hidden'); }
     function closeDialog(el) { el.classList.add('hidden'); }
@@ -500,7 +615,7 @@
             window.location.href = '/login';
             return;
         }
-        selectedGame = null;
+        closeGameTable();
         gameGrid.innerHTML = '';
         openDialog(modal);
         try {
@@ -510,8 +625,6 @@
             renderGameCards([], 'Could not load the game list.');
         }
     });
-
-    btnCancel.addEventListener('click', () => closeDialog(modal));
 
     modal.addEventListener('click', (e) => {
         if (e.target === modal) closeDialog(modal);
@@ -582,6 +695,7 @@
         const stuck = currentLineup().some((s) => s.type === 'bot' && !s.botId);
         btnStartGame.disabled = stuck;
         lineupNote.textContent = stuck ? 'A bot seat still has no bot to pick.' : '';
+        syncGameTable();
     }
 
     function renderPlayerSlots(botOptions, gameId) {
@@ -605,8 +719,9 @@
 
     function showPlayerSetup() {
         playerGameName.textContent = selectedGame.name;
+        openGameTable();
 
-        // Coming back from step 2 keeps the lineup the player already built.
+        // Re-opening the same game after abandoning a table reuses its lineup.
         if (playerSlots.dataset.forGame === String(selectedGame.id) && playerSlots.children.length === 2) {
             updateLineupNote();
             openDialog(playerModal);
@@ -632,23 +747,23 @@
             });
     }
 
-    btnClosePlayerModal.addEventListener('click', () => {
-        closeDialog(playerModal);
-    });
-
-    btnBackToGames.addEventListener('click', () => {
-        closeDialog(playerModal);
-        openDialog(modal);
-    });
-
+    // Every way out of step 2 abandons the table; only "Start game" keeps it,
+    // and that path clears it server-side once the match row exists.
     playerModal.addEventListener('click', (e) => {
-        if (e.target === playerModal) closeDialog(playerModal);
+        if (e.target === playerModal) {
+            closeDialog(playerModal);
+            closeGameTable();
+        }
     });
 
     document.addEventListener('keydown', (e) => {
         if (e.key !== 'Escape') return;
-        if (isDialogOpen(playerModal)) closeDialog(playerModal);
-        else if (isDialogOpen(modal)) closeDialog(modal);
+        if (isDialogOpen(playerModal)) {
+            closeDialog(playerModal);
+            closeGameTable();
+        } else if (isDialogOpen(modal)) {
+            closeDialog(modal);
+        }
     });
 
     btnStartGame.addEventListener('click', async () => {

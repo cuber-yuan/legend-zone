@@ -6,6 +6,7 @@ import json
 from .db import get_db_connection
 from .services.bot_service import player_json_for_bot, player_json_for_human
 from .services.utils import utc_now_iso
+from .home import clear_setup_tables
 
 main_bp = Blueprint('main', __name__)
 
@@ -324,6 +325,9 @@ def api_create_match():
                 (match_id, game['name'], json.dumps(players_map), 'playing', utc_now_iso())
             )
             conn.commit()
+        # The match now exists, so this host's setup table is no longer a table
+        # being set up. Cleared server-side because the browser redirects away.
+        clear_setup_tables(current_user.id)
         return jsonify({'match_id': match_id, 'game_name': game['name']})
     except Exception as e:
         print(f"Error creating match: {e}")
