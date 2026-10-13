@@ -34,23 +34,14 @@ class SnakeScene extends Phaser.Scene {
         this.turn = 0;
     }
 
-    preload() {
-        const assetPath = '/static/snake/assets/';
-        const colors = ['red', 'blue'];
-        colors.forEach(color => {
-            this.load.image(`head_${color}_nodir`, `${assetPath}head_${color}_nodir.png`);
-            this.load.image(`head_${color}_dir0`, `${assetPath}head_${color}_dir0.png`);
-            this.load.image(`tail_${color}_dir0`, `${assetPath}tail_${color}_dir0.png`);
-            this.load.image(`body_${color}_dir0`, `${assetPath}body_${color}_dir0.png`);
-            this.load.image(`body_${color}_dir01`, `${assetPath}body_${color}_dir01.png`);
-        });
-        this.load.image('stone', `${assetPath}stone.png`);
-    }
-
     create() {
-        this.obstacleLayer = this.add.group();
-        this.snake1Layer = this.add.group();
-        this.snake2Layer = this.add.group();
+        this.boardLayer = this.add.graphics();
+        this.obstacleLayer = this.add.graphics();
+        this.snake1Layer = this.add.graphics();
+        this.snake2Layer = this.add.graphics();
+        this.waitingText = this.add.text(this.scale.width / 2, this.scale.height / 2, 'Waiting for match…', {
+            fontFamily: 'system-ui, sans-serif', fontSize: '15px', color: '#94a3b8'
+        }).setOrigin(0.5);
     }
 
     updateFromState(state) {
@@ -67,6 +58,7 @@ class SnakeScene extends Phaser.Scene {
     }
 
     drawInitialState(state) {
+        if (this.waitingText) { this.waitingText.destroy(); this.waitingText = null; }
         this.fieldWidth = state.width;
         this.fieldHeight = state.height;
         this.obstacles = state.obstacle;
@@ -78,7 +70,7 @@ class SnakeScene extends Phaser.Scene {
 
     applyActions(actions) {
         this.turn += 1;
-        // Directions: 0=left, 1=down, 2=right, 3=up
+        // Directions: 0=up, 1=right, 2=down, 3=left
         const directions = [
             { x: -1, y: 0 },
             { x: 0, y: 1 },
@@ -116,68 +108,144 @@ class SnakeScene extends Phaser.Scene {
         this.renderAll();
     }
 
-    renderAll() {
-        this.obstacleLayer.clear(true, true);
-        this.snake1Layer.clear(true, true);
-        this.snake2Layer.clear(true, true);
-
-        // Render obstacles
-        this.obstacles.forEach(obs => {
-            const x = (obs.x - 1 + 0.5) * this.CELL_SIZE;
-            const y = (obs.y - 1 + 0.5) * this.CELL_SIZE;
-            const sprite = this.add.sprite(y, x, 'stone');
-            sprite.setDisplaySize(this.CELL_SIZE, this.CELL_SIZE);
-            this.obstacleLayer.add(sprite);
-        });
-
-        // Render snakes
-        this.renderSnake(this.snake1, 'blue', this.snake1Layer);
-        this.renderSnake(this.snake2, 'red', this.snake2Layer);
-    }
-
-    renderSnake(snake, color, layer) {
-        const dirToAngle = [90, 180, 270, 0];
-        for (let i = 0; i < snake.length; i++) {
-            const segment = snake[i];
-            const x = (segment.x - 1 + 0.5) * this.CELL_SIZE;
-            const y = (segment.y - 1 + 0.5) * this.CELL_SIZE;
-            let spriteKey = '';
-            let angle = 0;
-            if (i === 0) {
-                spriteKey = segment.dir === -1 ? `head_${color}_nodir` : `head_${color}_dir0`;
-                if (segment.dir !== -1) angle = dirToAngle[segment.dir];
-            } else if (i === snake.length - 1 && snake.length > 1) {
-                const prevSegment = snake[i - 1];
-                spriteKey = `tail_${color}_dir0`;
-                angle = dirToAngle[prevSegment.dir];
-            } else {
-                const prevSegment = snake[i - 1];
-                if (prevSegment.dir === segment.dir || (prevSegment.dir + 2) % 4 === segment.dir) {
-                    spriteKey = `body_${color}_dir0`;
-                    angle = dirToAngle[segment.dir];
-                } else {
-                    const inDir = (segment.dir + 2) % 4;
-                    const outDir = prevSegment.dir;
-                    spriteKey = `body_${color}_dir01`;
-                    if ((inDir + 1) % 4 === outDir) {
-                        angle = dirToAngle[inDir];
-                    } else if ((inDir + 3) % 4 === outDir) {
-                        angle = dirToAngle[outDir];
-                    }
-                    const sprite = this.add.sprite(y, x, spriteKey);
-                    sprite.setDisplaySize(this.CELL_SIZE, this.CELL_SIZE);
-                    sprite.setAngle(angle);
-                    layer.add(sprite);
-                    continue;
-                }
-            }
-            if (spriteKey) {
-                const sprite = this.add.sprite(y, x, spriteKey);
-                sprite.setDisplaySize(this.CELL_SIZE, this.CELL_SIZE);
-                sprite.setAngle(angle);
-                layer.add(sprite);
+    renderBoard() {
+        const g = this.boardLayer;
+        const c = this.CELL_SIZE;
+        g.clear();
+        g.fillStyle(0x111f32);
+        g.fillRect(0, 0, this.scale.width, this.scale.height);
+        for (let row = 0; row < this.fieldHeight; row++) {
+            for (let col = 0; col < this.fieldWidth; col++) {
+                g.fillStyle((row + col) % 2 ? 0x1b2c42 : 0x19293e);
+                g.fillRoundedRect(col * c + c * 0.035, row * c + c * 0.035,
+                    c * 0.93, c * 0.93, c * 0.09);
             }
         }
+    }
+
+    renderAll() {
+        const g = this.obstacleLayer;
+        const c = this.CELL_SIZE;
+        g.clear();
+        this.obstacles.forEach(obs => {
+            const x = (obs.y - 0.5) * c;
+            const y = (obs.x - 0.5) * c;
+            g.fillStyle(0x080f1c, 0.45);
+            g.fillRoundedRect(x - c * 0.38, y - c * 0.32, c * 0.76, c * 0.76, c * 0.15);
+            g.fillStyle(0x64748b);
+            g.fillRoundedRect(x - c * 0.38, y - c * 0.38, c * 0.76, c * 0.72, c * 0.15);
+            g.fillStyle(0x94a3b8);
+            g.fillRoundedRect(x - c * 0.38, y - c * 0.38, c * 0.76, c * 0.62, c * 0.15);
+            g.lineStyle(Math.max(1, c * 0.025), 0xcbd5e1, 0.6);
+            g.lineBetween(x - c * 0.23, y - c * 0.25, x + c * 0.18, y - c * 0.25);
+        });
+        this.renderSnake(this.snake1, { body: 0x4198f5, light: 0xb8e0ff }, this.snake1Layer);
+        this.renderSnake(this.snake2, { body: 0xf16c7b, light: 0xffd1d6 }, this.snake2Layer);
+    }
+
+    renderSnake(snake, palette, g) {
+        g.clear();
+        if (!snake.length) return;
+        const c = this.CELL_SIZE;
+        // State coordinates are one-based: x is row and y is column.
+        const points = snake.map(segment => ({ x: (segment.y - 0.5) * c, y: (segment.x - 0.5) * c }));
+        const radius = () => c * 0.19;
+        // A connected silhouette keeps corners seamless; a tapered end marks the tail.
+        const drawBody = (color, offset, alpha = 1) => {
+            g.fillStyle(color, alpha);
+            for (let i = points.length - 1; i >= 0; i--) {
+                const p = points[i];
+                const r = radius(i);
+                if (i > 0) {
+                    const q = points[i - 1];
+                    const qr = radius(i - 1);
+                    const angle = Math.atan2(q.y - p.y, q.x - p.x);
+                    const nx = -Math.sin(angle), ny = Math.cos(angle);
+                    if (i === points.length - 1) {
+                        // Curved edges start tangent to the body and taper gradually into a soft tip.
+                        const length = Math.hypot(p.x - q.x, p.y - q.y) + c * 0.16;
+                        const tx = -Math.cos(angle), ty = -Math.sin(angle);
+                        const edges = [[], []];
+                        for (let step = 0; step <= 24; step++) {
+                            const t = step / 24;
+                            const width = r * (1 - t * t);
+                            const bend = Math.sin(Math.PI * t) ** 2 * c * 0.055;
+                            const x = q.x + tx * length * t + nx * bend;
+                            const y = q.y + ty * length * t + ny * bend + offset;
+                            edges[0].push({ x: x + nx * width, y: y + ny * width });
+                            edges[1].push({ x: x - nx * width, y: y - ny * width });
+                        }
+                        g.fillPoints([...edges[0], ...edges[1].reverse()], true);
+                        continue;
+                    }
+                    g.fillPoints([
+                        { x: p.x + nx * r, y: p.y + ny * r + offset },
+                        { x: q.x + nx * qr, y: q.y + ny * qr + offset },
+                        { x: q.x - nx * qr, y: q.y - ny * qr + offset },
+                        { x: p.x - nx * r, y: p.y - ny * r + offset }
+                    ], true);
+                }
+                g.fillCircle(p.x, p.y + offset, r);
+            }
+        };
+        drawBody(0x080f1c, c * 0.055, 0.5);
+        drawBody(palette.body, 0);
+        // Small chevrons follow the body toward the head, recalling the original sprites.
+        const chevron = (p, direction) => {
+            const nx = -direction.y, ny = direction.x;
+            g.lineStyle(Math.max(0.7, c * 0.025), palette.light, 0.5);
+            g.beginPath();
+            g.moveTo(p.x - direction.x * c * 0.045 + nx * c * 0.065,
+                p.y - direction.y * c * 0.045 + ny * c * 0.065);
+            g.lineTo(p.x + direction.x * c * 0.035, p.y + direction.y * c * 0.035);
+            g.lineTo(p.x - direction.x * c * 0.045 - nx * c * 0.065,
+                p.y - direction.y * c * 0.045 - ny * c * 0.065);
+            g.strokePath();
+        };
+        for (let i = 1; i < points.length - 1; i++) {
+            const p = points[i], q = points[i - 1];
+            const distance = Math.hypot(q.x - p.x, q.y - p.y);
+            const direction = { x: (q.x - p.x) / distance, y: (q.y - p.y) / distance };
+            for (const t of [0.25, 0.7]) {
+                if (i === 1 && t > 0.5) continue;
+                chevron({ x: p.x + (q.x - p.x) * t, y: p.y + (q.y - p.y) * t }, direction);
+            }
+        }
+        const head = points[0];
+        const drawEye = (x, y, lookX = 0, lookY = 0) => {
+            g.fillStyle(0xf8fafc);
+            g.fillCircle(x, y, c * 0.06);
+            g.fillStyle(0x15253b);
+            g.fillCircle(x + lookX * c * 0.02, y + lookY * c * 0.02, c * 0.034);
+        };
+        if (snake[0].dir === -1) {
+            // Spawn with a round head and centered pupils before a heading is chosen.
+            g.fillStyle(palette.body);
+            g.fillCircle(head.x, head.y, c * 0.29);
+            drawEye(head.x - c * 0.11, head.y - c * 0.04);
+            drawEye(head.x + c * 0.11, head.y - c * 0.04);
+            return;
+        }
+        const vectors = [{ x: 0, y: -1 }, { x: 1, y: 0 }, { x: 0, y: 1 }, { x: -1, y: 0 }];
+        const direction = vectors[snake[0].dir] || vectors[1];
+        const localPoint = (forward, side) => ({
+            x: head.x + c * (direction.x * forward - direction.y * side),
+            y: head.y + c * (direction.y * forward + direction.x * side)
+        });
+        // A symmetric top-down silhouette rotates with the movement direction.
+        const headShape = [];
+        for (let step = 0; step < 40; step++) {
+            const angle = step * Math.PI * 2 / 40;
+            headShape.push(localPoint(Math.cos(angle) * 0.37 + 0.025, Math.sin(angle) * 0.255));
+        }
+        g.fillStyle(palette.body);
+        g.fillPoints(headShape, true);
+        for (const side of [-1, 1]) {
+            const eye = localPoint(0.16, side * 0.135);
+            drawEye(eye.x, eye.y, direction.x, direction.y);
+        }
+
+
     }
 }
 
@@ -271,7 +339,7 @@ socket.on('game_started', (data) => {
         gameoverAudio.pause();
         gameoverAudio.currentTime = 0;
         bgmAudio.currentTime = 0;
-        bgmAudio.play();
+        _tryPlay(bgmAudio);
     } else {
         console.error("SnakeScene or its updateFromState method is not available!");
     }
@@ -293,7 +361,7 @@ socket.on('update', (data) => {
     }
     const fc = document.getElementById('floating-corner');
     if (fc && canSteer()) fc.classList.remove('hidden');
-    moveAudio.play();
+    _tryPlay(moveAudio);
 });
 
 socket.on('finish', (data) => {
@@ -313,8 +381,8 @@ socket.on('finish', (data) => {
         bgmAudio.pause();
         bgmAudio.currentTime = 0;
     }
-    explosionAudio.play();
-    gameoverAudio.play();
+    _tryPlay(explosionAudio);
+    _tryPlay(gameoverAudio);
     let winner = data.winner;
     let msg = winner == 0 ? 'Blue wins!' : (winner == 1 ? 'Red wins!' : 'Draw!');
     if (data.error_msg) msg = data.error_msg;
@@ -442,22 +510,29 @@ function startReplay(displays, winner) {
 
 // --- Canvas Resize ---
 function resizeCanvas() {
+    if (!phaserGame) return;
     const scene = phaserGame.scene.getScene('SnakeScene');
-    // Add a guard to prevent running with invalid dimensions
-    if (!scene || !scene.fieldWidth || !scene.fieldHeight) {
-        
+    if (!scene || !scene.sys.isActive()) return;
+    const container = document.getElementById('phaser-container');
+    // Size against the frame's content area, including mobile card padding.
+    const availableWidth = container.parentElement.clientWidth - 16;
+    if (!scene.fieldWidth || !scene.fieldHeight) {
+        const size = Math.max(1, Math.floor(availableWidth));
+        container.style.width = container.style.height = size + 'px';
+        scene.scale.resize(size, size);
+        if (scene.waitingText) scene.waitingText.setPosition(size / 2, size / 2);
         return;
     }
-    const maxScreenWidth = Math.min(window.innerWidth * 0.95, 900);
-    const cellSize = Math.floor(maxScreenWidth / scene.fieldWidth);
+    const cellSize = Math.max(1, Math.floor(availableWidth / scene.fieldWidth));
     const canvasWidth = cellSize * scene.fieldWidth;
     const canvasHeight = cellSize * scene.fieldHeight;
-    const container = document.getElementById('phaser-container');
     container.style.width = canvasWidth + 'px';
     container.style.height = canvasHeight + 'px';
     scene.scale.resize(canvasWidth, canvasHeight);
     scene.CELL_SIZE = cellSize;
+    scene.renderBoard();
     scene.renderAll();
+    if (maskText) showPhaserMask(maskText.text);
 }
 
 // --- Event Listeners & Initialization ---
@@ -467,11 +542,13 @@ window.addEventListener('resize', () => {
 
 document.addEventListener('DOMContentLoaded', () => {
     // Phaser initialization
+    CANVAS_SIZE = Math.floor(document.querySelector('.snake-board-frame').clientWidth - 16);
     const config = {
         type: Phaser.AUTO,
         width: CANVAS_SIZE,
         height: CANVAS_SIZE,
         parent: 'phaser-container',
+        backgroundColor: '#19293e',
         scene: [SnakeScene]
     };
     phaserGame = new Phaser.Game(config);

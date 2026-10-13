@@ -4,29 +4,12 @@
 {% block title %}{% if match_id %}Watch Match{% else %}{{ guide_game }}{% endif %}{% endblock %}
 
 {% block floating_corner %}
-<div id="floating-corner"
-  class="fixed bottom-6 right-6 z-50 bg-white bg-opacity-90 rounded-lg shadow-lg px-4 py-3 border border-gray-300 flex flex-col items-center block lg:hidden hidden"
-  style="min-width:180px; min-height:80px;">
-  <div style="display: flex; flex-direction: column; align-items: center;">
-    <button id="arrow-up" style="background: none; border: none; padding: 4px; margin-bottom: 4px;">
-      <img src="{{ url_for('static', filename='snake/assets/arrow.png') }}" alt="Up"
-        style="width:32px; transform: rotate(-90deg);">
-    </button>
-    <div style="display: flex; flex-direction: row; justify-content: center;">
-      <button id="arrow-left" style="background: none; border: none; padding: 4px; margin-right: 48px;">
-        <img src="{{ url_for('static', filename='snake/assets/arrow.png') }}" alt="Left"
-          style="width:32px; transform: rotate(180deg);">
-      </button>
-      <button id="arrow-right" style="background: none; border: none; padding: 4px;">
-        <img src="{{ url_for('static', filename='snake/assets/arrow.png') }}" alt="Right"
-          style="width:32px; transform: rotate(0deg);">
-      </button>
-    </div>
-    <button id="arrow-down" style="background: none; border: none; padding: 4px; margin-top: 4px;">
-      <img src="{{ url_for('static', filename='snake/assets/arrow.png') }}" alt="Down"
-        style="width:32px; transform: rotate(90deg);">
-    </button>
-  </div>
+<div id="floating-corner" class="snake-direction-pad fixed bottom-6 right-6 z-50 lg:hidden hidden" aria-label="Movement controls">
+  {% for direction, rotation in [('up', -90), ('left', 180), ('down', 90), ('right', 0)] %}
+  <button id="arrow-{{ direction }}" type="button" aria-label="Move {{ direction }}" style="grid-area:{{ direction }};">
+    <svg viewBox="0 0 24 24" aria-hidden="true" style="transform:rotate({{ rotation }}deg);"><path d="M5 12h14m-6-6 6 6-6 6"/></svg>
+  </button>
+  {% endfor %}
 </div>
 {% endblock %}
 
@@ -42,53 +25,29 @@
 <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/prism.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-python.min.js"></script>
 
-<style>
-  .spectator-badge {
-    display: none;
-    text-align: center;
-    margin-top: 0.5rem;
-    padding: 0.3rem 0.8rem;
-    background: #fef3c7;
-    color: #92400e;
-    border-radius: 0.25rem;
-    font-size: 0.85rem;
-    max-width: 200px;
-    margin-left: auto;
-    margin-right: auto;
-  }
-  .turn-hint {
-    display: none;
-    text-align: center;
-    margin-top: 0.5rem;
-    padding: 0.3rem 0.8rem;
-    background: #dbeafe;
-    color: #1e40af;
-    border-radius: 0.25rem;
-    font-size: 0.85rem;
-    max-width: 320px;
-    margin-left: auto;
-    margin-right: auto;
-  }
-</style>
 
-<div class="bg-gray-100 py-10">
+
+<div class="snake-page">
   <div class="max-w-screen-xl mx-auto">
-    <!-- Game Canvas Section -->
-    <div style="display:flex; justify-content:center;">
-      <div id="phaser-container"
-        style="width:100%; max-width:600px; height:100%; display:flex; justify-content:center;">
+    <section class="snake-arena" aria-label="{{ guide_game }} game board">
+      <div class="snake-heading">
+        <h1>{{ guide_game }}</h1>
+        <div class="snake-legend" aria-label="Snake colors">
+          <span><i class="snake-dot snake-dot-blue"></i>Blue</span>
+          <span><i class="snake-dot snake-dot-red"></i>Red</span>
+        </div>
       </div>
-    </div>
-    <br>
-
-    {% if not match_id %}
-    <div style="text-align:center;">
-      <p id="turnCounter" class="mt-4 text-lg font-semibold">Turn: 0</p>
-    </div>
-    {% endif %}
-
-    <div id="spectatorBadge" class="spectator-badge">Spectating</div>
-    <div id="turnHint" class="turn-hint"></div>
+      <div class="snake-stage">
+        <div class="snake-board-frame">
+          <div id="phaser-container"></div>
+        </div>
+      </div>
+      <div class="snake-footer">
+        {% if not match_id %}<p id="turnCounter">Turn: 0</p>{% endif %}
+        <div id="spectatorBadge" class="spectator-badge">Spectating</div>
+        <div id="turnHint" class="turn-hint"></div>
+      </div>
+    </section>
 
     {% set replay_unit = "Turn" %}
     {% include "components/replay_controls.html" %}
@@ -106,70 +65,4 @@ const MATCH_STATUS = "{{ match.status if match_id and match else '' }}";
 const MATCH_GAME_NAME = "{{ match.game if match_id and match else '' }}";
 </script>
 
-{% if not match_id %}
-<script>
-  // Control parameters
-  let maxTurn = 100;
-  let currentTurn = 0;
-  let playing = false;
-  let playInterval = null;
-
-  const playBtn = document.getElementById('turn-play-btn');
-  const playIcon = document.getElementById('turn-play-icon');
-  const pauseIcon = document.getElementById('turn-pause-icon');
-  const progressBar = document.getElementById('turn-progress-bar');
-  const progressFill = document.getElementById('turn-progress-fill');
-  const progressKnob = document.getElementById('turn-progress-knob');
-  const progressLabel = document.getElementById('turn-progress-label');
-
-  function updateProgressBar() {
-    const percent = (currentTurn / maxTurn) * 100;
-    progressFill.style.width = percent + '%';
-    progressKnob.style.left = `calc(${percent}% )`;
-    progressLabel.textContent = currentTurn;
-  }
-  updateProgressBar();
-
-  playBtn.onclick = function() {
-    playing = !playing;
-    playIcon.style.display = playing ? 'none' : '';
-    pauseIcon.style.display = playing ? '' : 'none';
-    if (playing) {
-      playInterval = setInterval(() => {
-        if (currentTurn < maxTurn) {
-          currentTurn++;
-          updateProgressBar();
-        } else {
-          playing = false;
-          playIcon.style.display = '';
-          pauseIcon.style.display = 'none';
-          clearInterval(playInterval);
-        }
-      }, 400);
-    } else {
-      clearInterval(playInterval);
-    }
-  };
-
-  progressBar.onclick = function(e) {
-    const rect = progressBar.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const percent = Math.max(0, Math.min(1, x / rect.width));
-    currentTurn = Math.round(percent * maxTurn);
-    updateProgressBar();
-  };
-
-  window.setTurnProgressMax = function(n) {
-    maxTurn = n;
-    updateProgressBar();
-  };
-  window.setTurnProgress = function(n) {
-    currentTurn = Math.max(0, Math.min(maxTurn, n));
-    updateProgressBar();
-  };
-  window.getTurnProgress = function() {
-    return currentTurn;
-  };
-</script>
-{% endif %}
 {% endblock %}
