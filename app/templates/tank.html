@@ -13,237 +13,50 @@
 <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/prism.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-python.min.js"></script>
 
-<style>
-  canvas {
-    background: #c2d1a2; /* A grassy green for tanks */
-    margin-top: 20px;
-    border: 2px solid #333;
-  }
+<link rel="stylesheet" href="{{ url_for('static', filename='tank2/tank2.css') }}">
 
-  /* --- Orders status line --- */
-  .order-bar {
-    display: none;
-    max-width: 600px;
-    margin: 10px auto 0;
-    align-items: center;
-    justify-content: center;
-    gap: 10px;
-    font-size: 0.68rem;
-    font-weight: 700;
-    letter-spacing: 0.16em;
-    text-transform: uppercase;
-    color: #374151;
-  }
-  .order-bar.show { display: flex; }
-  .order-bar .ob-seat { color: #1d4ed8; }
-  .order-bar .ob-count {
-    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-    letter-spacing: 0.06em;
-    padding: 2px 9px;
-    border-radius: 999px;
-    background: #eef2ff;
-    border: 1px solid #c7d2fe;
-    color: #3730a3;
-  }
-  .order-bar.locked { color: #065f46; }
-  .order-bar.locked .ob-seat { color: #047857; }
-  .order-bar.locked .ob-count { background: #ecfdf5; border-color: #a7f3d0; color: #047857; }
-
-  /* --- Hover orders: the keys land on the board's own cells around the tank --- */
-  .tank-pad {
-    --cell: 60px;
-    display: none;
-    position: absolute;
-    z-index: 30;
-    width: calc(var(--cell) * 3);
-    height: calc(var(--cell) * 3);
-    pointer-events: none;
-  }
-  .tank-pad::before {
-    /* Dimmed halo so the hardware reads against the grass */
-    content: '';
-    position: absolute;
-    inset: 4%;
-    border-radius: 50%;
-    background: radial-gradient(circle, rgba(11, 16, 22, 0.66) 0%, rgba(11, 16, 22, 0.36) 56%, rgba(11, 16, 22, 0) 74%);
-  }
-  .tank-pad .tp-cell {
-    position: absolute;
-    width: var(--cell);
-    height: var(--cell);
-    display: grid;
-    place-items: center;
-  }
-  .tp-cell--up { top: 0; left: var(--cell); }
-  .tp-cell--down { top: calc(var(--cell) * 2); left: var(--cell); }
-  .tp-cell--left { top: var(--cell); left: 0; }
-  .tp-cell--right { top: var(--cell); left: calc(var(--cell) * 2); }
-  .tp-cell--core { top: var(--cell); left: var(--cell); }
-
-  .tp-key {
-    pointer-events: auto;
-    width: calc(var(--cell) * 0.62);
-    height: calc(var(--cell) * 0.62);
-    display: grid;
-    place-items: center;
-    border: 1px solid rgba(255, 255, 255, 0.22);
-    border-radius: calc(var(--cell) * 0.16);
-    background: linear-gradient(165deg, #4f5c6b 0%, #2f3944 60%, #262f38 100%);
-    color: #f3f4f6;
-    font-size: calc(var(--cell) * 0.26);
-    line-height: 1;
-    cursor: pointer;
-    box-shadow:
-      0 calc(var(--cell) * 0.06) 0 #151b21,
-      0 calc(var(--cell) * 0.13) calc(var(--cell) * 0.2) rgba(0, 0, 0, 0.45),
-      inset 0 1px 0 rgba(255, 255, 255, 0.22);
-    transition: transform 0.1s ease, box-shadow 0.1s ease, background 0.15s ease, color 0.15s ease;
-    animation: keyDeploy 0.2s ease backwards;
-    animation-delay: calc(var(--i, 0) * 35ms);
-  }
-  .tp-key:hover:not(:disabled) {
-    transform: translateY(-2px);
-    background: linear-gradient(165deg, #617183 0%, #3a4653 60%, #2c353f 100%);
-  }
-  .tp-key:active:not(:disabled) {
-    transform: translateY(2px);
-    box-shadow: 0 1px 0 #151b21, inset 0 2px 6px rgba(0, 0, 0, 0.5);
-  }
-  .tp-key:disabled {
-    opacity: 0.24;
-    cursor: not-allowed;
-    box-shadow: 0 2px 0 #151b21;
-  }
-  .tp-key:focus-visible, .tp-core:focus-visible, .tp-hold:focus-visible {
-    outline: 2px solid #fbbf24;
-    outline-offset: 2px;
-  }
-  .tank-pad.armed .tp-key { color: #fecaca; border-color: rgba(248, 113, 113, 0.55); }
-  .tank-pad.armed .tp-key:hover:not(:disabled) { background: linear-gradient(165deg, #7f3d3d, #451f1f); }
-
-  .tp-core {
-    pointer-events: auto;
-    width: calc(var(--cell) * 0.86);
-    height: calc(var(--cell) * 0.86);
-    border-radius: 50%;
-    border: calc(var(--cell) * 0.05) solid #f59e0b;
-    background: transparent;
-    cursor: pointer;
-    display: grid;
-    place-items: center;
-    box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.4), 0 0 18px rgba(245, 158, 11, 0.5);
-    transition: border-color 0.15s ease, transform 0.12s ease;
-    animation: keyDeploy 0.2s ease backwards;
-  }
-  .tp-core:hover { transform: scale(1.07); }
-  .tp-core .tp-muzzle {
-    width: calc(var(--cell) * 0.16);
-    height: calc(var(--cell) * 0.16);
-    border-radius: 50%;
-    background: #f59e0b;
-    box-shadow: 0 0 10px rgba(245, 158, 11, 0.9);
-    transition: background 0.15s ease, box-shadow 0.15s ease;
-  }
-  .tank-pad.armed .tp-core { border-color: #ef4444; animation: corePulse 1.15s ease-in-out infinite; }
-  .tank-pad.armed .tp-muzzle { background: #ef4444; box-shadow: 0 0 12px rgba(239, 68, 68, 0.95); }
-
-  .tp-caption {
-    position: absolute;
-    top: calc(var(--cell) * 3);
-    left: 50%;
-    transform: translateX(-50%);
-    display: flex;
-    align-items: center;
-    gap: 7px;
-    padding: 3px 10px;
-    border-radius: 999px;
-    background: rgba(11, 16, 22, 0.88);
-    border: 1px solid rgba(255, 255, 255, 0.16);
-    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4);
-    font-size: 0.6rem;
-    font-weight: 700;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    color: #e5e7eb;
-    white-space: nowrap;
-  }
-  .tank-pad.tp-flip .tp-caption { top: auto; bottom: calc(var(--cell) * 3); }
-  .tp-caption .tp-coord {
-    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-    letter-spacing: 0;
-    text-transform: none;
-    color: #94a3b8;
-  }
-  .tp-caption .tp-mode { color: #fbbf24; }
-  .tank-pad.armed .tp-caption .tp-mode { color: #f87171; }
-  .tp-hold {
-    pointer-events: auto;
-    border: 1px solid rgba(255, 255, 255, 0.24);
-    border-radius: 999px;
-    background: transparent;
-    color: #e5e7eb;
-    padding: 1px 8px;
-    font-size: 0.55rem;
-    font-weight: 700;
-    letter-spacing: 0.14em;
-    text-transform: uppercase;
-    cursor: pointer;
-  }
-  .tp-hold:hover:not(:disabled) { background: rgba(255, 255, 255, 0.12); }
-  .tp-hold:disabled { opacity: 0.3; cursor: not-allowed; }
-
-  @keyframes keyDeploy { from { opacity: 0; transform: scale(0.6); } to { opacity: 1; transform: none; } }
-  @keyframes corePulse {
-    0%, 100% { box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.4), 0 0 14px rgba(239, 68, 68, 0.55); }
-    50% { box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.4), 0 0 28px rgba(239, 68, 68, 0.95); }
-  }
-  @media (prefers-reduced-motion: reduce) {
-    .tp-key, .tp-core { animation: none !important; transition: none !important; }
-  }
-
-  /* --- Responsive Layout Control (from Gomoku) --- */
-</style>
-
-<div class="bg-gray-100 py-10">
+<div class="tank-page">
   <div class="max-w-screen-xl mx-auto">
-    <!-- Match page: player names -->
-    {% if match_id and match %}
-    <div style="display:flex;justify-content:space-between;max-width:600px;margin:0 auto 8px;">
-      <span id="bluePlayerName" style="font-weight:600;color:#2563eb;">Top Player</span>
-      <span id="spectatorBadge" style="display:none;background:#f59e0b;color:#fff;padding:2px 10px;border-radius:9999px;font-size:0.75rem;">Spectator</span>
-      <span id="redPlayerName" style="font-weight:600;color:#dc2626;">Bottom Player</span>
-    </div>
-    {% endif %}
-
-    <!-- Game Canvas Section -->
-    <div style="position:relative;width:100%;max-width:600px;height:auto;margin:auto;box-sizing:border-box;">
-      <div id="phaser-container" style="width:100%;height:100%;"></div>
-      <!-- Orders cluster: keys sit on the cells around the hovered tank -->
-      <div id="tankPad" class="tank-pad" role="group" aria-label="Tank orders">
-        <span class="tp-cell tp-cell--up"><button type="button" class="tp-key" data-act="0" style="--i:1" aria-label="Move up" title="Move up">&#9650;</button></span>
-        <span class="tp-cell tp-cell--right"><button type="button" class="tp-key" data-act="1" style="--i:2" aria-label="Move right" title="Move right">&#9654;</button></span>
-        <span class="tp-cell tp-cell--down"><button type="button" class="tp-key" data-act="2" style="--i:3" aria-label="Move down" title="Move down">&#9660;</button></span>
-        <span class="tp-cell tp-cell--left"><button type="button" class="tp-key" data-act="3" style="--i:4" aria-label="Move left" title="Move left">&#9664;</button></span>
-        <span class="tp-cell tp-cell--core">
-          <button type="button" class="tp-core" id="tpArm" aria-label="Toggle fire mode" title="Toggle fire mode"><span class="tp-muzzle"></span></button>
-        </span>
-        <div class="tp-caption">
-          <span id="tpTag">Tank 1</span>
-          <span class="tp-coord" id="tpCoord"></span>
-          <span class="tp-mode" id="tpMode">move</span>
-          <button type="button" class="tp-hold" id="tpHold" title="Hold position">hold</button>
+    <section class="tank-arena" aria-label="Tank Battle game board">
+      <div class="tank-heading">
+        <h1>Tank Battle</h1>
+        <p id="turnCounter">Turn: 1</p>
+      </div>
+      {% if match_id and match %}
+      <div class="tank-players">
+        <span id="bluePlayerName" class="tank-player">Top Player</span>
+        <span id="spectatorBadge" class="tank-spectator">Spectator</span>
+        <span id="redPlayerName" class="tank-player">Bottom Player</span>
+      </div>
+      {% endif %}
+      <div class="tank-stage">
+        <div class="tank-board-frame">
+          <div class="tank-board-wrap">
+            <div id="phaser-container"></div>
+            <!-- Orders cluster: keys sit on the cells around the hovered tank -->
+            <div id="tankPad" class="tank-pad" role="group" aria-label="Tank orders">
+              <span class="tp-cell tp-cell--up"><button type="button" class="tp-key" data-act="0" style="--i:1" aria-label="Move up" title="Move up">&#9650;</button></span>
+              <span class="tp-cell tp-cell--right"><button type="button" class="tp-key" data-act="1" style="--i:2" aria-label="Move right" title="Move right">&#9654;</button></span>
+              <span class="tp-cell tp-cell--down"><button type="button" class="tp-key" data-act="2" style="--i:3" aria-label="Move down" title="Move down">&#9660;</button></span>
+              <span class="tp-cell tp-cell--left"><button type="button" class="tp-key" data-act="3" style="--i:4" aria-label="Move left" title="Move left">&#9664;</button></span>
+              <span class="tp-cell tp-cell--core">
+                <button type="button" class="tp-core" id="tpArm" aria-label="Toggle fire mode" title="Toggle fire mode"><span class="tp-muzzle"></span></button>
+              </span>
+              <div class="tp-caption">
+                <span id="tpTag">Tank 1</span>
+                <span class="tp-coord" id="tpCoord"></span>
+                <span class="tp-mode" id="tpMode">move</span>
+                <button type="button" class="tp-hold" id="tpHold" title="Hold position">hold</button>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
-    </div>
-    <br>
-    <div style="text-align:center;">
-        <p id="turnCounter" class="mt-4 text-lg font-semibold">Turn: 1</p>
-    </div>
-
-    <div id="orderBar" class="order-bar">
-      <span class="ob-seat" id="obSeat"></span>
-      <span class="ob-count" id="obCount"></span>
-    </div>
+      <div id="orderBar" class="order-bar">
+        <span class="ob-seat" id="obSeat"></span>
+        <span class="ob-count" id="obCount"></span>
+      </div>
+    </section>
 
     <!-- Replay Controls (match page only) -->
     {% if match_id %}
@@ -272,8 +85,8 @@ let gameOver = false;
 const socket = io('/tank2');
 
 function getCanvasSize() {
-  const padding = window.innerWidth < 600 ? 24 : 70;
-  return Math.min(window.innerWidth - padding, 600);
+  const wrap = document.querySelector('.tank-board-wrap');
+  return Math.max(9, Math.floor(wrap.clientWidth));
 }
 let CANVAS_SIZE = getCanvasSize();
 let phaserGame;
@@ -760,6 +573,10 @@ window.addEventListener('resize', () => {
   CANVAS_SIZE = getCanvasSize();
   if (phaserGame) {
     phaserGame.scale.resize(CANVAS_SIZE, CANVAS_SIZE);
+    const scene = tankScene();
+    if (scene && scene.sys.isActive()) scene.resizeBoard();
+    if (maskText) showPhaserMask(maskText.text);
+    renderCommandPanel();
   }
 });
 
@@ -770,6 +587,7 @@ document.addEventListener('DOMContentLoaded', () => {
         width: CANVAS_SIZE,
         height: CANVAS_SIZE,
         parent: 'phaser-container',
+        backgroundColor: '#233b34',
         scene: [TankScene]
     };
     phaserGame = new Phaser.Game(config);

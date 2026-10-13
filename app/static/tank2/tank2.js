@@ -1,5 +1,4 @@
-// This script is loaded by tank.html after the Phaser game object is created.
-// The 'mainScene' variable is globally available and points to the main Phaser scene.
+// Shared Tank Battle scene for live games and match replays.
 
 const FIELD_WIDTH = 9, FIELD_HEIGHT = 9;
 const INIT_TANKS = [
@@ -114,6 +113,7 @@ class TankScene extends Phaser.Scene {
     // tank at a time, so this is how the outstanding one stays visible.
     setOrderMarks(marks) {
         if (!this.markLayer) return;
+        this.orderMarks = marks || [];
         this.markLayer.clear(true, true);
         const colors = { move: 0xf59e0b, fire: 0xef4444, hold: 0x9ca3af };
         (marks || []).forEach((m) => {
@@ -137,33 +137,122 @@ class TankScene extends Phaser.Scene {
         });
     }
 
-    preload() {
-        const assetPath = '/static/tank2/assets/';
-        this.load.image('brick', assetPath + 'brick.png');
-        this.load.image('steel', assetPath + 'steel.png');
-        this.load.image('water', assetPath + 'water.png');
-        this.load.image('base', assetPath + 'base.png');
-        this.load.image('tank_blue', assetPath + 'tank_blue.png');
-        this.load.image('tank_red', assetPath + 'tank_red.png');
+    buildTextures() {
+        // Procedural textures stay crisp at every board size and require no asset requests.
+        const g = this.make.graphics({ x: 0, y: 0, add: false });
+        const save = key => { g.generateTexture(key, 128, 128); g.clear(); };
+        const block = (color, x, y, w, h, radius = 8) => {
+            g.fillStyle(color); g.fillRoundedRect(x, y, w, h, radius);
+        };
+        block(0x153755, 5, 8, 118, 116);
+        block(0x52b1df, 5, 5, 118, 115);
+        block(0x237eb4, 9, 9, 110, 107);
+        g.lineStyle(2, 0xb4e7ff, 0.75);
+        g.lineBetween(15, 12, 113, 12);
+        for (let row = 0; row < 4; row++) {
+            g.lineStyle(3, 0xc4efff, 0.7);
+            g.beginPath();
+            for (let x = 18; x <= 110; x += 4) {
+                const y = 28 + row * 23 + Math.sin(x / 14 + row) * 3;
+                if (x === 18) g.moveTo(x, y); else g.lineTo(x, y);
+            }
+            g.strokePath();
+        }
+        save('water');
+        block(0x26342f, 5, 9, 118, 115);
+        block(0x794a3d, 5, 5, 118, 115);
+        for (let row = 0; row < 3; row++) {
+            for (let col = -1; col < 3; col++) {
+                const x = 9 + col * 57 + (row % 2 ? 28 : 0);
+                const left = Math.max(9, x), right = Math.min(119, x + 53);
+                if (right <= left) continue;
+                block(0xb87960, left, 9 + row * 36, right - left, 31, 3);
+                block(0xd29b7d, left + 2, 11 + row * 36, Math.max(1, right - left - 4), 5, 2);
+            }
+        }
+        save('brick');
+        block(0x1b2b2c, 5, 9, 118, 115);
+        block(0x62717b, 5, 5, 118, 115);
+        block(0xa0adb5, 9, 9, 110, 103);
+        block(0x84949e, 18, 18, 92, 84, 5);
+        g.lineStyle(2, 0xcbd5dc, 0.6); g.lineBetween(23, 23, 105, 23);
+        [[15,15],[113,15],[15,106],[113,106]].forEach(([x,y]) => {
+            g.fillStyle(0x52616d); g.fillCircle(x,y,3);
+        });
+        save('steel');
+        for (const [name, color, light, dark] of [
+            ['blue', 0x4198f5, 0x87c4ff, 0x2563a9],
+            ['red', 0xf16c7b, 0xffadb6, 0xa94051]
+        ]) {
+            block(0x122523, 25, 34, 78, 80, 12);
+            for (const x of [25, 85]) {
+                block(0x182a2f, x, 30, 18, 77, 6);
+                for (let y = 36; y < 102; y += 9) block(0x53646a, x + 3, y, 12, 4, 1);
+            }
+            block(dark, 42, 35, 44, 71, 9);
+            block(color, 45, 35, 38, 65, 8);
+            block(light, 49, 39, 30, 5, 2);
+            g.fillStyle(dark); g.fillCircle(64, 73, 21);
+            block(dark, 57, 12, 14, 57, 3);
+            block(color, 59, 12, 10, 55, 3);
+            block(light, 60, 15, 3, 44, 1);
+            block(0x263e49, 56, 12, 16, 8, 2);
+            g.fillStyle(color); g.fillCircle(64, 69, 19);
+            g.lineStyle(2, light, 0.7); g.strokeCircle(64, 69, 15);
+            block(dark, 58, 62, 12, 13, 3);
+            block(light, 60, 64, 8, 3, 1);
+            save('tank_' + name);
+            block(0x172c29, 14, 20, 100, 97, 13);
+            block(0x687a7c, 14, 14, 100, 96, 13);
+            block(0x9eafaf, 20, 19, 88, 79, 10);
+            block(0x475d63, 31, 31, 66, 55, 6);
+            block(dark, 37, 36, 54, 44, 5);
+            block(color, 42, 41, 44, 34, 4);
+            g.lineStyle(4, light, 0.9);
+            g.strokeRect(51, 47, 26, 21);
+            g.lineBetween(64, 48, 64, 68);
+            g.lineBetween(51, 57, 77, 57);
+            save('base_' + name);
+        }
+        g.destroy();
     }
 
     create() {
-        // window.mainScene = this;
-
-        const canvasWidth = this.game.config.width;
-        this.CELL_SIZE = canvasWidth / 9; // FIELD_WIDTH is 9
-
+        this.buildTextures();
+        this.CELL_SIZE = this.scale.width / FIELD_WIDTH;
+        this.groundLayer = this.add.graphics().setDepth(-10);
         this.mapLayer = this.add.group();
         this.baseLayer = this.add.group();
         this.tankLayer = this.add.group();
         this.markLayer = this.add.group();
+        this.drawGround();
+        this.waitingText = this.add.text(this.scale.width / 2, this.scale.height / 2, 'Waiting for match…', {
+            fontFamily: 'system-ui, sans-serif', fontSize: '15px', color: '#c4d6ce', backgroundColor: '#233b34', padding: { x: 16, y: 10 }
+        }).setOrigin(0.5);
+    }
 
-        this.mapDrawn = false;
-        
-        // The mask is controlled by tank.html. We no longer show it here by default.
-        // if (window.showPhaserMask) {
-        //     window.showPhaserMask("Select players and start a new game.");
-        // }
+    drawGround() {
+        const g = this.groundLayer, c = this.CELL_SIZE;
+        g.clear();
+        g.fillStyle(0x233b34); g.fillRect(0, 0, this.scale.width, this.scale.height);
+        for (let y = 0; y < FIELD_HEIGHT; y++) {
+            for (let x = 0; x < FIELD_WIDTH; x++) {
+                g.fillStyle((x + y) % 2 ? 0x304a40 : 0x2d463d);
+                g.fillRoundedRect(x * c + c * 0.025, y * c + c * 0.025, c * 0.95, c * 0.95, c * 0.045);
+            }
+        }
+    }
+
+    resizeBoard() {
+        this.clearAllBullets();
+        this.CELL_SIZE = this.scale.width / FIELD_WIDTH;
+        this.drawGround();
+        if (this.mapData) this.refreshMapLayer();
+        this.tankLayer.clear(true, true);
+        this.baseLayer.clear(true, true);
+        this.renderTanksAndBases();
+        this.setOrderMarks(this.orderMarks || []);
+        if (this.waitingText) this.waitingText.setPosition(this.scale.width / 2, this.scale.height / 2);
     }
 
     updateFromState(state) {
@@ -171,19 +260,20 @@ class TankScene extends Phaser.Scene {
 
         // Init map and local state (every new game resets all state)
         if (state.brick && state.steel && state.water) {
+            if (this.waitingText) { this.waitingText.destroy(); this.waitingText = null; }
             // New game: drop the previous game's in-flight bullets at once so none linger
             this.clearAllBullets();
             this.mapDrawn = false; // allow the map to be redrawn
             this.drawMap(state.brick, state.water, state.steel);
             this.mapDrawn = true;
             // Re-initialize local tanks and bases
-            this.localTanks = INIT_TANKS.map(t => ({ ...t }));
+            this.localTanks = INIT_TANKS.map(t => ({ ...t, dir: t.side === 0 ? 2 : 0 }));
             this.localBases = INIT_BASES.map(b => ({ ...b }));
             this.lastActions = [[-1, -1], [-1, -1]];
             this.turn = 1;
             this.tankLayer.clear(true, true);
             this.baseLayer.clear(true, true);
-            if (this.markLayer) this.markLayer.clear(true, true);
+            this.setOrderMarks([]);
             this.renderTanksAndBases();
             // Update the turn counter display
             const turnCounter = document.getElementById('turnCounter');
@@ -218,7 +308,8 @@ class TankScene extends Phaser.Scene {
                 const x = (tank.x + 0.5) * this.CELL_SIZE;
                 const y = (tank.y + 0.5) * this.CELL_SIZE;
                 const tankSprite = this.add.sprite(x, y, spriteKey);
-                tankSprite.setDisplaySize(this.CELL_SIZE * 0.9, this.CELL_SIZE * 0.9);
+                tankSprite.setDisplaySize(this.CELL_SIZE * 0.94, this.CELL_SIZE * 0.94);
+                tankSprite.setAngle((tank.dir || 0) * 90);
                 this.tankLayer.add(tankSprite);
             }
         });
@@ -227,8 +318,8 @@ class TankScene extends Phaser.Scene {
             if (base.alive) {
                 const x = (base.x + 0.5) * this.CELL_SIZE;
                 const y = (base.y + 0.5) * this.CELL_SIZE;
-                const baseSprite = this.add.sprite(x, y, 'base');
-                baseSprite.setDisplaySize(this.CELL_SIZE, this.CELL_SIZE);
+                const baseSprite = this.add.sprite(x, y, base.side === 0 ? 'base_blue' : 'base_red');
+                baseSprite.setDisplaySize(this.CELL_SIZE * 0.92, this.CELL_SIZE * 0.92);
                 this.baseLayer.add(baseSprite);
             }
         });
@@ -247,14 +338,12 @@ class TankScene extends Phaser.Scene {
         const allActions = [actions0[0], actions0[1], actions1[0], actions1[1]];
 
         // 1. Handle movement
-        // Remember the original positions
-        const origPos = tanks.map(t => ({ x: t.x, y: t.y, alive: t.alive }));
-
         // Resolve all moves first
         for (let i = 0; i < 4; i++) {
             const tank = tanks[i];
             if (!tank.alive) continue;
             const act = allActions[i];
+            if (act >= 0 && act <= 7) tank.dir = act % 4;
             if (act >= 0 && act <= 3) { // move
                 const nx = tank.x + dx[act], ny = tank.y + dy[act];
                 // Bounds check
@@ -371,48 +460,15 @@ class TankScene extends Phaser.Scene {
     }
 
     drawMap(brickBinary, waterBinary, steelBinary) {
-        this.mapLayer.clear(true, true);
         this.mapData = Array.from({length: FIELD_HEIGHT}, () => Array(FIELD_WIDTH).fill(0));
-        const drawLayer = (binaryData, spriteKey, code) => {
-            for (let i = 0; i < 3; i++) {
-                let mask = 1;
-                const chunk = binaryData[i];
-                for (let y_offset = 0; y_offset < 3; y_offset++) {
-                    for (let x_offset = 0; x_offset < FIELD_WIDTH; x_offset++) {
-                        if (chunk & mask) {
-                            const y = i * 3 + y_offset;
-                            const x = x_offset;
-                            this.mapData[y][x] = code; // 1=water, 2=brick, 3=steel
-                            const tileX = (x + 0.5) * this.CELL_SIZE;
-                            const tileY = (y + 0.5) * this.CELL_SIZE;
-                            const tile = this.add.sprite(tileX, tileY, spriteKey);
-                            tile.setDisplaySize(this.CELL_SIZE, this.CELL_SIZE);
-                            this.mapLayer.add(tile);
-                        }
-                        mask <<= 1;
-                    }
-                }
-            }
-        };
-        drawLayer(waterBinary, 'water', 1);
-        drawLayer(brickBinary, 'brick', 2);
-        drawLayer(steelBinary, 'steel', 3);
-        this.mapLayer.clear(true, true);
-        for (let y = 0; y < FIELD_HEIGHT; y++) {
-            for (let x = 0; x < FIELD_WIDTH; x++) {
-                let spriteKey = null;
-                if (this.mapData[y][x] === 1) spriteKey = 'water';
-                else if (this.mapData[y][x] === 2) spriteKey = 'brick';
-                else if (this.mapData[y][x] === 3) spriteKey = 'steel';
-                if (spriteKey) {
-                    const tileX = (x + 0.5) * this.CELL_SIZE;
-                    const tileY = (y + 0.5) * this.CELL_SIZE;
-                    const tile = this.add.sprite(tileX, tileY, spriteKey);
-                    tile.setDisplaySize(this.CELL_SIZE, this.CELL_SIZE);
-                    this.mapLayer.add(tile);
+        for (const [binary, code] of [[waterBinary, 1], [brickBinary, 2], [steelBinary, 3]]) {
+            for (let y = 0; y < FIELD_HEIGHT; y++) {
+                for (let x = 0; x < FIELD_WIDTH; x++) {
+                    if (binary[Math.floor(y / 3)] & (1 << ((y % 3) * FIELD_WIDTH + x))) this.mapData[y][x] = code;
                 }
             }
         }
+        this.refreshMapLayer();
     }
 
     refreshMapLayer() {
@@ -438,7 +494,7 @@ class TankScene extends Phaser.Scene {
         // dir: 0=up, 1=right, 2=down, 3=left
         //
         // Design notes:
-        //  - What moves is a small block (not a stretched line) with a fixed-length tail behind it
+        //  - A small projectile carries a short tapered trail behind it
         //  - All bullets in one turn use the same fixed duration; once queued they advance on the
         //    same Phaser timeline, so every bullet reaches its target at the very same instant
         //  - Speed = distance / duration: an open path means a long distance, so the bullet covers
@@ -449,17 +505,16 @@ class TankScene extends Phaser.Scene {
         const endY = (toY + 0.5) * this.CELL_SIZE;
 
         const cell = this.CELL_SIZE;
-        const bulletSize = cell * 0.28;
+        const bulletSize = cell * 0.15;
         const trailLen = cell * 0.8; // tail is a fixed 0.8 cells, never stretched by distance -> no leftover line
 
-        // The bullet block (yellow)
-        const bullet = this.add.rectangle(startX, startY, bulletSize, bulletSize, 0xffeb3b);
+        // The bright projectile core
+        const bullet = this.add.circle(startX, startY, bulletSize / 2, 0xffe6a3);
         bullet.setDepth(20);
 
         // The tail graphics (yellow, semi-transparent)
         const trail = this.add.graphics();
         trail.setDepth(19);
-        trail.lineStyle(bulletSize * 0.8, 0xffeb3b, 0.55);
 
         // Unit direction vector (used to place the tail)
         const ddx = endX - startX, ddy = endY - startY;
@@ -480,13 +535,13 @@ class TankScene extends Phaser.Scene {
             duration: BULLET_DURATION_MS,
             ease: 'Linear',
             onUpdate: () => {
-                // Tail: extends trailLen backwards from the bullet's position
                 trail.clear();
-                trail.lineStyle(bulletSize * 0.8, 0xffeb3b, 0.55);
-                trail.beginPath();
-                trail.moveTo(bullet.x - ux * trailLen, bullet.y - uy * trailLen);
-                trail.lineTo(bullet.x, bullet.y);
-                trail.strokePath();
+                const length = Math.min(trailLen, Math.hypot(bullet.x - startX, bullet.y - startY));
+                for (let i = 0; i < 6; i++) {
+                    const a = length * (1 - i / 6), b = length * (1 - (i + 1) / 6);
+                    trail.lineStyle(bulletSize * (0.2 + i * 0.12), 0xfbbf24, 0.1 + i * 0.08);
+                    trail.lineBetween(bullet.x - ux * a, bullet.y - uy * a, bullet.x - ux * b, bullet.y - uy * b);
+                }
             },
             onComplete: () => {
                 bullet.destroy();
