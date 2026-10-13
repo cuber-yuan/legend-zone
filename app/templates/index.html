@@ -177,7 +177,7 @@
      `overflow: hidden` here would defeat the overflow-x-auto utility on the
      element and silently cut the Time column off on narrow screens. */
   .lm-card {
-    border: 1px solid #e2e8f0; border-radius: 0.75rem;
+    border: 1px solid #e2e8f0;
     overflow-x: auto; overflow-y: hidden;
     background: #fff; box-shadow: 0 4px 12px rgba(15, 23, 42, 0.06);
   }
@@ -217,6 +217,29 @@
   @media (prefers-reduced-motion: reduce) {
     .lm-dot { animation: none; }
     .lm-table tbody tr:hover { background: inherit; }
+  }
+  /* Bot names are unbounded, so on small screens the table moves to a fixed
+     layout: columns get explicit widths and the Players column hands whatever is
+     left to an ellipsis. Under table-layout:auto a cell is sized by its content,
+     which makes max-width on the chip circular and it never truncates. Wide
+     screens are left completely alone. */
+  @media (max-width: 640px) {
+    /* fixed layout needs a definite table width to distribute; the markup only
+       carries min-w-full, and without this the columns sum to their content and
+       nothing ever truncates */
+    .lm-table { table-layout: fixed; width: 100%; }
+    .lm-table th:nth-child(1) { width: 28%; }
+    /* the Replay button is 2rem inside 1rem of cell padding on each side */
+    .lm-table th:nth-child(3) { width: 4rem; }
+    .lm-table td:nth-child(2) { overflow: hidden; }
+    /* 1rem of cell padding on each side was eating enough width that even a short
+       name like "MinimaxMax" lost its last character. Must match the specificity
+       of the base `.lm-table tbody td { padding: … }` shorthand above it, which a
+       plainer `.lm-table td` selector loses to. */
+    .lm-table thead th, .lm-table tbody td { padding-left: 0.5rem; padding-right: 0.5rem; }
+    .lm-players { display: flex; flex-direction: column; align-items: flex-start; gap: 0.3rem; min-width: 0; }
+    .lm-chip { max-width: 100%; min-width: 0; }
+    .lm-pname { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   }
 
   /* --- Game Tables ---
@@ -360,6 +383,12 @@
         return div.innerHTML;
     }
 
+    // escapeHtml leaves quotes alone, which is fine between tags but not inside
+    // an attribute: a bot named  a" onmouseover=x  would break out of title="".
+    function escapeAttr(text) {
+        return escapeHtml(text).replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    }
+
     // The contestant glyphs, shared by the Game Tables cards and the Latest
     // Matches chips so a bot reads as a bot in both places.
     const GLYPH = {
@@ -384,21 +413,23 @@
         // Bots wear the cool chip, players the purple one; the glyph keeps the
         // distinction readable without relying on colour alone.
         const cls = isHuman ? (tones[tone] || tones.blue) : 'bg-teal-100 text-teal-900 hover:bg-teal-200';
-        const glyph = glyphSvg(isHuman ? 'human' : 'bot', ' class="w-3.5 h-3.5 mr-1 opacity-80"');
+        const glyph = glyphSvg(isHuman ? 'human' : 'bot', ' class="w-3.5 h-3.5 mr-1 opacity-80 flex-none"');
         const badge = isWinner
             ? '<span class="absolute -top-1.5 -right-1.5 flex items-center justify-center w-4 h-4 rounded-full bg-green-500 text-white text-[10px] font-bold shadow" title="Winner">W</span>'
             : '';
-        const versionHtml = version ? `<span class="ml-1 text-xs font-normal opacity-70">v${version}</span>` : '';
-        const inner = `${glyph}${escapeHtml(name)}${versionHtml}${badge}`;
+        const versionHtml = version ? `<span class="ml-1 text-xs font-normal opacity-70 flex-none">v${version}</span>` : '';
+        // The name is the only unbounded part of the chip, so it gets its own box
+        // for the ellipsis rule to act on; glyph and version never shrink.
+        const inner = `${glyph}<span class="lm-pname">${escapeHtml(name)}</span>${versionHtml}${badge}`;
         // Old rows recorded the seat as the literal "HUMAN" and never stored who it
         // was, so there is no profile to open for those.
         const href = botId ? `/bot/${encodeURIComponent(botId)}`
             : (isHuman && name !== 'HUMAN' ? `/profile/${encodeURIComponent(name)}` : null);
         if (href) {
             const label = botId ? 'View bot' : 'View profile';
-            return `<a href="${escapeHtml(href)}" class="relative inline-flex items-center px-2.5 py-1 rounded-full ${cls} text-sm font-medium whitespace-nowrap transition-colors" title="${label}">${inner}</a>`;
+            return `<a href="${escapeAttr(href)}" class="lm-chip relative inline-flex items-center px-2.5 py-1 rounded-full ${cls} text-sm font-medium whitespace-nowrap transition-colors" title="${escapeAttr(label + ' — ' + name)}">${inner}</a>`;
         }
-        return `<span class="relative inline-flex items-center px-2.5 py-1 rounded-full ${cls} text-sm font-medium whitespace-nowrap">${inner}</span>`;
+        return `<span class="lm-chip relative inline-flex items-center px-2.5 py-1 rounded-full ${cls} text-sm font-medium whitespace-nowrap">${inner}</span>`;
     }
 
     socket.on('latest_matches', (data) => {
@@ -495,8 +526,8 @@
     </section>
 
     <!-- Latest Matches -->
-    <section class="bg-gray-100 p-6 rounded-lg shadow-md">
-        <div class="lm-head" style="margin-bottom:1em;">
+    <section class="bg-gray-100 pt-6 rounded-lg overflow-hidden shadow-md">
+        <div class="lm-head px-6" style="margin-bottom:1em;">
             <h2 class="text-2xl font-semibold">Latest Matches</h2>
             <span class="lm-count" id="latest-count"></span>
         </div>

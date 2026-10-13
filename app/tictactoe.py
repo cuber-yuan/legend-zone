@@ -6,10 +6,9 @@ from uuid import uuid4
 from flask_socketio import emit, join_room
 import json
 import uuid
-from .services.rating_service import update_bot_ratings
 from .services.bot_service import get_bot_executor as _get_bot_executor, build_players_json
-from .services.match_service import (create_match_record, finalize_match_record,
-                                     update_match_result, state_payload)
+from .services.match_service import create_match_record, state_payload
+from .services.match_lifecycle import match_lifecycle, play_board_game, wait_for_move
 
 tictactoe_bp = Blueprint('tictactoe', __name__)
 
@@ -19,92 +18,53 @@ active_matches = {}
 MAX_TURNS = 9
 
 
-def _emit_state(game, match_id, room, extra=None):
-    payload = {'match_id': match_id}
-    if extra:
-        payload.update(extra)
-    emit('update', state_payload(game, payload), room=room)
-
-
 def run_auto_tictactoe_match(player_1_id, player_2_id):
-    """Non-interactive (AI vs AI) Tic Tac Toe match for the background ladder."""
-    print(f"Running auto Tic Tac Toe match: {player_1_id} (X) vs {player_2_id} (O)")
-
+    """Run a scheduled bot match using the same completion path as live games."""
     executor_1 = _get_bot_executor(str(player_1_id))
     executor_2 = _get_bot_executor(str(player_2_id))
-    if not executor_1 or not executor_2:
-        print("Error: Failed to load both bot executors for auto match.")
+    executors = (executor_1, executor_2)
+    if not all(executors):
+        for executor in executors:
+            if executor:
+                executor.cleanup()
         return
 
     players = build_players_json(player_1_id, 'bot', player_2_id, 'bot')
     try:
         match_id = create_match_record('Tic Tac Toe', players)
-    except Exception as e:
-        print("Failed to create auto match record:", e)
-        executor_1.cleanup()
-        executor_2.cleanup()
-        return
+    except Exception:
+        for executor in executors:
+            executor.cleanup()
+        raise
 
     game = TicTacToeJudge()
     game.game_id = str(uuid.uuid4())
-    game.new_game('bot', 'bot', executor_1, executor_2)
-
-    active_matches[match_id] = {
-        'judge': game,
-        'game_id': game.game_id,
-        'player_1_id': player_1_id,
-        'player_2_id': player_2_id,
-        'player_1_type': 'bot',
-        'player_2_type': 'bot',
-    }
-
-    try:
-        socketio.emit('match_started', {'match_id': match_id, 'board': game.board, 'game_id': game.game_id}, room=match_id)
-
-        for _ in range(MAX_TURNS):
-            input_str = game.send_action_to_ai()
-            executor = executor_1 if game.current_player == 1 else executor_2
-            output_str = executor.run(input_str)
-
-            try:
-                move_data = json.loads(output_str)
-                x, y = move_data['x'], move_data['y']
-            except (json.JSONDecodeError, KeyError):
-                game.winner = 3 - game.current_player
-                break
-
-            if game.is_terminated:
-                break
-            if not game.apply_move(x, y):
-                game.winner = 3 - game.current_player
-                break
-
-            winner = game.check_win(x, y)
-            if winner != 0:
-                game.winner = winner
-
-            socketio.emit('update', state_payload(game, {
-                'ai_move': {'x': x, 'y': y, 'player': 3 - game.current_player},
-                'match_id': match_id,
-            }), room=match_id)
-
-            if game.winner != 0 or game.is_board_full():
-                break
-    finally:
-        active_matches.pop(match_id, None)
-
-    elo_winner = (game.winner - 1) if game.winner in (1, 2) else -1
-    update_bot_ratings(player_1_id, player_2_id, elo_winner, match_id)
-    update_match_result(match_id, elo_winner, json.dumps(game.move_history), 'move_history')
-
-    socketio.emit('match_finished', {
-        'match_id': match_id,
-        'winner': game.winner,
-        'move_history': game.move_history,
-    }, room=match_id)
-
-    executor_1.cleanup()
-    executor_2.cleanup()
+    with match_lifecycle(
+        match_id=match_id, game_name='Tic Tac Toe', players=players,
+        player_ids=(player_1_id, player_2_id), player_types=('bot', 'bot'),
+        payload_col='move_history', socketio=socketio, namespace='/tictactoe',
+        room=match_id, active_matches=active_matches, executors=executors,
+        board_game=game,
+        notify=lambda result: socketio.emit('update', state_payload(game, {
+            'match_id': match_id, 'error_msg': result.error_msg,
+        }), room=match_id, namespace='/tictactoe'),
+    ):
+        game.new_game('bot', 'bot', executor_1, executor_2)
+        active_matches[match_id] = {
+            'judge': game, 'game_id': game.game_id,
+            'player_1_id': player_1_id, 'player_2_id': player_2_id,
+            'player_1_type': 'bot', 'player_2_type': 'bot',
+        }
+        socketio.emit('match_started', {
+            'match_id': match_id, 'board': game.board, 'game_id': game.game_id,
+        }, room=match_id, namespace='/tictactoe')
+        play_board_game(
+            game, (executor_1.run, executor_2.run),
+            lambda extra: socketio.emit('update', state_payload(game, {
+                'match_id': match_id, **extra,
+            }), room=match_id, namespace='/tictactoe'),
+            MAX_TURNS, column_only=False,
+        )
 
 
 def register_tictactoe_events(socketio):
@@ -198,74 +158,36 @@ def register_tictactoe_events(socketio):
                 'player_2_type': player_2_type,
             }
 
-        emit('game_started', state_payload(game), room=broadcast_target)
+        players = build_players_json(
+            player_1_id, player_1_type, player_2_id, player_2_type,
+            human_name=current_user.username,
+        )
 
-        def get_output_1(input_str=None):
-            if player_1_type == 'human':
-                while 'pending_move' not in sessions.get(user_id, {}):
-                    if user_id not in sessions or sessions[user_id]['sid'] != sid:
-                        break
-                    socketio.sleep(0.05)
-                return json.dumps(sessions[user_id].pop('pending_move'))
-            return executor_1.run(input_str)
+        def get_output(player, input_str):
+            player_type = (player_1_type, player_2_type)[player]
+            if player_type == 'human':
+                return wait_for_move(sessions, user_id, sid, game, socketio)
+            return (executor_1, executor_2)[player].run(input_str)
 
-        def get_output_2(input_str=None):
-            if player_2_type == 'human':
-                while 'pending_move' not in sessions.get(user_id, {}):
-                    if user_id not in sessions or sessions[user_id]['sid'] != sid:
-                        break
-                    socketio.sleep(0.05)
-                return json.dumps(sessions[user_id].pop('pending_move'))
-            return executor_2.run(input_str)
-
-        try:
-            for _ in range(MAX_TURNS):
-                input_str = game.send_action_to_ai()
-                if game.current_player == 1:
-                    output_str = get_output_1(input_str)
-                else:
-                    output_str = get_output_2(input_str)
-
-                try:
-                    move_data = json.loads(output_str)
-                    x, y = move_data['x'], move_data['y']
-                except (json.JSONDecodeError, KeyError):
-                    game.winner = 3 - game.current_player
-                    _emit_state(game, match_id, broadcast_target, {'error_msg': 'AI returned invalid move.'})
-                    return
-                if game.is_terminated:
-                    break
-                if not game.apply_move(x, y):
-                    game.winner = 3 - game.current_player
-                    _emit_state(game, match_id, broadcast_target, {'error_msg': 'AI made an invalid move.'})
-                    return
-
-                winner = game.check_win(x, y)
-                if winner != 0:
-                    game.winner = winner
-
-                _emit_state(game, match_id, broadcast_target, {
-                    'ai_move': {'x': x, 'y': y, 'player': 3 - game.current_player}
-                })
-                if game.winner != 0 or game.is_board_full():
-                    break
-        finally:
-            if match_id:
-                active_matches.pop(match_id, None)
-
-        elo_winner = (game.winner - 1) if game.winner in (1, 2) else -1
-        if player_1_type == 'bot' and player_2_type == 'bot':
-            update_bot_ratings(player_1_id, player_2_id, elo_winner, match_id)
-
-        players = build_players_json(player_1_id, player_1_type, player_2_id, player_2_type, human_name=current_user.username)
-        finalize_match_record(match_id, 'Tic Tac Toe', players, elo_winner, json.dumps(game.move_history), 'move_history')
-
-        if match_id:
-            socketio.emit('match_finished', {
-                'match_id': match_id,
-                'winner': game.winner,
-                'move_history': game.move_history,
-            }, room=match_id)
+        with match_lifecycle(
+            match_id=match_id, game_name='Tic Tac Toe', players=players,
+            player_ids=(player_1_id, player_2_id),
+            player_types=(player_1_type, player_2_type),
+            payload_col='move_history', socketio=socketio, namespace='/tictactoe',
+            room=broadcast_target, active_matches=active_matches,
+            executors=(executor_1, executor_2), board_game=game,
+            notify=lambda result: emit('update', state_payload(game, {
+                'match_id': match_id, 'error_msg': result.error_msg,
+            }), room=broadcast_target),
+        ):
+            emit('game_started', state_payload(game), room=broadcast_target)
+            play_board_game(
+                game, (lambda value: get_output(0, value), lambda value: get_output(1, value)),
+                lambda extra: emit('update', state_payload(game, {
+                    'match_id': match_id, **extra,
+                }), room=broadcast_target),
+                MAX_TURNS, column_only=False,
+            )
 
     @socketio.on('player_move', namespace='/tictactoe')
     def handle_player_move(data):

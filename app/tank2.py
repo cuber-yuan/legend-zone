@@ -7,11 +7,10 @@ from flask_socketio import emit, join_room
 from uuid import uuid4
 import os
 import json
-import concurrent.futures
 from .db import get_db_connection
-from .services.rating_service import update_bot_ratings
 from .services.bot_service import get_bot_executor as _get_bot_executor, build_players_json
-from .services.match_service import create_match_record, finalize_match_record, update_match_result
+from .services.match_service import create_match_record
+from .services.match_lifecycle import match_lifecycle, read_response, read_simultaneous_actions
 
 tank_bp = Blueprint('tank', __name__)
 sessions = {}
@@ -21,7 +20,8 @@ active_matches = {}
 class TankGameSession:
     def __init__(self, cpp_path):
         self.game_id = str(uuid4())
-        self.cpp_judge = CppJudgeExecutor(cpp_path)
+        self.cpp_path = cpp_path
+        self.cpp_judge = None
 
     def terminate(self):
         pass
@@ -138,15 +138,31 @@ def register_tank_events(socketio):
         print(f"Starting tank game {game.game_id} (match={match_id}): "
               f"{player_1_id_str} ({player_1_type}) vs {player_2_id_str} ({player_2_type})")
 
-        try:
+        displays = []
+        players = build_players_json(
+            player_1_id_str, player_1_type, player_2_id_str, player_2_type,
+            human_name=current_user.username,
+        )
+        with match_lifecycle(
+            match_id=match_id, game_name='Tank Battle', players=players,
+            player_ids=(player_1_id_str, player_2_id_str),
+            player_types=(player_1_type, player_2_type), payload_col='displays',
+            socketio=socketio, namespace='/tank2', room=broadcast_target,
+            active_matches=active_matches, executors=(executor_1, executor_2),
+            cleanup=(game.terminate,),
+            notify=lambda result: emit('finish', tank_payload(
+                game.game_id, match_id, player_1_type, player_2_type,
+                extra={'winner': result.winner, 'error_msg': result.error_msg},
+            ), room=broadcast_target),
+        ) as result:
+            result.payload = displays
+            game.cpp_judge = CppJudgeExecutor(game.cpp_path)
             game_state_dict = game.cpp_judge.run_raw_json({})
 
             maxTurn = game_state_dict['initdata']['maxTurn']
             judge_input_dict = {'log': [], 'initdata': game_state_dict['initdata']}
             input_dict_1 = {"requests": [game_state_dict['content']['0']], "responses": []}
             input_dict_2 = {"requests": [game_state_dict['content']['1']], "responses": []}
-
-            displays = []
 
             emit('game_started', tank_payload(game.game_id, match_id, player_1_type, player_2_type,
                                               state=game_state_dict['display']), room=broadcast_target)
@@ -181,31 +197,10 @@ def register_tank_events(socketio):
                 def get_output_2():
                     return wait_for_human('2') if player_2_type == 'human' else executor_2.run(input_str_2)
 
-                try:
-                    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
-                        future1 = pool.submit(get_output_1)
-                        future2 = pool.submit(get_output_2)
-                        output_1 = future1.result()
-                        output_2 = future2.result()
-                except Exception as e:
-                    print(f"Bot execution error on turn {turn + 1}: {e}")
-                    p1_failed = future1.done() and future1.exception() is not None
-                    p2_failed = future2.done() and future2.exception() is not None
-                    if p1_failed and p2_failed:
-                        winner = -1
-                    elif p1_failed:
-                        winner = 1
-                    else:
-                        winner = 0
-                    break
-
-                if output_1 is None or output_2 is None:
-                    # A human walked away mid-turn; the other side takes the win.
-                    winner = 1 if output_1 is None else 0
-                    break
+                output_1, output_2 = read_simultaneous_actions((get_output_1, get_output_2))
 
                 judge_input_dict['log'].append({})
-                judge_input_dict['log'].append({"0": json.loads(output_1), "1": json.loads(output_2)})
+                judge_input_dict['log'].append({"0": output_1, "1": output_2})
                 game_state_dict = game.cpp_judge.run_raw_json(judge_input_dict)
                 displays.append(game_state_dict['display'])
 
@@ -227,34 +222,12 @@ def register_tank_events(socketio):
                         winner = -1
                     break
 
-                input_dict_1['requests'].append(json.loads(output_2)['response'])
-                input_dict_1['responses'].append(json.loads(output_1)['response'])
-                input_dict_2['requests'].append(json.loads(output_1)['response'])
-                input_dict_2['responses'].append(json.loads(output_2)['response'])
+                input_dict_1['requests'].append(output_2['response'])
+                input_dict_1['responses'].append(output_1['response'])
+                input_dict_2['requests'].append(output_1['response'])
+                input_dict_2['responses'].append(output_2['response'])
 
-            if winner is not None:
-                emit('finish', tank_payload(game.game_id, match_id, player_1_type, player_2_type,
-                                            extra={'winner': winner}), room=broadcast_target)
-
-                players = build_players_json(player_1_id_str, player_1_type, player_2_id_str, player_2_type, human_name=current_user.username)
-                finalize_match_record(match_id, 'Tank Battle', players, winner, json.dumps(displays), 'displays')
-
-                if player_1_type == 'bot' and player_2_type == 'bot':
-                    update_bot_ratings(player_1_id_str, player_2_id_str, winner if winner in (0, 1) else -1, match_id)
-
-                if match_id:
-                    socketio.emit('match_finished', {
-                        'match_id': match_id,
-                        'winner': winner,
-                        'displays': displays,
-                    }, room=match_id, namespace='/tank2')
-
-                print(f"Tank game finished (match={match_id}). Winner: {winner}")
-
-        finally:
-            if match_id:
-                active_matches.pop(match_id, None)
-            game.terminate()
+            result.winner = winner if winner in (0, 1) else -1
 
     @socketio.on('disconnect', namespace='/tank2')
     def handle_disconnect():
@@ -311,13 +284,17 @@ def run_auto_tank_match(player_1_id, player_2_id):
         executor_2.cleanup()
         return
 
-    # 2) Run the match
-    cpp_path = judge_binary_path('tank2_judge')
-    cpp_judge = CppJudgeExecutor(cpp_path)
-
     displays = []
     winner = -1
-    try:
+    with match_lifecycle(
+        match_id=match_id, game_name='Tank Battle', players=players,
+        player_ids=(player_1_id, player_2_id), player_types=('bot', 'bot'),
+        payload_col='displays', socketio=socketio, namespace='/tank2',
+        room=match_id, active_matches=active_matches,
+        executors=(executor_1, executor_2),
+    ) as result:
+        result.payload = displays
+        cpp_judge = CppJudgeExecutor(judge_binary_path('tank2_judge'))
         game_state_dict = cpp_judge.run_raw_json({})
         max_turn = game_state_dict['initdata']['maxTurn']
         judge_input = {'log': [], 'initdata': game_state_dict['initdata']}
@@ -326,10 +303,10 @@ def run_auto_tank_match(player_1_id, player_2_id):
         displays.append(game_state_dict['display'])
 
         for _ in range(max_turn):
-            out1 = executor_1.run(json.dumps(input_1))
-            out2 = executor_2.run(json.dumps(input_2))
+            out1 = read_response(lambda: executor_1.run(json.dumps(input_1)), 0)
+            out2 = read_response(lambda: executor_2.run(json.dumps(input_2)), 1)
             judge_input['log'].append({})
-            judge_input['log'].append({"0": json.loads(out1), "1": json.loads(out2)})
+            judge_input['log'].append({"0": out1, "1": out2})
             game_state_dict = cpp_judge.run_raw_json(judge_input)
             displays.append(game_state_dict['display'])
 
@@ -346,21 +323,10 @@ def run_auto_tank_match(player_1_id, player_2_id):
                     winner = -1
                 break
 
-            r1 = json.loads(out1)['response']
-            r2 = json.loads(out2)['response']
+            r1 = out1['response']
+            r2 = out2['response']
             input_1['requests'].append(r2)
             input_1['responses'].append(r1)
             input_2['requests'].append(r1)
             input_2['responses'].append(r2)
-    except Exception as e:
-        print(f"Auto Tank match crashed: {e}")
-    finally:
-        executor_1.cleanup()
-        executor_2.cleanup()
-
-    # Normalize winner to 0/1/-1
-    elo_winner = winner if winner in (0, 1) else -1
-    update_bot_ratings(player_1_id, player_2_id, elo_winner, match_id)
-    update_match_result(match_id, elo_winner, json.dumps(displays), 'displays')
-
-    print(f"Auto Tank match finished. Winner: {elo_winner} (-1=draw, 0=Top, 1=Bottom)")
+        result.winner = winner if winner in (0, 1) else -1

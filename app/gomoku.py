@@ -7,10 +7,9 @@ from flask_socketio import emit, join_room
 import json
 import uuid
 from .db import get_db_connection
-from .services.rating_service import update_bot_ratings
 from .services.bot_service import get_bot_executor as _get_bot_executor, build_players_json
-from .services.match_service import (create_match_record, finalize_match_record,
-                                     update_match_result, state_payload)
+from .services.match_service import create_match_record, state_payload
+from .services.match_lifecycle import match_lifecycle, play_board_game, wait_for_move
 
 gomoku_bp = Blueprint('gomoku', __name__)
 
@@ -19,101 +18,53 @@ active_matches = {}
 
 
 def run_auto_gomoku_match(player_1_id, player_2_id):
-    """
-    Runs a non-interactive (AI vs AI) Gomoku match, updates rating, and logs result.
-    This function is designed to be called by a background worker.
-    player_1_id (Black), player_2_id (White)
-    """
-    print(f"Running auto Gomoku match: {player_1_id} (Black) vs {player_2_id} (White)")
-
+    """Run a scheduled bot match using the same completion path as live games."""
     executor_1 = _get_bot_executor(str(player_1_id))
     executor_2 = _get_bot_executor(str(player_2_id))
-
-    if not executor_1 or not executor_2:
-        print("Error: Failed to load both bot executors for auto match.")
+    executors = (executor_1, executor_2)
+    if not all(executors):
+        for executor in executors:
+            if executor:
+                executor.cleanup()
         return
 
     players = build_players_json(player_1_id, 'bot', player_2_id, 'bot')
     try:
         match_id = create_match_record('Gomoku', players)
-    except Exception as e:
-        print("Failed to create auto match record:", e)
-        executor_1.cleanup()
-        executor_2.cleanup()
-        return
+    except Exception:
+        for executor in executors:
+            executor.cleanup()
+        raise
 
     game = GomokuJudge()
     game.game_id = str(uuid.uuid4())
-    game.new_game(
-        black_player_type='bot',
-        white_player_type='bot',
-        black_executor=executor_1,
-        white_executor=executor_2
-    )
+    with match_lifecycle(
+        match_id=match_id, game_name='Gomoku', players=players,
+        player_ids=(player_1_id, player_2_id), player_types=('bot', 'bot'),
+        payload_col='move_history', socketio=socketio, namespace='/gomoku',
+        room=match_id, active_matches=active_matches, executors=executors,
+        board_game=game,
+        notify=lambda result: socketio.emit('update', state_payload(game, {
+            'match_id': match_id, 'error_msg': result.error_msg,
+        }), room=match_id, namespace='/gomoku'),
+    ):
+        game.new_game('bot', 'bot', executor_1, executor_2)
+        active_matches[match_id] = {
+            'judge': game, 'game_id': game.game_id,
+            'player_1_id': player_1_id, 'player_2_id': player_2_id,
+            'player_1_type': 'bot', 'player_2_type': 'bot',
+        }
+        socketio.emit('match_started', {
+            'match_id': match_id, 'board': game.board, 'game_id': game.game_id,
+        }, room=match_id, namespace='/gomoku')
+        play_board_game(
+            game, (executor_1.run, executor_2.run),
+            lambda extra: socketio.emit('update', state_payload(game, {
+                'match_id': match_id, **extra,
+            }), room=match_id, namespace='/gomoku'),
+            256, column_only=False,
+        )
 
-    active_matches[match_id] = {
-        'judge': game,
-        'game_id': game.game_id,
-        'player_1_id': player_1_id,
-        'player_2_id': player_2_id,
-        'player_1_type': 'bot',
-        'player_2_type': 'bot',
-    }
-
-    try:
-        socketio.emit('match_started', {'match_id': match_id, 'board': game.board, 'game_id': game.game_id}, room=match_id)
-
-        for turn in range(256):
-            input_str = game.send_action_to_ai()
-
-            if game.current_player == 1:
-                output_str = executor_1.run(input_str)
-            else:
-                output_str = executor_2.run(input_str)
-
-            try:
-                move_data = json.loads(output_str)
-                x, y = move_data['x'], move_data['y']
-            except (json.JSONDecodeError, KeyError):
-                print(f"AI for player {game.current_player} returned invalid data. Player {3 - game.current_player} wins.")
-                game.winner = 3 - game.current_player
-                break
-
-            if game.is_terminated:
-                break
-
-            if not game.apply_move(x, y):
-                print(f"AI for player {game.current_player} made an invalid move. Player {3 - game.current_player} wins.")
-                game.winner = 3 - game.current_player
-                break
-
-            winner = game.check_win(x, y)
-            if winner != 0:
-                game.winner = winner
-
-            socketio.emit('update', state_payload(game, {
-                'ai_move': {'x': x, 'y': y, 'player': 3 - game.current_player},
-                'match_id': match_id
-            }), room=match_id)
-
-            if game.winner != 0 or game.is_board_full() or game.is_terminated:
-                print(f"Game ended after {turn + 1} turns. Winner: {game.winner}")
-                break
-    finally:
-        active_matches.pop(match_id, None)
-
-    elo_winner = (game.winner - 1) if game.winner in (1, 2) else -1
-    update_bot_ratings(player_1_id, player_2_id, elo_winner, match_id)
-    update_match_result(match_id, elo_winner, json.dumps(game.move_history), 'move_history')
-
-    socketio.emit('match_finished', {
-        'match_id': match_id,
-        'winner': game.winner,
-        'move_history': game.move_history
-    }, room=match_id)
-
-    executor_1.cleanup()
-    executor_2.cleanup()
 
 def register_gomoku_events(socketio):
     @socketio.on('connect', namespace='/gomoku')
@@ -214,91 +165,36 @@ def register_gomoku_events(socketio):
                 'player_2_type': player_2_type,
             }
 
-        emit('game_started', state_payload(game), room=broadcast_target)
+        players = build_players_json(
+            player_1_id, player_1_type, player_2_id, player_2_type,
+            human_name=current_user.username,
+        )
 
+        def get_output(player, input_str):
+            player_type = (player_1_type, player_2_type)[player]
+            if player_type == 'human':
+                return wait_for_move(sessions, user_id, sid, game, socketio)
+            return (executor_1, executor_2)[player].run(input_str)
 
-        current_player_type = game.black_player_type if game.current_player == 1 else game.white_player_type
-        
-
-        def get_output_1(input: str = None):
-            if player_1_type == 'human':
-                while 'pending_move' not in sessions[user_id]:
-                    if user_id not in sessions or sessions[user_id]['sid'] != sid:
-                        break
-                    socketio.sleep(0.05)
-                return json.dumps(sessions[user_id].pop('pending_move'))
-            else:
-                return executor_1.run(input)
-
-        def get_output_2(input: str = None):
-            if player_2_type == 'human':
-                while 'pending_move' not in sessions[user_id]:
-                    if user_id not in sessions or sessions[user_id]['sid'] != sid:
-                        break
-                    socketio.sleep(0.05)
-                return json.dumps(sessions[user_id].pop('pending_move'))
-            else:
-                return executor_2.run(input)
-
-
-        # main game loop
-        try:
-            for turn in range(256):
-                output_str = ""
-                input_str = game.send_action_to_ai()
-                if game.current_player == 1:
-                    output_str = get_output_1(input_str)
-                if game.current_player == 2:
-                    output_str = get_output_2(input_str)
-
-                try:
-                    move_data = json.loads(output_str)
-                    x, y = move_data['x'], move_data['y']
-                except (json.JSONDecodeError, KeyError):
-                    print(f"AI for player {game.current_player} returned invalid data: {output_str}.")
-                    game.winner = 3 - game.current_player
-                    emit('update', state_payload(game, {'error_msg': 'AI returned invalid move.', 'match_id': match_id}), room=broadcast_target)
-                    return
-                if game.is_terminated:
-                    break
-
-
-                if not game.apply_move(x, y):
-                    game.winner = 3 - game.current_player
-                    emit('update', state_payload(game, {'error_msg': 'AI made an invalid move.', 'match_id': match_id}), room=broadcast_target)
-                    return
-
-                winner = game.check_win(x, y)
-                if winner != 0:
-                    game.winner = winner
-
-                emit('update', state_payload(game, {
-                    'ai_move': {'x': x, 'y': y, 'player': 3 - game.current_player},
-                    'match_id': match_id
-                }), room=broadcast_target)
-                if game.winner != 0 or game.is_board_full() or game.is_terminated:
-                    print(f"Game ended after {turn + 1} turns. Winner: {game.winner}")
-                    break
-        finally:
-            if match_id:
-                active_matches.pop(match_id, None)
-
-        # update ratings and save match
-        elo_winner = (game.winner - 1) if game.winner in (1, 2) else -1
-        if player_1_type == 'bot' and player_2_type == 'bot':
-            update_bot_ratings(player_1_id, player_2_id, elo_winner, match_id)
-
-        players = build_players_json(player_1_id, player_1_type, player_2_id, player_2_type, human_name=current_user.username)
-        finalize_match_record(match_id, 'Gomoku', players, elo_winner, json.dumps(game.move_history), 'move_history')
-
-        if match_id:
-            socketio.emit('match_finished', {
-                'match_id': match_id,
-                'winner': game.winner,
-                'move_history': game.move_history
-            }, room=match_id)
-
-                    
+        with match_lifecycle(
+            match_id=match_id, game_name='Gomoku', players=players,
+            player_ids=(player_1_id, player_2_id),
+            player_types=(player_1_type, player_2_type),
+            payload_col='move_history', socketio=socketio, namespace='/gomoku',
+            room=broadcast_target, active_matches=active_matches,
+            executors=(executor_1, executor_2), board_game=game,
+            notify=lambda result: emit('update', state_payload(game, {
+                'match_id': match_id, 'error_msg': result.error_msg,
+            }), room=broadcast_target),
+        ):
+            emit('game_started', state_payload(game), room=broadcast_target)
+            play_board_game(
+                game, (lambda value: get_output(0, value), lambda value: get_output(1, value)),
+                lambda extra: emit('update', state_payload(game, {
+                    'match_id': match_id, **extra,
+                }), room=broadcast_target),
+                256, column_only=False,
+            )
 
     @socketio.on('player_move', namespace='/gomoku')
     def handle_player_move(data):

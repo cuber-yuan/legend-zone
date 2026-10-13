@@ -53,6 +53,7 @@ def finalize_match_record(match_id, game, players_json, winner, payload_json, pa
     otherwise INSERT a completed row (the legacy no-match-id game-page path)."""
     if payload_col not in _PAYLOAD_COLS:
         raise ValueError(f"invalid payload column: {payload_col}")
+    saved_id = match_id or uuid.uuid4().hex
     conn = None
     try:
         conn = get_db_connection()
@@ -62,35 +63,19 @@ def finalize_match_record(match_id, game, players_json, winner, payload_json, pa
                     f"UPDATE matches SET players = ?, winner = ?, {payload_col} = ?, status = 'finished' WHERE id = ?",
                     (players_json, winner, payload_json, match_id)
                 )
+                if cursor.rowcount != 1:
+                    raise ValueError(f"match not found: {match_id}")
             else:
                 cursor.execute(
                     f"INSERT INTO matches (id, game, players, winner, {payload_col}, status, created_at) VALUES (?, ?, ?, ?, ?, 'finished', ?)",
-                    (uuid.uuid4().hex, game, players_json, winner, payload_json, utc_now_iso())
+                    (saved_id, game, players_json, winner, payload_json, utc_now_iso())
                 )
             conn.commit()
-    except Exception as e:
-        print("Failed to save match record:", e)
+    except Exception:
+        if conn:
+            conn.rollback()
+        raise
     finally:
         if conn:
             conn.close()
-
-
-def update_match_result(match_id, winner, payload_json, payload_col):
-    """Write winner + payload onto an existing match row (auto-ladder finish,
-    where players was already recorded at creation time)."""
-    if payload_col not in _PAYLOAD_COLS:
-        raise ValueError(f"invalid payload column: {payload_col}")
-    conn = None
-    try:
-        conn = get_db_connection()
-        with conn.cursor() as cursor:
-            cursor.execute(
-                f"UPDATE matches SET winner = ?, {payload_col} = ?, status = 'finished' WHERE id = ?",
-                (winner, payload_json, match_id)
-            )
-            conn.commit()
-    except Exception as e:
-        print("Failed to update match record:", e)
-    finally:
-        if conn:
-            conn.close()
+    return saved_id

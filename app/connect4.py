@@ -6,10 +6,9 @@ from uuid import uuid4
 from flask_socketio import emit, join_room
 import json
 import uuid
-from .services.rating_service import update_bot_ratings
 from .services.bot_service import get_bot_executor as _get_bot_executor, build_players_json
-from .services.match_service import (create_match_record, finalize_match_record,
-                                     update_match_result, state_payload)
+from .services.match_service import create_match_record, state_payload
+from .services.match_lifecycle import match_lifecycle, play_board_game, wait_for_move
 
 connect4_bp = Blueprint('connect4', __name__)
 
@@ -20,107 +19,53 @@ GAME_NAME = 'Connect Four'
 MAX_TURNS = COLS * ROWS
 
 
-def _emit_state(game, match_id, room, extra=None):
-    payload = {'match_id': match_id}
-    if extra:
-        payload.update(extra)
-    emit('update', state_payload(game, payload), room=room)
-
-
-def _parse_column(output_str):
-    """Read the chosen column from a bot's stdout. Returns None if unusable."""
-    try:
-        return int(json.loads(output_str)['x'])
-    except (ValueError, TypeError, KeyError):
-        return None
-
-
 def run_auto_connect4_match(player_1_id, player_2_id):
-    """Non-interactive (AI vs AI) Connect Four match for the background ladder."""
-    print(f"Running auto Connect Four match: {player_1_id} vs {player_2_id}")
-
+    """Run a scheduled bot match using the same completion path as live games."""
     executor_1 = _get_bot_executor(str(player_1_id))
     executor_2 = _get_bot_executor(str(player_2_id))
-    if not executor_1 or not executor_2:
-        print("Error: Failed to load both bot executors for auto match.")
+    executors = (executor_1, executor_2)
+    if not all(executors):
+        for executor in executors:
+            if executor:
+                executor.cleanup()
         return
 
     players = build_players_json(player_1_id, 'bot', player_2_id, 'bot')
     try:
-        match_id = create_match_record(GAME_NAME, players)
-    except Exception as e:
-        print("Failed to create auto match record:", e)
-        executor_1.cleanup()
-        executor_2.cleanup()
-        return
+        match_id = create_match_record('Connect Four', players)
+    except Exception:
+        for executor in executors:
+            executor.cleanup()
+        raise
 
     game = ConnectFourJudge()
     game.game_id = str(uuid.uuid4())
-    game.new_game('bot', 'bot', executor_1, executor_2)
-
-    active_matches[match_id] = {
-        'judge': game,
-        'game_id': game.game_id,
-        'player_1_id': player_1_id,
-        'player_2_id': player_2_id,
-        'player_1_type': 'bot',
-        'player_2_type': 'bot',
-    }
-
-    socketio.emit('match_started', {
-        'match_id': match_id, 'board': game.board, 'game_id': game.game_id
-    }, room=match_id)
-
-    try:
-        for _ in range(MAX_TURNS):
-            input_str = game.send_action_to_ai()
-            executor = executor_1 if game.current_player == 1 else executor_2
-
-            # A bot that crashes, times out or answers nonsense forfeits rather
-            # than taking the whole match thread down with it.
-            try:
-                col = _parse_column(executor.run(input_str))
-            except Exception as exc:
-                print(f"Connect Four bot {game.current_player} failed: {exc}")
-                game.winner = 3 - game.current_player
-                break
-
-            if game.is_terminated:
-                break
-            if col is None or not game.apply_move(col):
-                game.winner = 3 - game.current_player
-                break
-
-            landed = game.move_history[-1]
-            winner = game.check_win(landed['x'], landed['y'])
-            if winner != 0:
-                game.winner = winner
-
-            socketio.emit('update', state_payload(game, {
-                'ai_move': {'x': landed['x'], 'y': landed['y'], 'player': 3 - game.current_player},
-                'match_id': match_id,
-            }), room=match_id)
-
-            if game.winner != 0 or game.is_board_full():
-                break
-    except Exception as exc:
-        # Anything unexpected still has to close the match out, otherwise the
-        # row is stranded at status='playing' and the rating never moves.
-        print(f"Connect Four auto match aborted: {exc}")
-    finally:
-        active_matches.pop(match_id, None)
-        executor_1.cleanup()
-        executor_2.cleanup()
-
-    elo_winner = (game.winner - 1) if game.winner in (1, 2) else -1
-    update_bot_ratings(player_1_id, player_2_id, elo_winner, match_id)
-    update_match_result(match_id, elo_winner, json.dumps(game.move_history), 'move_history')
-
-    socketio.emit('match_finished', {
-        'match_id': match_id,
-        'winner': game.winner,
-        'move_history': game.move_history,
-    }, room=match_id)
+    with match_lifecycle(
+        match_id=match_id, game_name='Connect Four', players=players,
+        player_ids=(player_1_id, player_2_id), player_types=('bot', 'bot'),
+        payload_col='move_history', socketio=socketio, namespace='/connect4',
+        room=match_id, active_matches=active_matches, executors=executors,
+        board_game=game,
+        notify=lambda result: socketio.emit('update', state_payload(game, {
+            'match_id': match_id, 'error_msg': result.error_msg,
+        }), room=match_id, namespace='/connect4'),
+    ):
+        game.new_game('bot', 'bot', executor_1, executor_2)
+        active_matches[match_id] = {
+            'judge': game, 'game_id': game.game_id,
+            'player_1_id': player_1_id, 'player_2_id': player_2_id,
+            'player_1_type': 'bot', 'player_2_type': 'bot',
+        }
+        socketio.emit('match_started', {
+            'match_id': match_id, 'board': game.board, 'game_id': game.game_id,
+        }, room=match_id, namespace='/connect4')
+        play_board_game(
+            game, (executor_1.run, executor_2.run),
+            lambda extra: socketio.emit('update', state_payload(game, {
+                'match_id': match_id, **extra,
+            }), room=match_id, namespace='/connect4'),
+            MAX_TURNS, column_only=True,
+        )
 
 
 def register_connect4_events(socketio):
@@ -214,76 +159,36 @@ def register_connect4_events(socketio):
                 'player_2_type': player_2_type,
             }
 
-        emit('game_started', state_payload(game), room=broadcast_target)
+        players = build_players_json(
+            player_1_id, player_1_type, player_2_id, player_2_type,
+            human_name=current_user.username,
+        )
 
-        def wait_for_human():
-            while 'pending_move' not in sessions.get(user_id, {}):
-                if user_id not in sessions or sessions[user_id]['sid'] != sid:
-                    break
-                socketio.sleep(0.05)
-            return json.dumps(sessions[user_id].pop('pending_move')) \
-                if 'pending_move' in sessions.get(user_id, {}) else None
+        def get_output(player, input_str):
+            player_type = (player_1_type, player_2_type)[player]
+            if player_type == 'human':
+                return wait_for_move(sessions, user_id, sid, game, socketio)
+            return (executor_1, executor_2)[player].run(input_str)
 
-        def get_output_1(input_str=None):
-            return wait_for_human() if player_1_type == 'human' else executor_1.run(input_str)
-
-        def get_output_2(input_str=None):
-            return wait_for_human() if player_2_type == 'human' else executor_2.run(input_str)
-
-        try:
-            for _ in range(MAX_TURNS):
-                input_str = game.send_action_to_ai()
-                get_output = get_output_1 if game.current_player == 1 else get_output_2
-
-                # A crashed bot, or a human who left, forfeits instead of
-                # killing the thread that writes the match record.
-                try:
-                    output_str = get_output(input_str)
-                    if output_str is None:
-                        game.winner = 3 - game.current_player
-                        break
-                    col = _parse_column(output_str)
-                except Exception as exc:
-                    print(f"Connect Four player {game.current_player} failed: {exc}")
-                    game.winner = 3 - game.current_player
-                    break
-
-                if game.is_terminated:
-                    break
-                if col is None or not game.apply_move(col):
-                    game.winner = 3 - game.current_player
-                    _emit_state(game, match_id, broadcast_target, {'error_msg': 'Invalid move.'})
-                    break
-
-                landed = game.move_history[-1]
-                winner = game.check_win(landed['x'], landed['y'])
-                if winner != 0:
-                    game.winner = winner
-
-                _emit_state(game, match_id, broadcast_target, {
-                    'ai_move': {'x': landed['x'], 'y': landed['y'], 'player': 3 - game.current_player}
-                })
-                if game.winner != 0 or game.is_board_full():
-                    break
-        except Exception as exc:
-            print(f"Connect Four match aborted: {exc}")
-        finally:
-            if match_id:
-                active_matches.pop(match_id, None)
-
-        elo_winner = (game.winner - 1) if game.winner in (1, 2) else -1
-        if player_1_type == 'bot' and player_2_type == 'bot':
-            update_bot_ratings(player_1_id, player_2_id, elo_winner, match_id)
-
-        players = build_players_json(player_1_id, player_1_type, player_2_id, player_2_type, human_name=current_user.username)
-        finalize_match_record(match_id, GAME_NAME, players, elo_winner, json.dumps(game.move_history), 'move_history')
-
-        if match_id:
-            socketio.emit('match_finished', {
-                'match_id': match_id,
-                'winner': game.winner,
-                'move_history': game.move_history,
-            }, room=match_id)
+        with match_lifecycle(
+            match_id=match_id, game_name='Connect Four', players=players,
+            player_ids=(player_1_id, player_2_id),
+            player_types=(player_1_type, player_2_type),
+            payload_col='move_history', socketio=socketio, namespace='/connect4',
+            room=broadcast_target, active_matches=active_matches,
+            executors=(executor_1, executor_2), board_game=game,
+            notify=lambda result: emit('update', state_payload(game, {
+                'match_id': match_id, 'error_msg': result.error_msg,
+            }), room=broadcast_target),
+        ):
+            emit('game_started', state_payload(game), room=broadcast_target)
+            play_board_game(
+                game, (lambda value: get_output(0, value), lambda value: get_output(1, value)),
+                lambda extra: emit('update', state_payload(game, {
+                    'match_id': match_id, **extra,
+                }), room=broadcast_target),
+                MAX_TURNS, column_only=True,
+            )
 
     @socketio.on('player_move', namespace='/connect4')
     def handle_player_move(data):
