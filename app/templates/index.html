@@ -165,21 +165,17 @@
   }
 
   /* --- Latest Matches table --- */
-  .lm-head { display: flex; align-items: baseline; justify-content: space-between; gap: 0.75rem; margin-bottom: 0.9rem; }
+  .lm-head { display: flex; align-items: baseline; justify-content: space-between; gap: 0.75rem; }
   .lm-count {
     font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
     font-size: 0.62rem; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase;
     color: #475569; background: #f1f5f9; border: 1px solid #e2e8f0;
     padding: 0.2rem 0.5rem; border-radius: 999px; white-space: nowrap;
   }
-  /* Clip the wrapper instead of the cells: preflight's border-collapse makes
-     border-radius on th/td a no-op. The x axis must stay scrollable — a plain
-     `overflow: hidden` here would defeat the overflow-x-auto utility on the
-     element and silently cut the Time column off on narrow screens. */
+  /* The section owns the rounded outline and shadow; this wrapper only scrolls. */
   .lm-card {
-    border: 1px solid #e2e8f0;
     overflow-x: auto; overflow-y: hidden;
-    background: #fff; box-shadow: 0 4px 12px rgba(15, 23, 42, 0.06);
+    background: #fff;
   }
   /* Body spacing matches the restored header cells' px-4/py-2 so column edges line up. */
   .lm-table tbody td { padding: 0.5rem 1rem; border-top: 1px solid #f1f5f9; vertical-align: middle; }
@@ -526,9 +522,9 @@
     </section>
 
     <!-- Latest Matches -->
-    <section class="bg-gray-100 pt-6 rounded-lg overflow-hidden shadow-md">
-        <div class="lm-head px-6" style="margin-bottom:1em;">
-            <h2 class="text-2xl font-semibold">Latest Matches</h2>
+    <section class="bg-white rounded-lg overflow-hidden shadow-md">
+        <div class="lm-head px-4 py-4 sm:px-6 sm:py-5">
+            <h2 class="text-xl sm:text-2xl font-semibold">Latest Matches</h2>
             <span class="lm-count" id="latest-count"></span>
         </div>
         <div class="lm-card overflow-x-auto">
