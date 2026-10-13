@@ -1,99 +1,137 @@
 {% extends 'base.html' %}
-
 {% block title %}Games{% endblock %}
 
 {% block content %}
-<div class="max-w-screen-lg mx-auto mt-8">
-    <h1 class="text-3xl font-extrabold text-center mb-8 text-blue-700 tracking-tight drop-shadow">Game List</h1>
-    <div class="overflow-x-auto rounded-xl shadow-2xl bg-white">
-        <table class="min-w-full text-left text-gray-700 border border-gray-300 bg-white">
-            <thead>
-                <tr class="bg-gradient-to-r from-blue-600 to-blue-400 text-white">
-                    <th class="px-4 py-2 border-b border-blue-700">#</th>
-                    <th class="px-4 py-2 border-b border-blue-700">Name</th>
-                    <th class="px-4 py-2 border-b border-blue-700">Description</th>
-                    <th class="px-4 py-2 border-b border-blue-700 hidden sm:table-cell">Play</th>
-                </tr>
-            </thead>
-            <tbody class="bg-white divide-y divide-gray-100">
-                <tr class="hover:bg-blue-50 transition even:bg-gray-50 odd:bg-white">
-                    <td class="px-6 py-4 text-center font-bold text-blue-700">1</td>
-                    <td class="px-6 py-4 font-semibold">Gomoku</td>
-                    <td class="px-6 py-4 hidden md:table-cell text-gray-600">A classic strategy board game.</td>
-                    <td class="px-6 py-4 text-center">
-                        <a href="{{ url_for('main.gomoku') }}" class="text-blue-600 hover:underline">Play</a>
-                    </td>
-                </tr>
-                <tr class="hover:bg-blue-50 transition even:bg-gray-50 odd:bg-white">
-                    <td class="px-6 py-4 text-center font-bold text-blue-700">2</td>
-                    <td class="px-6 py-4 font-semibold">Tic Tac Toe</td>
-                    <td class="px-6 py-4 hidden md:table-cell text-gray-600">Classic 3x3 noughts and crosses. First to line up three wins.</td>
-                    <td class="px-6 py-4 text-center">
-                        <a href="{{ url_for('main.tictactoe') }}" class="text-blue-600 hover:underline">Play</a>
-                    </td>
-                </tr>
-                <tr class="hover:bg-blue-50 transition even:bg-gray-50 odd:bg-white">
-                    <td class="px-6 py-4 text-center font-bold text-blue-700">3</td>
-                    <td class="px-6 py-4 font-semibold">Connect Four</td>
-                    <td class="px-6 py-4 hidden md:table-cell text-gray-600">Take turns dropping discs into columns; the first to line up four in a row wins.</td>
-                    <td class="px-6 py-4 text-center">
-                        <a href="{{ url_for('main.connect4') }}" class="text-blue-600 hover:underline">Play</a>
-                    </td>
-                </tr>
-                <tr class="hover:bg-blue-50 transition even:bg-gray-50 odd:bg-white">
-                    <td class="px-6 py-4 text-center font-bold text-blue-700">4</td>
-                    <td class="px-6 py-4 font-semibold">Tank Battle</td>
-                    <td class="px-6 py-4 hidden md:table-cell text-gray-600">An action-packed tank battle game.</td>
-                    <td class="px-6 py-4 text-center">
-                        <a href="{{ url_for('main.tank') }}" class="text-blue-600 hover:underline">Play</a>
-                    </td>
-                </tr>
-                <tr class="hover:bg-blue-50 transition even:bg-gray-50 odd:bg-white">
-                    <td class="px-6 py-4 text-center font-bold text-blue-700">5</td>
-                    <td class="px-6 py-4 font-semibold">Snake</td>
-                    <td class="px-6 py-4 hidden md:table-cell text-gray-600">A two-player competitive game where both players simultaneously make decisions each turn to control their own snake.</td>
-                    <td class="px-6 py-4 text-center">
-                        <a href="{{ url_for('main.snake') }}" class="text-blue-600 hover:underline">Play</a>
-                    </td>
-                </tr>
-                <tr class="hover:bg-blue-50 transition even:bg-gray-50 odd:bg-white">
-                    <td class="px-6 py-4 text-center font-bold text-blue-700">6</td>
-                    <td class="px-6 py-4 font-semibold">Mini Snake</td>
-                    <td class="px-6 py-4 hidden md:table-cell text-gray-600">Mini-map version of the Snake game, suitable for getting started with reinforcement learning.</td>
-                    <td class="px-6 py-4 text-center">
-                        <a href="{{ url_for('main.msnake') }}" class="text-blue-600 hover:underline">Play</a>
-                    </td>
-                </tr>
-                <tr class="hover:bg-blue-50 transition even:bg-gray-50 odd:bg-white">
-                    <td class="px-6 py-4 text-center font-bold text-blue-700">7</td>
-                    <td class="px-6 py-4 font-semibold">Yahtzee</td>
-                    <td class="px-6 py-4 hidden md:table-cell text-gray-600">Dice game.</td>
-                    <td class="px-6 py-4 text-center">
-                        <a href="{{ url_for('main.yahtzee') }}" class="text-blue-600 hover:underline">Play</a>
-                    </td>
-                </tr>
-                <!-- <tr class="hover:bg-blue-50 transition even:bg-gray-50 odd:bg-white">
-                    <td class="px-6 py-4 text-center font-bold text-blue-700">8</td>
-                    <td class="px-6 py-4 font-semibold">Cat King</td>
-                    <td class="px-6 py-4 hidden md:table-cell text-gray-600">Take on the role of a Feral Druid in WoW WotLK, sharpen your rotation, and push your DPS to the limit. (COMING SOON)</td>
-                    <td class="px-6 py-4 text-center">
-                        <a href="{{ url_for('main.catking') }}" class="text-blue-600 hover:underline">Play</a>
-                    </td>
-                </tr> -->
-                <tr class="hover:bg-blue-50 transition even:bg-gray-50 odd:bg-white">
-                    <td class="px-6 py-4 text-center font-bold text-blue-700">8</td>
-                    <td class="px-6 py-4 font-semibold">Injoker</td>
-                    <td class="px-6 py-4 hidden md:table-cell text-gray-600">Master the art of playing Invoker in Dota 2! Practice quick spell combinations, unleash devastating abilities. Hone your skills to become the true Invoker, not an "Injoker".</td>
-                    <td class="px-6 py-4 text-center">
-                        <a href="{{ url_for('main.injoker') }}" class="text-blue-600 hover:underline">Play</a>
-                    </td>
-                </tr>
-            </tbody>
-        </table>
+{% set arena_games = [
+  {'name': 'Gomoku', 'endpoint': 'main.gomoku', 'icon': 'gomoku', 'format': '15 × 15 board', 'description': 'Take turns placing stones. Connect five in a row to claim the board.', 'tag': 'Strategy'},
+  {'name': 'Tic Tac Toe', 'endpoint': 'main.tictactoe', 'icon': 'tictactoe', 'format': '3 × 3 board', 'description': 'A small board with no room for mistakes. Line up three marks before your opponent.', 'tag': 'Strategy'},
+  {'name': 'Connect Four', 'endpoint': 'main.connect4', 'icon': 'connect4', 'format': '7 × 6 board', 'description': 'Drop a disc, set a trap. Connect four horizontally, vertically, or diagonally.', 'tag': 'Strategy'},
+  {'name': 'Tank Battle', 'endpoint': 'main.tank', 'icon': 'tank', 'format': '9 × 9 battlefield', 'description': 'Command two tanks, protect your base, and coordinate movement and fire each round.', 'tag': 'Tactics'},
+  {'name': 'Snake', 'endpoint': 'main.snake', 'icon': 'snake', 'format': 'Variable map', 'description': 'Two growing snakes share one arena. Plan each turn and outlast your opponent.', 'tag': 'Survival'},
+  {'name': 'Mini Snake', 'endpoint': 'main.msnake', 'icon': 'snake', 'format': '10 × 11 map', 'description': 'The same snake duel on a fixed-size map. A compact arena for testing your next idea.', 'tag': 'Survival'}
+] %}
+{% set solo_games = [
+  {'name': 'Yahtzee', 'endpoint': 'main.yahtzee', 'icon': 'dice', 'format': 'Dice game', 'description': 'Roll the dice, choose what to keep, and build the best score you can.', 'tag': 'Solo'},
+  {'name': 'Injoker', 'endpoint': 'main.injoker', 'icon': 'spells', 'format': 'Spell practice', 'description': 'Practice Invoker’s spell combinations. Build speed and accuracy, one invocation at a time.', 'tag': 'Practice'}
+] %}
+
+<style>
+  .games-page { --games-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+  .games-meta { font-family: var(--games-mono); font-size: 0.65rem; letter-spacing: 0.08em; }
+  .games-count {
+    font-family: var(--games-mono); font-size: 0.62rem; letter-spacing: 0.08em;
+    padding: 0.2rem 0.5rem; border: 1px solid #e2e8f0; border-radius: 999px;
+    background: #f1f5f9; color: #475569; white-space: nowrap;
+  }
+  .catalog-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
+  .catalog-card {
+    display: flex; flex-direction: column; min-width: 0; padding: 1.25rem;
+    border: 1px solid #e2e8f0; border-radius: 0.75rem; background: #f8fafc;
+    transition: background 0.15s, border-color 0.15s, box-shadow 0.15s;
+  }
+  .catalog-card:hover { background: #fff; border-color: #93c5fd; box-shadow: 0 4px 14px rgba(15, 23, 42, 0.07); }
+  .catalog-card:focus-visible, .games-create:focus-visible { outline: 2px solid #2563eb; outline-offset: 3px; }
+  .catalog-card-head { display: flex; align-items: center; gap: 0.9rem; }
+  .catalog-icon {
+    display: grid; place-items: center; flex: none; width: 3rem; height: 3rem;
+    border: 1px solid #bfdbfe; border-radius: 0.75rem; background: #eff6ff; color: #2563eb;
+  }
+  .catalog-icon svg { width: 1.75rem; height: 1.75rem; }
+  .catalog-card[data-tone="teal"] .catalog-icon { border-color: #99f6e4; background: #f0fdfa; color: #0f766e; }
+  .catalog-card[data-tone="purple"] .catalog-icon { border-color: #e9d5ff; background: #faf5ff; color: #7e22ce; }
+  .catalog-description { color: #64748b; font-size: 0.875rem; line-height: 1.65; margin: 1rem 0 1.25rem; }
+  .catalog-foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.5rem; margin-top: auto; }
+  .catalog-tag { padding: 0.2rem 0.55rem; border-radius: 999px; background: #e2e8f0; color: #475569; font-size: 0.65rem; font-weight: 600; }
+  .catalog-open { display: inline-flex; align-items: center; gap: 0.4rem; color: #2563eb; font-size: 0.8rem; font-weight: 600; }
+  .catalog-open svg { width: 1rem; height: 1rem; }
+  .games-create {
+    display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.6rem 0.9rem;
+    border: 1px solid rgba(255,255,255,0.35); border-radius: 0.5rem;
+    background: rgba(255,255,255,0.12); color: #fff; font-size: 0.8rem; font-weight: 600;
+  }
+  .games-create:hover { background: rgba(255,255,255,0.22); }
+  @media (max-width: 639px) {
+    .catalog-grid { grid-template-columns: 1fr; gap: 0.75rem; }
+    .catalog-card { padding: 1rem; }
+  }
+  @media (prefers-reduced-motion: reduce) { .catalog-card { transition: none; } }
+</style>
+
+{% macro game_icon(kind) -%}
+<svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+  {% if kind == 'gomoku' %}
+  <path d="M5 9h22M5 16h22M5 23h22M9 5v22M16 5v22M23 5v22" opacity="0.4"/><circle cx="9" cy="9" r="3" fill="currentColor"/><circle cx="16" cy="16" r="3" fill="currentColor"/><circle cx="23" cy="16" r="3" fill="#eff6ff"/><circle cx="23" cy="23" r="3" fill="currentColor"/>
+  {% elif kind == 'tictactoe' %}
+  <path d="M12 4v24M21 4v24M4 12h24M4 21h24M5 5l4 4M9 5L5 9M14 14l5 5M19 14l-5 5"/><circle cx="25" cy="7" r="2.5"/><circle cx="7" cy="25" r="2.5"/>
+  {% elif kind == 'connect4' %}
+  <rect x="4" y="5" width="24" height="21" rx="3"/><path d="M4 28h24"/><circle cx="10" cy="11" r="2"/><circle cx="16" cy="11" r="2"/><circle cx="22" cy="11" r="2"/><circle cx="10" cy="19" r="2" fill="currentColor"/><circle cx="16" cy="19" r="2" fill="currentColor"/><circle cx="22" cy="19" r="2"/>
+  {% elif kind == 'tank' %}
+  <rect x="6" y="9" width="20" height="18" rx="4"/><path d="M10 10v16M22 10v16M16 4v9"/><circle cx="16" cy="17" r="4"/><path d="M6 14h4M6 21h4M22 14h4M22 21h4"/>
+  {% elif kind == 'snake' %}
+  <path d="M8 25h11a5 5 0 0 0 0-10h-6a5 5 0 0 1 0-10h9" stroke-width="4"/><circle cx="25" cy="5" r="3" fill="currentColor"/><circle cx="26" cy="4" r="0.7" fill="white" stroke="none"/>
+  {% elif kind == 'dice' %}
+  <rect x="5" y="5" width="22" height="22" rx="5"/><circle cx="11" cy="11" r="1.4" fill="currentColor"/><circle cx="21" cy="11" r="1.4" fill="currentColor"/><circle cx="16" cy="16" r="1.4" fill="currentColor"/><circle cx="11" cy="21" r="1.4" fill="currentColor"/><circle cx="21" cy="21" r="1.4" fill="currentColor"/>
+  {% else %}
+  <circle cx="9" cy="9" r="4"/><circle cx="23" cy="9" r="4"/><circle cx="16" cy="23" r="4"/><path d="M16 4v6M13 7h6M5 23h3M24 23h3"/>
+  {% endif %}
+</svg>
+{%- endmacro %}
+
+{% macro game_cards(games, arena) -%}
+<div class="catalog-grid">
+  {% for game in games %}
+  <a href="{{ url_for(game.endpoint) }}" class="catalog-card" data-tone="{{ 'purple' if not arena else ('teal' if game.tag in ['Tactics', 'Survival'] else 'blue') }}">
+    <div class="catalog-card-head">
+      <span class="catalog-icon">{{ game_icon(game.icon) }}</span>
+      <div class="min-w-0">
+        <div class="games-meta text-gray-400 mb-1">{{ game.format }}</div>
+        <h3 class="text-lg font-semibold text-gray-900">{{ game.name }}</h3>
+      </div>
     </div>
+    <p class="catalog-description">{{ game.description }}</p>
+    <div class="catalog-foot">
+      <div class="flex flex-wrap gap-1.5">
+        <span class="catalog-tag">{{ game.tag }}</span>
+        {% if arena %}<span class="catalog-tag">Human + Bot</span>{% endif %}
+      </div>
+      <span class="catalog-open">Open game <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M5 12h14m-6-6 6 6-6 6"/></svg></span>
+    </div>
+  </a>
+  {% endfor %}
 </div>
+{%- endmacro %}
 
+<div class="games-page max-w-screen-lg mx-auto mt-8 space-y-8">
+  <header class="bg-gradient-to-r from-blue-600 to-blue-400 text-white p-6 sm:p-8 rounded-lg shadow-lg">
+    <!-- <div class="games-meta uppercase text-blue-100 mb-3">The game library</div> -->
+    <h1 class="text-3xl sm:text-4xl font-bold mb-3">Game List</h1>
+    <!-- <p class="text-sm sm:text-base text-blue-50 max-w-xl">Find your next challenge. Build a bot, take a Human seat, or sharpen your skills in a solo game.</p> -->
+    <div class="flex flex-wrap items-center justify-between gap-4 mt-5">
+      <!-- <div class="games-meta flex flex-wrap gap-x-5 gap-y-2 text-blue-100">
+        <span><strong class="text-white">8</strong> games</span>
+        <span><strong class="text-white">6</strong> bot arenas</span>
+        <span><strong class="text-white">2</strong> solo &amp; practice games</span>
+      </div> -->
+      <!-- <a href="{{ url_for('main.home') }}" class="games-create"><span aria-hidden="true">+</span> Create a match</a> -->
+    </div>
+  </header>
+
+  <section class="bg-white p-4 sm:p-6 rounded-lg shadow-md" aria-labelledby="arena-title">
+    <div class="flex items-center justify-between gap-3 mb-2">
+      <h2 id="arena-title" class="text-xl sm:text-2xl font-semibold text-gray-900">Bot Arenas</h2>
+      <span class="games-count">6 GAMES</span>
+    </div>
+    <p class="text-sm text-gray-500 mb-5">Explore the rules and sample bots here. Start a Human or Bot match from Game Tables on the homepage.</p>
+    {{ game_cards(arena_games, true) }}
+  </section>
+
+  <section class="bg-white p-4 sm:p-6 rounded-lg shadow-md" aria-labelledby="solo-title">
+    <div class="flex items-center justify-between gap-3 mb-2">
+      <h2 id="solo-title" class="text-xl sm:text-2xl font-semibold text-gray-900">Solo &amp; Practice</h2>
+      <span class="games-count">2 GAMES</span>
+    </div>
+    <p class="text-sm text-gray-500 mb-5">A quick game or a focused practice session. Jump straight in.</p>
+    {{ game_cards(solo_games, false) }}
+  </section>
+</div>
 {% endblock %}
-
-
-
