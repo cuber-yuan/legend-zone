@@ -10,53 +10,14 @@
 <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-python.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/phaser@3.55.2/dist/phaser.js"></script>
 
-<style>
-  canvas {
-    background: #ffffff;
-    margin-top: 20px;
-    border: 2px solid #333;
-  }
-  .spectator-badge {
-    display: none;
-    text-align: center;
-    margin-top: 0.5rem;
-    padding: 0.3rem 0.8rem;
-    background: #fef3c7;
-    color: #92400e;
-    border-radius: 0.25rem;
-    font-size: 0.85rem;
-    max-width: 200px;
-    margin-left: auto;
-    margin-right: auto;
-  }
-  .turn-hint {
-    display: none;
-    text-align: center;
-    margin-top: 0.5rem;
-    padding: 0.3rem 0.8rem;
-    background: #dbeafe;
-    color: #1e40af;
-    border-radius: 0.25rem;
-    font-size: 0.85rem;
-    max-width: 260px;
-    margin-left: auto;
-    margin-right: auto;
-  }
-</style>
+<link rel="stylesheet" href="{{ url_for('static', filename='board-games.css') }}">
+<script src="{{ url_for('static', filename='board-games.js') }}"></script>
 
-<div class="bg-gray-100 py-10">
+<div class="board-game-page">
   <div class="max-w-screen-xl mx-auto">
-    <div style="position:relative;width:100%;max-width:420px;height:auto;margin:auto;box-sizing:border-box;">
-      <div id="phaser-container" style="width:100%;height:100%;"></div>
-    </div>
-
-    {% if not match_id %}
-    <br>
-    <br>
-    {% endif %}
-
-    <div id="spectatorBadge" class="spectator-badge">Spectating</div>
-    <div id="turnHint" class="turn-hint"></div>
+    {% set board_game = "Tic Tac Toe" %}
+    {% set board_variant = "tictactoe" %}
+    {% include "components/board_arena.html" %}
 
     {% set replay_unit = "Move" %}
     {% include "components/replay_controls.html" %}
@@ -74,8 +35,7 @@ const MATCH_ID = "{{ match_id or '' }}";
 const MATCH_STATUS = "{{ match.status if match_id and match else '' }}";
 
 function getBoardSize() {
-  const padding = window.innerWidth < 600 ? 24 : 70;
-  return Math.min(window.innerWidth - padding - 48, 420);
+  return Math.max(15, Math.floor(document.querySelector('.board-game-surface').clientWidth));
 }
 
 let SIZE = 3;
@@ -130,7 +90,7 @@ const config = {
   width: BOARD_SIZE,
   height: BOARD_SIZE,
   parent: 'phaser-container',
-  backgroundColor: '#ffffff',
+  backgroundColor: '#e8eef5',
   scene: { create, preload }
 };
 let phaserGame = new Phaser.Game(config);
@@ -150,32 +110,8 @@ function create() {
 }
 
 function drawBoard() {
-  graphics.clear();
-  graphics.lineStyle(3, 0x333333, 1);
-  for (let i = 1; i < SIZE; i++) {
-    graphics.lineBetween(i * GRID, 8, i * GRID, BOARD_SIZE - 8);
-    graphics.lineBetween(8, i * GRID, BOARD_SIZE - 8, i * GRID);
-  }
-  for (let y = 0; y < SIZE; y++) {
-    for (let x = 0; x < SIZE; x++) {
-      if (board[y][x] === 1) drawX(x, y);
-      else if (board[y][x] === 2) drawO(x, y);
-    }
-  }
-}
-
-function drawX(x, y) {
-  const cx = x * GRID, cy = y * GRID;
-  const m = GRID * 0.28;
-  graphics.lineStyle(6, 0x2563eb, 1);
-  graphics.lineBetween(cx + m, cy + m, cx + GRID - m, cy + GRID - m);
-  graphics.lineBetween(cx + GRID - m, cy + m, cx + m, cy + GRID - m);
-}
-
-function drawO(x, y) {
-  const cx = x * GRID + GRID / 2, cy = y * GRID + GRID / 2;
-  graphics.lineStyle(6, 0xdc2626, 1);
-  graphics.strokeCircle(cx, cy, GRID * 0.28);
+  if (!graphics) return;
+  BoardGameRenderer.draw({ graphics, variant: "tictactoe", board, lastMove, size: SIZE, width: BOARD_SIZE });
 }
 
 let maskRect = null;
@@ -183,8 +119,8 @@ let maskText = null;
 
 function showPhaserMask(msg = "") {
   hidePhaserMask();
-  maskRect = graphics.scene.add.rectangle(BOARD_SIZE / 2, BOARD_SIZE / 2, BOARD_SIZE, BOARD_SIZE, 0x000000, 0.25).setDepth(1000);
-  maskText = graphics.scene.add.text(BOARD_SIZE / 2, BOARD_SIZE / 2, msg, { fontSize: Math.floor(BOARD_SIZE / 12) + 'px', color: '#fff', fontStyle: 'bold' }).setOrigin(0.5).setDepth(1001);
+  maskRect = graphics.scene.add.rectangle(BOARD_SIZE / 2, BOARD_SIZE / 2, BOARD_SIZE, BOARD_SIZE, 0x15253b, 0.45).setDepth(1000);
+  maskText = graphics.scene.add.text(BOARD_SIZE / 2, BOARD_SIZE / 2, msg, { fontFamily: 'system-ui, sans-serif', fontSize: Math.floor(BOARD_SIZE / 12) + 'px', color: '#fff', fontStyle: 'bold' }).setOrigin(0.5).setDepth(1001);
 }
 
 function hidePhaserMask() {
@@ -321,6 +257,7 @@ window.addEventListener('resize', () => {
   GRID = BOARD_SIZE / SIZE;
   phaserGame.scale.resize(BOARD_SIZE, BOARD_SIZE);
   drawBoard();
+  if (maskText) showPhaserMask(maskText.text);
 });
 
 // --- Init ---

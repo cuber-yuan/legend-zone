@@ -428,8 +428,8 @@
 
         const matches = data.matches || [];
         const tbody = document.querySelector('#latest-matches-tbody');
-        const count = document.getElementById('latest-count');
-        count.textContent = matches.length ? `${matches.length} recent` : '';
+        // const count = document.getElementById('latest-count');
+        // count.textContent = matches.length ? `${matches.length} recent` : '';
 
         tbody.innerHTML = '';
         if (!matches.length) {
@@ -521,7 +521,7 @@
     <section class="bg-white rounded-lg overflow-hidden shadow-md">
         <div class="lm-head px-4 py-4 sm:px-6 sm:py-5">
             <h2 class="text-xl sm:text-2xl font-semibold">Latest Matches</h2>
-            <span class="lm-count" id="latest-count"></span>
+            <!-- <span class="lm-count" id="latest-count"></span> -->
         </div>
         <div class="lm-card overflow-x-auto">
             <table class="lm-table min-w-full text-left text-gray-700 bg-white">

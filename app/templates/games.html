@@ -119,7 +119,6 @@
   <section class="bg-white p-4 sm:p-6 rounded-lg shadow-md" aria-labelledby="arena-title">
     <div class="flex items-center justify-between gap-3 mb-2">
       <h2 id="arena-title" class="text-xl sm:text-2xl font-semibold text-gray-900">Bot Arenas</h2>
-      <span class="games-count">6 GAMES</span>
     </div>
     <p class="text-sm text-gray-500 mb-5">Explore the rules and sample bots here. Start a Human or Bot match from Game Tables on the homepage.</p>
     {{ game_cards(arena_games, true) }}
@@ -128,7 +127,6 @@
   <section class="bg-white p-4 sm:p-6 rounded-lg shadow-md" aria-labelledby="solo-title">
     <div class="flex items-center justify-between gap-3 mb-2">
       <h2 id="solo-title" class="text-xl sm:text-2xl font-semibold text-gray-900">Solo &amp; Practice</h2>
-      <span class="games-count">2 GAMES</span>
     </div>
     <p class="text-sm text-gray-500 mb-5">A quick game or a focused practice session. Jump straight in.</p>
     {{ game_cards(solo_games, false) }}
