@@ -62,6 +62,12 @@ async function settled(page) {
   try {
     const page = await browser.newPage({viewport:{width:1280,height:1100}});
     const errors = await open(page);
+    assert.equal(await page.locator('[data-player="1"] .c4-player-label').innerText(),'GravityBot');
+    assert.equal(await page.locator('[data-player="2"] .c4-player-label').innerText(),'cuber');
+    assert.ok((await page.locator('[data-player="1"] .c4-player-side').textContent()).includes('Bot v3'));
+    assert.ok((await page.locator('[data-player="2"] .c4-player-side').textContent()).includes('Human'));
+    assert.equal(await page.evaluate(()=>Math.round(document.querySelector('.c4-arena').getBoundingClientRect().width)),
+      await page.evaluate(()=>Math.round(document.querySelector('.c4-page').getBoundingClientRect().width)));
     await start(page);
     await page.locator('[data-column="3"]').click();
     await page.evaluate(() => sendPlayerMove(3));
@@ -90,7 +96,7 @@ async function settled(page) {
     await settled(page);
     assert.equal(await page.evaluate(()=>winningCells(displayBoard).length),4);
     assert.equal(await page.evaluate(()=>replayController.index),7);
-    assert.equal(await page.locator('#resultTitle').innerText(),'Blue wins');
+    assert.equal(await page.locator('#resultTitle').innerText(),'GravityBot wins');
     await page.screenshot({path:path.join(preview,'connect4-desktop.png'),fullPage:true});
 
     // Seeking backwards or jumping snaps immediately; stepping forwards animates.
@@ -120,6 +126,10 @@ async function settled(page) {
     await start(page); await drop(page,2,1);
     assert.equal(await page.evaluate(()=>isAnimating),false,'Reduced motion should snap');
     assert.equal(await page.evaluate(()=>displayBoard[5][2]),1);
+    await page.evaluate(()=>applyPlayers(JSON.stringify({player_1:'Legacy Bot',player_2:{name:'<img src=x onerror=alert(1)>',type:'human'}})));
+    await page.evaluate(()=>renderHUD());
+    assert.equal(await page.locator('[data-player="1"] .c4-player-label').innerText(),'Legacy Bot');
+    assert.equal(await page.locator('[data-player="2"] .c4-player-label img').count(),0);
     assert.deepEqual(errors,[]);
 
     const finished = await browser.newPage();

@@ -7,6 +7,7 @@ const motionPreference = window.matchMedia('(prefers-reduced-motion: reduce)');
 let board = emptyBoard(), displayBoard = emptyBoard(), lastMove = null;
 let gameOver = true, userId = null, currentGameId = null, currentPlayer = 1;
 let playerTypes = { '1': 'bot', '2': 'bot' };
+let players = [];
 let awaitingMove = false, isSpectator = false, isReplayMode = false;
 let scene = null, ghost = null, highlights = null, tokenObjects = [];
 let fallingToken = null, animationGeneration = 0, isAnimating = false;
@@ -21,7 +22,24 @@ function canPlay() {
 }
 
 function resultMessage(winner) {
-  return winner === 1 ? 'Blue wins' : winner === 2 ? 'Red wins' : 'Draw';
+  return winner === 1 || winner === 2 ? `${playerName(winner)} wins` : 'Draw';
+}
+
+function parsePlayers(value) {
+  const parsed = typeof value === 'string' ? JSON.parse(value) : value;
+  if (!parsed) return [];
+  const entries = Array.isArray(parsed) ? parsed : [parsed.player_1, parsed.player_2];
+  return entries.map(player => typeof player === 'string' ? { name: player } : player || {});
+}
+
+function playerName(side) {
+  return players[side - 1]?.name || `Player ${side}`;
+}
+
+function applyPlayers(value) {
+  if (!value) return;
+  try { players = parsePlayers(value); }
+  catch (error) { console.error('Failed to parse match players:', error); }
 }
 
 function renderHUD(message) {
@@ -29,7 +47,12 @@ function renderHUD(message) {
   document.getElementById('dropCount').textContent = `${count} / 42`;
   document.getElementById('modeBadge').textContent = isReplayMode ? 'Replay' : isSpectator ? 'Watching' : gameOver ? 'Ready' : 'Live';
   document.querySelectorAll('.c4-player').forEach(el => {
-    el.classList.toggle('active', !gameOver && !isReplayMode && Number(el.dataset.player) === currentPlayer);
+    const side = Number(el.dataset.player);
+    const player = players[side - 1] || {};
+    el.querySelector('.c4-player-label').textContent = playerName(side);
+    const kind = player.type === 'human' ? 'Human' : player.bot_id ? `Bot${player.version ? ` v${player.version}` : ''}` : '';
+    el.querySelector('.c4-player-side').textContent = [kind, side === 1 ? 'First move' : 'Second move'].filter(Boolean).join(' · ');
+    el.classList.toggle('active', !gameOver && !isReplayMode && side === currentPlayer);
   });
   document.querySelectorAll('[data-column]').forEach(button => {
     button.disabled = !canPlay() || board[0][Number(button.dataset.column)] !== 0;
@@ -42,8 +65,8 @@ function renderHUD(message) {
   else if (isAnimating || frames.length) hint.textContent = 'Disc in motion…';
   else if (awaitingMove) hint.textContent = 'Move submitted · waiting for the board';
   else hint.textContent = playerTypes[String(currentPlayer)] === 'human'
-    ? `${currentPlayer === 1 ? 'Blue' : 'Red'} to move · choose a column`
-    : `Waiting for ${currentPlayer === 1 ? 'Blue' : 'Red'}…`;
+    ? `${playerName(currentPlayer)} to move · choose a column`
+    : `Waiting for ${playerName(currentPlayer)}…`;
   updatePreview(hoveredColumn);
 }
 
@@ -218,6 +241,7 @@ function showResult(winner, error) {
 }
 
 function applyState(data) {
+  applyPlayers(data.players);
   if (data.board) board = copyBoard(data.board);
   if (data.current_player) currentPlayer = data.current_player;
   if (data.player_types) playerTypes = data.player_types;
@@ -228,8 +252,8 @@ function resetGame(data, spectator = false) {
   isReplayMode = false; isSpectator = spectator; gameOver = false; awaitingMove = false;
   currentGameId = data.game_id; applyState(data); lastMove = null;
   document.getElementById('gameResult').classList.remove('visible');
-  document.getElementById('replayControls').style.display = 'none';
-  document.getElementById('replayStatus').textContent = '';
+  replayController.hide();
+  replayController.setStatus('');
   renderBoard(board, null); renderHUD();
 }
 
@@ -247,6 +271,7 @@ socket.on('update', data => {
 });
 socket.on('match_status', data => {
   if (data.match_id !== settings.matchId) return;
+  applyPlayers(data.players);
   if (data.status === 'playing') resetGame(data, true);
   else if (data.status === 'finished') startReplay(data.move_history || [], data.winner, true);
   else if (data.status === 'not_started') autoStartMatch(data.players);
@@ -259,7 +284,7 @@ socket.on('match_finished', data => {
 });
 
 const replayController = new ReplayController({
-  counterId: 'moveCounter', baseIntervalMs: 750,
+  baseIntervalMs: 750,
   onRender: index => {
     if (!scene) { queuedReplayIndex = index; return; }
     const previousIndex = replayIndex;
@@ -287,7 +312,6 @@ function startReplay(moves, winner, autoplay = true, error = null) {
   cancelMotion(); frames = []; pendingFinish = null;
   isReplayMode = true; isSpectator = false; gameOver = true;
   replayMoves = moves; replayWinner = winner; replayIndex = 0;
-  document.getElementById('replayControls').style.display = 'flex';
   replaySnap = true;
   replayController.load(moves.length);
   if (!autoplay) replayController.goto(moves.length);
@@ -300,8 +324,8 @@ function startReplay(moves, winner, autoplay = true, error = null) {
 
 function autoStartMatch(playersJson) {
   try {
-    const parsed = typeof playersJson === 'string' ? JSON.parse(playersJson) : playersJson;
-    const players = Array.isArray(parsed) ? parsed : [parsed.player_1, parsed.player_2];
+    applyPlayers(playersJson); renderHUD();
+    const players = parsePlayers(playersJson);
     if (players.length < 2 || !players[0] || !players[1]) return;
     const [p1, p2] = players;
     socket.emit('new_game', { user_id: userId, black_bot: p1.bot_id || null, white_bot: p2.bot_id || null,
@@ -323,6 +347,7 @@ document.querySelectorAll('[data-column]').forEach(button => {
   button.addEventListener('mouseleave', () => updatePreview(null));
   button.addEventListener('blur', () => updatePreview(null));
 });
+applyPlayers(settings.players);
 replayController.attach(); renderHUD();
 if (settings.status === 'finished') startReplay(settings.moves || [], settings.winner, true);
 else if (settings.matchId) {

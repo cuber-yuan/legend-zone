@@ -1,0 +1,31 @@
+{% macro icon(kind) -%}
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+  {% if kind == 'first' %}<path d="M5 5v14m13-13-8 6 8 6V6Z"/>
+  {% elif kind == 'prev' %}<path d="m15 6-6 6 6 6"/>
+  {% elif kind == 'next' %}<path d="m9 6 6 6-6 6"/>
+  {% elif kind == 'last' %}<path d="M19 5v14M6 6l8 6-8 6V6Z"/>
+  {% elif kind == 'pause' %}<path d="M9 5v14M15 5v14" stroke-width="3"/>
+  {% else %}<path d="m9 5 10 7-10 7V5Z" fill="currentColor" stroke="none"/>{% endif %}
+</svg>
+{%- endmacro %}
+<link rel="stylesheet" href="{{ url_for('static', filename='replay-player.css') }}">
+<section id="replayControls" class="replay-controls" data-unit="{{ replay_unit | default('Move') }}" aria-label="Match replay controls" tabindex="0" hidden>
+  <div class="rp-heading">
+    <div class="rp-info"><div class="rp-eyebrow">Match replay</div><p id="replayStatus" class="rp-status" role="status"></p></div>
+    <div class="rp-position"><span class="rp-unit">{{ replay_unit | default('Move') }}</span><span id="replayCounter">0 / 0</span></div>
+  </div>
+  <input id="replaySlider" class="rp-timeline" type="range" min="0" max="0" value="0" aria-label="Replay position" disabled>
+  <div class="rp-toolbar">
+    <span class="rp-shortcuts" aria-hidden="true">&larr; &rarr; step <span>&middot;</span> Space play</span>
+    <div class="rp-transport" role="group" aria-label="Playback">
+      <button id="btnFirst" class="rp-button" type="button" aria-label="Go to beginning" title="Go to beginning">{{ icon('first') }}</button>
+      <button id="btnPrev" class="rp-button" type="button" aria-label="Previous step" title="Previous step">{{ icon('prev') }}</button>
+      <button id="btnPlayPause" class="rp-button rp-play" type="button" aria-label="Play replay" title="Play replay" disabled>
+        <span class="rp-icon-play">{{ icon('play') }}</span><span class="rp-icon-pause" hidden>{{ icon('pause') }}</span><span class="rp-play-label">Play</span>
+      </button>
+      <button id="btnNext" class="rp-button" type="button" aria-label="Next step" title="Next step">{{ icon('next') }}</button>
+      <button id="btnLast" class="rp-button" type="button" aria-label="Go to end" title="Go to end">{{ icon('last') }}</button>
+    </div>
+    <label class="rp-speed"><span>Speed</span><select id="replaySpeed" aria-label="Playback speed"><option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="2">2×</option><option value="4">4×</option></select></label>
+  </div>
+</section>

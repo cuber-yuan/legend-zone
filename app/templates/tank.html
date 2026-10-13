@@ -247,22 +247,8 @@
 
     <!-- Replay Controls (match page only) -->
     {% if match_id %}
-    <div id="replayControls" style="display:none;justify-content:center;align-items:center;gap:8px;margin-top:12px;flex-wrap:wrap;">
-      <button id="btnFirst" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300 text-sm">|&lt;</button>
-      <button id="btnPrev" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300 text-sm">&lt;</button>
-      <button id="btnPlayPause" class="px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 text-sm">&#9654;</button>
-      <button id="btnNext" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300 text-sm">&gt;</button>
-      <button id="btnLast" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300 text-sm">&gt;|</button>
-      <select id="replaySpeed" class="px-2 py-1 border border-gray-300 rounded text-sm bg-white" title="Replay speed">
-        <option value="0.5">0.5x</option>
-        <option value="1" selected>1x</option>
-        <option value="2">2x</option>
-        <option value="4">4x</option>
-      </select>
-      <input id="replaySlider" type="range" min="0" max="0" value="0" style="width:180px;">
-      <span id="turnCounter2" class="text-sm text-gray-600">0 / 0</span>
-      <span id="replayStatus" class="text-sm text-gray-600"></span>
-    </div>
+    {% set replay_unit = "Turn" %}
+    {% include "components/replay_controls.html" %}
     {% endif %}
     {% if not match_id %}
     {% include "game_guides/tank.html" %}
@@ -734,8 +720,6 @@ function startReplay(displays, winner) {
     replayDisplays = displays;
     renderCommandPanel();
 
-    const controls = document.getElementById('replayControls');
-    if (controls) controls.style.display = 'flex';
 
     let msg = winner == 0 ? 'Blue wins!' : (winner == 1 ? 'Red wins!' : 'Draw!');
     replayController.load(Math.max(0, displays.length - 1));

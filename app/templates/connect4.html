@@ -17,9 +17,9 @@
       <span id="modeBadge" class="c4-mode">Ready</span>
     </header>
     <div class="c4-players">
-      <div class="c4-player" data-player="1"><span class="c4-player-dot" aria-hidden="true"></span><div><div class="c4-player-label">Blue</div><div class="c4-player-side">First move</div></div></div>
+      <div class="c4-player" data-player="1"><span class="c4-player-dot" aria-hidden="true"></span><div class="c4-player-info"><div class="c4-player-label">Player 1</div><div class="c4-player-side">First move</div></div></div>
       <div class="c4-move-count"><span id="dropCount">0 / 42</span><br><span class="c4-eyebrow">Drops</span></div>
-      <div class="c4-player" data-player="2"><span class="c4-player-dot" aria-hidden="true"></span><div><div class="c4-player-label">Red</div><div class="c4-player-side">Second move</div></div></div>
+      <div class="c4-player" data-player="2"><span class="c4-player-dot" aria-hidden="true"></span><div class="c4-player-info"><div class="c4-player-label">Player 2</div><div class="c4-player-side">Second move</div></div></div>
     </div>
     <div class="c4-stage">
       <div id="phaser-container" role="img" aria-label="Connect Four board: seven columns and six rows"></div>
@@ -34,16 +34,8 @@
     </footer>
   </section>
 
-  <div id="replayControls" class="replay-controls" role="group" aria-label="Replay controls">
-    <button id="btnFirst" type="button" title="First move" aria-label="First move">|&lt;</button>
-    <button id="btnPrev" type="button" title="Previous move" aria-label="Previous move">&lt;</button>
-    <button id="btnPlayPause" type="button" title="Play or pause" aria-label="Play or pause">&#9654;</button>
-    <button id="btnNext" type="button" title="Next move" aria-label="Next move">&gt;</button>
-    <button id="btnLast" type="button" title="Last move" aria-label="Last move">&gt;|</button>
-    <select id="replaySpeed" aria-label="Replay speed"><option value="0.5">0.5x</option><option value="1" selected>1x</option><option value="2">2x</option><option value="4">4x</option></select>
-    <div class="replay-progress"><span id="moveCounter">0 / 0</span><input id="replaySlider" type="range" min="0" max="0" value="0" aria-label="Replay move"></div>
-  </div>
-  <p id="replayStatus" class="replay-status"></p>
+  {% set replay_unit = "Move" %}
+    {% include "components/replay_controls.html" %}
 
   {% if not match_id %}{% set guide_game = 'Connect Four' %}{% include 'game_guides/board.html' %}{% endif %}
 </div>
@@ -51,6 +43,7 @@
 window.CONNECT4_CONFIG = {{ {
   'matchId': match_id or '',
   'status': match.status if match_id and match else '',
+  'players': match.players if match_id and match and match.players else none,
   'moves': match.move_history if match_id and match and match.move_history else [],
   'winner': (match.winner + 1 if match.winner in [0, 1] else 0) if match_id and match else 0
 } | tojson }};

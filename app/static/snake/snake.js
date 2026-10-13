@@ -417,8 +417,6 @@ function startReplay(displays, winner) {
     const fc = document.getElementById('floating-corner');
     if (fc) fc.classList.add('hidden');
 
-    const controls = document.getElementById('replayControls');
-    if (controls) controls.style.display = 'flex';
 
     // Start BGM; browsers block autoplay without a gesture, so arm a one-time
     // unlock that resumes it on the first click/keypress.

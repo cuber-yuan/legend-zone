@@ -18,6 +18,8 @@ for status in ('playing', 'finished'):
         request=SimpleNamespace(path='/match/smoke', endpoint='main.match_view'),
         current_user=SimpleNamespace(is_authenticated=False), bots=[], match_id='smoke',
         match={'status': status, 'winner': 0 if status == 'finished' else None,
+               'players': {'player_1': {'name': 'GravityBot', 'bot_id': 'bot-1', 'version': 3},
+                           'player_2': {'name': 'cuber', 'type': 'human'}},
                'move_history': [{'x': 3, 'y': 5, 'player': 1}] if status == 'finished' else []},
     )
     (output / f'connect4-{status}.html').write_text(rendered, encoding='utf-8')

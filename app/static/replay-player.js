@@ -1,6 +1,6 @@
 /**
  * ReplayController — shared replay player UI used by all game pages
- * (Gomoku, Snake, Tank Battle).
+ * (Gomoku, Tic Tac Toe, Connect Four, Snake/Mini Snake, Tank Battle).
  *
  * Owns what the three pages used to duplicate:
  *   - current frame index (0..maxIndex)
@@ -14,7 +14,7 @@
  * also works on pages without replay UI):
  *   #btnFirst #btnPrev #btnPlayPause #btnNext #btnLast
  *   #replaySlider #replayStatus #replaySpeed
- *   + counter element: options.counterId (default: 'turnCounter2')
+ *   + counter element: options.counterId (default: 'replayCounter')
  */
 class ReplayController {
     /**
@@ -26,7 +26,7 @@ class ReplayController {
      *                                              the effective interval changes
      *                                              (speed switch / play start)
      */
-    constructor({ onRender, baseIntervalMs = 800, counterId = 'turnCounter2', onIntervalChange = null }) {
+    constructor({ onRender, baseIntervalMs = 800, counterId = 'replayCounter', onIntervalChange = null }) {
         if (typeof onRender !== 'function') {
             throw new Error('ReplayController: onRender is required');
         }
@@ -60,6 +60,24 @@ class ReplayController {
         on('btnLast', 'click', () => this.goto(this.maxIndex));
         on('replaySlider', 'input', (e) => this.goto(parseInt(e.target.value, 10)));
         on('replaySpeed', 'change', (e) => this.setSpeed(parseFloat(e.target.value) || 1));
+        on('replayControls', 'keydown', (e) => {
+            if (e.target.matches('input, select, textarea, a')) return;
+            if (e.key === 'ArrowLeft') { e.preventDefault(); this.step(-1); }
+            else if (e.key === 'ArrowRight') { e.preventDefault(); this.step(1); }
+            else if (e.key === ' ' && e.target.id === 'replayControls') { e.preventDefault(); this.toggle(); }
+        });
+        this._syncUI();
+    }
+
+    show() {
+        const root = document.getElementById('replayControls');
+        if (root) root.hidden = false;
+    }
+
+    hide() {
+        this.pause();
+        const root = document.getElementById('replayControls');
+        if (root) root.hidden = true;
     }
 
     /** Effective per-frame interval, derived from base speed and multiplier. */
@@ -74,6 +92,7 @@ class ReplayController {
      */
     load(maxIndex) {
         this.pause();
+        this.show();
         this.maxIndex = Math.max(0, maxIndex || 0);
         const slider = document.getElementById('replaySlider');
         if (slider) slider.max = this.maxIndex;
@@ -90,6 +109,7 @@ class ReplayController {
         this.index = Math.max(0, Math.min(this.maxIndex, index));
         this.onRender(this.index);
         this._syncUI();
+        if (this.playing && this.index >= this.maxIndex) this.pause();
     }
 
     play() {
@@ -141,7 +161,18 @@ class ReplayController {
 
     _setPlayIcon(playing) {
         const btn = document.getElementById('btnPlayPause');
-        if (btn) btn.innerHTML = playing ? '&#9646;&#9646;' : '&#9654;';
+        if (!btn) return;
+        const replay = !playing && this.maxIndex > 0 && this.index >= this.maxIndex;
+        const label = playing ? 'Pause' : replay ? 'Replay' : 'Play';
+        const action = playing ? 'Pause replay' : replay ? 'Replay from beginning' : 'Play replay';
+        btn.setAttribute('aria-label', action);
+        btn.title = action;
+        const playIcon = btn.querySelector('.rp-icon-play');
+        const pauseIcon = btn.querySelector('.rp-icon-pause');
+        const text = btn.querySelector('.rp-play-label');
+        if (playIcon) playIcon.hidden = playing;
+        if (pauseIcon) pauseIcon.hidden = !playing;
+        if (text) text.textContent = label;
     }
 
     _syncUI() {
@@ -149,7 +180,15 @@ class ReplayController {
         if (counter) counter.textContent = this.index + ' / ' + this.maxIndex;
 
         const slider = document.getElementById('replaySlider');
-        if (slider) slider.value = this.index;
+        if (slider) {
+            slider.value = this.index;
+            slider.disabled = this.maxIndex <= 0;
+            slider.setAttribute('aria-valuetext', `${this.index} of ${this.maxIndex}`);
+        }
+        const root = document.getElementById('replayControls');
+        if (root) root.style.setProperty('--rp-progress', `${this.maxIndex ? this.index / this.maxIndex * 100 : 0}%`);
+        const speed = document.getElementById('replaySpeed');
+        if (speed) speed.value = String(this.speed);
 
         const disable = (id, disabled) => {
             const btn = document.getElementById(id);
@@ -159,5 +198,7 @@ class ReplayController {
         disable('btnPrev', this.index <= 0);
         disable('btnNext', this.index >= this.maxIndex);
         disable('btnLast', this.index >= this.maxIndex);
+        disable('btnPlayPause', this.maxIndex <= 0);
+        this._setPlayIcon(this.playing);
     }
 }
