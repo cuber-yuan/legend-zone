@@ -1,414 +1,59 @@
-{% extends "base.html" %}
-
+{% extends 'base.html' %}
 {% block title %}{% if match_id %}Watch Match{% else %}Connect Four{% endif %}{% endblock %}
 
 {% block content %}
 <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/phaser@3.55.2/dist/phaser.js"></script>
 <script src="{{ url_for('static', filename='replay-player.js') }}"></script>
-<link href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism.min.css" rel="stylesheet" />
+<link rel="stylesheet" href="{{ url_for('static', filename='connect4/connect4.css') }}">
+<link href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism.min.css" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/prism.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-python.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/phaser@3.55.2/dist/phaser.js"></script>
 
-<style>
-  canvas {
-    background: #ffffff;
-    margin-top: 20px;
-    border: 2px solid #333;
-  }
-  .replay-controls {
-    display: none;
-    align-items: center;
-    justify-content: center;
-    gap: 0.75rem;
-    margin-top: 1rem;
-    padding: 0.75rem 1.5rem;
-    background: #fff;
-    border-radius: 0.5rem;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-    max-width: 600px;
-    margin-left: auto;
-    margin-right: auto;
-  }
-  .replay-controls button {
-    padding: 0.4rem 0.8rem;
-    border: 1px solid #ccc;
-    border-radius: 0.25rem;
-    background: #f9f9f9;
-    cursor: pointer;
-    font-size: 0.9rem;
-    min-width: 2.5rem;
-  }
-  .replay-controls button:hover { background: #e9e9e9; }
-  .replay-controls button:disabled { opacity: 0.4; cursor: not-allowed; }
-  .replay-progress { flex: 1; max-width: 300px; display: flex; align-items: center; gap: 0.5rem; }
-  .replay-progress input[type="range"] { flex: 1; }
-  .replay-status { text-align: center; margin-top: 0.5rem; font-size: 0.85rem; color: #666; }
-  .spectator-badge {
-    display: none;
-    text-align: center;
-    margin-top: 0.5rem;
-    padding: 0.3rem 0.8rem;
-    background: #fef3c7;
-    color: #92400e;
-    border-radius: 0.25rem;
-    font-size: 0.85rem;
-    max-width: 200px;
-    margin-left: auto;
-    margin-right: auto;
-  }
-  .turn-hint {
-    display: none;
-    text-align: center;
-    margin-top: 0.5rem;
-    padding: 0.3rem 0.8rem;
-    background: #dbeafe;
-    color: #1e40af;
-    border-radius: 0.25rem;
-    font-size: 0.85rem;
-    max-width: 260px;
-    margin-left: auto;
-    margin-right: auto;
-  }
-</style>
-
-<div class="bg-gray-100 py-10">
-  <div class="max-w-screen-xl mx-auto">
-    <div id="board-wrap" style="width:auto;max-width:620px;margin:auto;box-sizing:border-box;">
-      <div id="phaser-container" style="width:100%;"></div>
+<div class="c4-page">
+  <section class="c4-arena" aria-labelledby="c4-title">
+    <header class="c4-heading">
+      <div><p class="c4-eyebrow">The gravity game</p><h1 id="c4-title" class="c4-title">Connect Four</h1></div>
+      <span id="modeBadge" class="c4-mode">Ready</span>
+    </header>
+    <div class="c4-players">
+      <div class="c4-player" data-player="1"><span class="c4-player-dot" aria-hidden="true"></span><div><div class="c4-player-label">Blue</div><div class="c4-player-side">First move</div></div></div>
+      <div class="c4-move-count"><span id="dropCount">0 / 42</span><br><span class="c4-eyebrow">Drops</span></div>
+      <div class="c4-player" data-player="2"><span class="c4-player-dot" aria-hidden="true"></span><div><div class="c4-player-label">Red</div><div class="c4-player-side">Second move</div></div></div>
     </div>
-
-    {% if not match_id %}
-    <br>
-    <br>
-    {% endif %}
-
-    <div id="spectatorBadge" class="spectator-badge">Spectating</div>
-    <div id="turnHint" class="turn-hint"></div>
-
-    <div id="replayControls" class="replay-controls">
-      <button id="btnFirst" title="First move">|&lt;</button>
-      <button id="btnPrev" title="Previous step">&lt;</button>
-      <button id="btnPlayPause" title="Play/Pause">&#9654;</button>
-      <button id="btnNext" title="Next step">&gt;</button>
-      <button id="btnLast" title="Last move">&gt;|</button>
-      <select id="replaySpeed" title="Replay speed" style="padding:0.3rem;border:1px solid #ccc;border-radius:0.25rem;">
-        <option value="0.5">0.5x</option>
-        <option value="1" selected>1x</option>
-        <option value="2">2x</option>
-        <option value="4">4x</option>
-      </select>
-      <div class="replay-progress">
-        <span id="moveCounter">0 / 0</span>
-        <input type="range" id="replaySlider" min="0" max="0" value="0" />
+    <div class="c4-stage">
+      <div id="phaser-container" role="img" aria-label="Connect Four board: seven columns and six rows"></div>
+      <div class="c4-columns" role="group" aria-label="Choose a column">
+        {% for column in range(7) %}<button type="button" data-column="{{ column }}" aria-label="Drop in column {{ column + 1 }}" disabled>{{ column + 1 }}</button>{% endfor %}
       </div>
     </div>
-    <div id="replayStatus" class="replay-status"></div>
+    <footer class="c4-footer">
+      <div id="gameResult" class="c4-result" role="status"><strong id="resultTitle"></strong><span id="resultDetail"></span></div>
+      <p id="turnHint" role="status" aria-live="polite">Seven columns. Four in a row.</p>
+      {% if not match_id %}<a href="{{ url_for('main.home') }}" class="c4-create">Create a match <span aria-hidden="true">&rarr;</span></a>{% endif %}
+    </footer>
+  </section>
 
-    {% if not match_id %}
-    {% set guide_game = "Connect Four" %}
-    {% include "game_guides/board.html" %}
-    {% endif %}
+  <div id="replayControls" class="replay-controls" role="group" aria-label="Replay controls">
+    <button id="btnFirst" type="button" title="First move" aria-label="First move">|&lt;</button>
+    <button id="btnPrev" type="button" title="Previous move" aria-label="Previous move">&lt;</button>
+    <button id="btnPlayPause" type="button" title="Play or pause" aria-label="Play or pause">&#9654;</button>
+    <button id="btnNext" type="button" title="Next move" aria-label="Next move">&gt;</button>
+    <button id="btnLast" type="button" title="Last move" aria-label="Last move">&gt;|</button>
+    <select id="replaySpeed" aria-label="Replay speed"><option value="0.5">0.5x</option><option value="1" selected>1x</option><option value="2">2x</option><option value="4">4x</option></select>
+    <div class="replay-progress"><span id="moveCounter">0 / 0</span><input id="replaySlider" type="range" min="0" max="0" value="0" aria-label="Replay move"></div>
   </div>
+  <p id="replayStatus" class="replay-status"></p>
+
+  {% if not match_id %}{% set guide_game = 'Connect Four' %}{% include 'game_guides/board.html' %}{% endif %}
 </div>
-
 <script>
-const IS_MATCH_PAGE = {{ 'true' if match_id else 'false' }};
-const MATCH_ID = "{{ match_id or '' }}";
-const MATCH_STATUS = "{{ match.status if match_id and match else '' }}";
-
-const COLS = 7;
-const ROWS = 6;
-
-function computeCell() {
-  const padding = window.innerWidth < 600 ? 24 : 70;
-  const avail = Math.min(window.innerWidth - padding - 48, 620);
-  return Math.max(32, Math.floor(avail / COLS));
-}
-
-let CELL = computeCell();
-let BOARD_W = COLS * CELL;
-let BOARD_H = ROWS * CELL;
-
-let board = Array.from({ length: ROWS }, () => Array(COLS).fill(0));
-let lastMove = null;
-let gameOver = true;
-let userId = null;
-let currentGameId = null;
-let currentPlayer = 1;
-let playerTypes = { '1': 'bot', '2': 'bot' };
-let awaitingMove = false;
-let graphics;
-
-let isSpectator = false;
-let isReplayMode = false;
-let replayMoves = [];
-
-// A click only means something when the seat to move is a human seat: the server
-// parks the game loop until player_move arrives, so clicking on the bot's turn
-// would be dropped. current_player and player_types come from the judge.
-function isHumanTurn() {
-  return playerTypes[String(currentPlayer)] === 'human';
-}
-
-function hasHumanSeat() {
-  return playerTypes['1'] === 'human' || playerTypes['2'] === 'human';
-}
-
-function applyState(data) {
-  if (data.board) board = data.board;
-  if (data.current_player) currentPlayer = data.current_player;
-  if (data.player_types) playerTypes = data.player_types;
-}
-
-function renderTurnHint() {
-  const el = document.getElementById('turnHint');
-  if (!el) return;
-  if (isReplayMode || isSpectator || gameOver || !hasHumanSeat()) {
-    el.style.display = 'none';
-    return;
-  }
-  el.style.display = 'block';
-  const name = currentPlayer === 1 ? 'Blue' : 'Red';
-  el.textContent = isHumanTurn() ? `${name} to move — click a column` : `Waiting for ${name.toLowerCase()}…`;
-}
-
-const COLOR_P1 = 0x2563eb;
-const COLOR_P2 = 0xdc2626;
-
-const config = {
-  type: Phaser.AUTO,
-  width: BOARD_W,
-  height: BOARD_H,
-  parent: 'phaser-container',
-  backgroundColor: '#ffffff',
-  scene: { create, preload }
-};
-let phaserGame = new Phaser.Game(config);
-
-function preload() {}
-
-function create() {
-  graphics = this.add.graphics();
-  drawBoard();
-  this.input.on('pointerdown', pointer => {
-    if (gameOver || maskRect || isSpectator || isReplayMode || awaitingMove || !isHumanTurn()) return;
-    const col = Math.floor(pointer.x / CELL);
-    if (col < 0 || col >= COLS || board[0][col] !== 0) return;   // top cell filled => column full
-    sendPlayerMove(col);
-  });
-}
-
-function columnHeights() {
-  return Array.from({ length: COLS }, (_, x) => board[0][x] === 0);
-}
-
-function drawBoard() {
-  graphics.clear();
-
-  // Faint grid so empty cells are still readable as slots.
-  graphics.lineStyle(1, 0xd1d5db, 1);
-  for (let i = 1; i < COLS; i++) graphics.lineBetween(i * CELL, 0, i * CELL, BOARD_H);
-  for (let j = 1; j < ROWS; j++) graphics.lineBetween(0, j * CELL, BOARD_W, j * CELL);
-
-  for (let y = 0; y < ROWS; y++) {
-    for (let x = 0; x < COLS; x++) {
-      const p = board[y][x];
-      if (!p) continue;
-      const cx = x * CELL + CELL / 2;
-      const cy = y * CELL + CELL / 2;
-      graphics.fillStyle(p === 1 ? COLOR_P1 : COLOR_P2, 1);
-      graphics.fillCircle(cx, cy, CELL * 0.38);
-    }
-  }
-
-  if (lastMove) {
-    const cx = lastMove.x * CELL + CELL / 2;
-    const cy = lastMove.y * CELL + CELL / 2;
-    graphics.lineStyle(3, 0x111827, 0.9);
-    graphics.strokeCircle(cx, cy, CELL * 0.38 + 3);
-  }
-}
-
-let maskRect = null;
-let maskText = null;
-
-function showPhaserMask(msg = "") {
-  hidePhaserMask();
-  maskRect = graphics.scene.add.rectangle(BOARD_W / 2, BOARD_H / 2, BOARD_W, BOARD_H, 0x000000, 0.25).setDepth(1000);
-  maskText = graphics.scene.add.text(BOARD_W / 2, BOARD_H / 2, msg, { fontSize: Math.floor(CELL / 3) + 'px', color: '#fff', fontStyle: 'bold' }).setOrigin(0.5).setDepth(1001);
-}
-
-function hidePhaserMask() {
-  if (maskRect) { maskRect.destroy(); maskRect = null; }
-  if (maskText) { maskText.destroy(); maskText = null; }
-}
-
-function resultMessage(winner) {
-  return winner === 1 ? 'Blue wins!' : (winner === 2 ? 'Red wins!' : 'Draw!');
-}
-
-// --- SocketIO ---
-const socket = io('/connect4');
-socket.on('connect', () => {});
-socket.on('init', (data) => { userId = data.user_id; });
-
-socket.on('game_started', (data) => {
-  hidePhaserMask();
-  currentGameId = data.game_id;
-  awaitingMove = false;
-  applyState(data);
-  lastMove = null;
-  gameOver = false;
-  isSpectator = false;
-  document.getElementById('spectatorBadge').style.display = 'none';
-  drawBoard();
-  renderTurnHint();
-});
-
-socket.on('update', (data) => {
-  if (IS_MATCH_PAGE) {
-    if (data.match_id && data.match_id !== MATCH_ID) return;
-  } else {
-    if (!currentGameId || data.game_id !== currentGameId) return;
-  }
-  awaitingMove = false;
-  applyState(data);
-  lastMove = data.ai_move || null;
-  drawBoard();
-  if (data.winner) {
-    showPhaserMask(resultMessage(data.winner));
-    gameOver = true;
-  }
-  renderTurnHint();
-});
-
-socket.on('match_status', (data) => {
-  if (data.match_id !== MATCH_ID) return;
-  if (data.status === 'playing') {
-    // A match already running was started by another session, whose human seat
-    // owns the pending-move mailbox server-side, so this browser can only watch.
-    isSpectator = true;
-    currentGameId = data.game_id;
-    awaitingMove = false;
-    applyState(data);
-    gameOver = false;
-    drawBoard();
-    hidePhaserMask();
-    document.getElementById('spectatorBadge').style.display = 'block';
-    renderTurnHint();
-  } else if (data.status === 'finished') {
-    startReplay(data.move_history || [], data.winner);
-  } else if (data.status === 'not_started') {
-    autoStartMatch(data.players);
-  }
-});
-
-socket.on('match_finished', (data) => {
-  if (data.match_id !== MATCH_ID) return;
-  isSpectator = false;
-  document.getElementById('spectatorBadge').style.display = 'none';
-  startReplay(data.move_history || [], data.winner);
-});
-
-// --- Replay ---
-const replayController = new ReplayController({
-  counterId: 'moveCounter',
-  baseIntervalMs: 500,
-  onRender: (index) => {
-    board = Array.from({ length: ROWS }, () => Array(COLS).fill(0));
-    lastMove = null;
-    for (let i = 0; i < index; i++) {
-      const m = replayMoves[i];
-      board[m.y][m.x] = m.player;
-      lastMove = { x: m.x, y: m.y };
-    }
-    drawBoard();
-  }
-});
-
-function startReplay(moves, winner) {
-  isReplayMode = true;
-  replayMoves = moves;
-  renderTurnHint();
-  const controls = document.getElementById('replayControls');
-  controls.style.display = 'flex';
-  replayController.load(moves.length);
-  replayController.setStatus(resultMessage(winner) + ' (' + moves.length + ' drops)');
-  replayController.play();
-}
-
-function parsePlayers(playersJson) {
-  const parsed = typeof playersJson === 'string' ? JSON.parse(playersJson) : playersJson;
-  const normalize = (p) => (typeof p === 'string' ? { name: p } : (p || {}));
-  if (Array.isArray(parsed)) return parsed.map(normalize);
-  if (parsed && parsed.player_1) return [normalize(parsed.player_1), normalize(parsed.player_2)];
-  return [];
-}
-
-function autoStartMatch(playersJson) {
-  let players = [];
-  try {
-    players = parsePlayers(playersJson);
-  } catch (e) {
-    console.error('Failed to parse match players:', e);
-    return;
-  }
-  if (players.length < 2) return;
-  const p1 = players[0], p2 = players[1];
-  socket.emit('new_game', {
-    user_id: userId,
-    black_bot: p1.bot_id || null,
-    white_bot: p2.bot_id || null,
-    black_is_human: p1.type === 'human',
-    white_is_human: p2.type === 'human',
-    match_id: MATCH_ID
-  });
-}
-
-function sendPlayerMove(col) {
-  // The server holds one pending-move slot per session, so a second click before
-  // the reply would be spent on our *next* turn and lose the game on an occupied cell.
-  awaitingMove = true;
-  socket.emit('player_move', { user_id: userId, x: col, game_id: currentGameId });
-}
-
-// --- Resize ---
-window.addEventListener('resize', () => {
-  CELL = computeCell();
-  BOARD_W = COLS * CELL;
-  BOARD_H = ROWS * CELL;
-  phaserGame.scale.resize(BOARD_W, BOARD_H);
-  drawBoard();
-});
-
-// --- Init ---
-document.addEventListener('DOMContentLoaded', function() {
-  replayController.attach();
-
-  {% if match_id and match %}
-  const matchId = "{{ match_id }}";
-  const matchStatus = "{{ match.status }}";
-
-  if (matchStatus === 'finished') {
-    let moveHistory = [];
-    {% if match.move_history %}
-    moveHistory = {{ match.move_history | tojson }};
-    {% endif %}
-    const winner = {{ match.winner if match.winner is not none else -1 }};
-    const gameWinner = winner === 0 ? 1 : (winner === 1 ? 2 : 0);
-    setTimeout(() => startReplay(moveHistory, gameWinner), 300);
-  } else {
-    const waitForSocket = () => {
-      if (socket.connected && userId) {
-        socket.emit('join_match', { match_id: matchId });
-      } else {
-        setTimeout(waitForSocket, 100);
-      }
-    };
-    waitForSocket();
-  }
-  {% endif %}
-});
+window.CONNECT4_CONFIG = {{ {
+  'matchId': match_id or '',
+  'status': match.status if match_id and match else '',
+  'moves': match.move_history if match_id and match and match.move_history else [],
+  'winner': (match.winner + 1 if match.winner in [0, 1] else 0) if match_id and match else 0
+} | tojson }};
 </script>
+<script src="{{ url_for('static', filename='connect4/connect4.js') }}"></script>
 {% endblock %}
