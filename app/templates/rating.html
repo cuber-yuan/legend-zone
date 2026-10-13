@@ -25,7 +25,7 @@
     font-size: 0.62rem; letter-spacing: 0.08em; white-space: nowrap;
   }
   .rating-table { width: 100%; table-layout: fixed; border-collapse: collapse; text-align: left; }
-  .rating-table th { padding: 0.6rem 1rem; font-size: 0.8rem; font-weight: 600; }
+  .rating-table th { padding: 0.6rem 1rem; border-bottom: 1px solid #e2e8f0; font-size: 0.8rem; font-weight: 500; }
   .rating-table td { padding: 0.8rem 1rem; border-top: 1px solid #f1f5f9; vertical-align: middle; }
   .rating-table tbody tr:first-child td { border-top: 0; }
   .rating-table tbody tr:nth-child(even) { background: #f8fafc; }
@@ -35,7 +35,7 @@
   .rating-owner-column { width: 26%; }
   .rating-table .rating-score { text-align: right; }
   .rating-score { color: #0f172a; font-family: var(--rank-mono); font-size: 0.9rem; font-weight: 700; font-variant-numeric: tabular-nums; }
-  .rating-table thead .rating-score { color: #fff; }
+  .rating-table thead .rating-score { color: #475569; }
   .rank-mark {
     display: inline-flex; align-items: center; justify-content: center; width: 1.9rem; height: 1.9rem;
     border: 1px solid transparent; border-radius: 0.5rem; color: #64748b;
@@ -108,7 +108,7 @@
     </div>
     {% if bot_list %}
     <table class="rating-table text-gray-700" aria-label="{{ game }} bot rankings">
-      <thead class="bg-gradient-to-r from-blue-600 to-blue-400 text-white">
+      <thead class="bg-slate-50 text-slate-600">
         <tr>
           <th scope="col" class="rating-rank-column">Rank</th>
           <th scope="col">Bot</th>
