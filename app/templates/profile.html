@@ -7,7 +7,8 @@
 {% endblock %}
 
 {% block content %}
-<div class="max-w-screen-lg mx-auto">
+<link rel="stylesheet" href="{{ url_for('static', filename='profile.css') }}">
+<div class="profile-page">
   
   <div class="mb-6">
     {% if user_not_found %}
@@ -16,16 +17,16 @@
       </div>
     {% endif %}
 
-    <div class="bg-white p-4 rounded shadow flex items-center justify-between">
+    <div class="profile-header">
       <!-- avatar on the far left -->
-      <div class="flex-shrink-0 mr-4">
+      <div class="profile-avatar">
         <img src="{{ avatar_url or url_for('static', filename='default-avatar.png') }}" alt="avatar"
-             class="w-16 h-16 rounded-full object-cover border border-gray-200">
+             class="profile-avatar-image">
       </div>
 
       <!-- main info: username, registered date, send message -->
-      <div class="flex-1">
-        <div class="text-xl font-bold text-gray-900">
+      <div class="min-w-0">
+        <div class="profile-name">
           {% if username %}
             {{ username }}
           {% elif current_user.is_authenticated %}
@@ -35,28 +36,28 @@
           {% endif %}
         </div>
 
-        <div class="text-sm text-gray-500 mt-1">
+        <div class="profile-date">
           {% if registered_at %}
-            <span data-utc="{{ registered_at }}">Registered: {{ registered_at }}</span>
+            Registered: <span data-utc="{{ registered_at }}">{{ registered_at }}</span>
           {% endif %}
         </div>
 
-        <div class="mt-4 flex gap-2"> <!-- increased spacing before the button -->
+        <div class="profile-actions">
           {% if current_user.is_authenticated and (not username or current_user.get_id() != username) %}
             <a href="#"
-               class="inline-block px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-500 text-sm">Send Message</a>
+               class="profile-button">Send Message</a>
           {% elif not current_user.is_authenticated %}
-            <a href="{{ url_for('auth.login') }}" class="inline-block px-3 py-1 bg-gray-200 text-gray-700 rounded text-sm">Login to message</a>
+            <a href="{{ url_for('auth.login') }}" class="profile-button">Login to message</a>
           {% endif %}
           {% if is_owner %}
             <button type="button" id="btn-create-bot"
-                    class="inline-block px-3 py-1 bg-green-600 text-white rounded hover:bg-green-500 text-sm">Create Bot</button>
+                    class="profile-button primary">Create Bot</button>
           {% endif %}
         </div>
       </div>
 
       <!-- right: user signature / bio -->
-      <div class="w-64 text-right pl-4 hidden sm:block">
+      <div class="profile-signature">
         {% if signature %}
           <div class="text-sm text-gray-600 italic break-words">{{ signature }}</div>
         {% else %}
@@ -71,22 +72,20 @@
   
   {% if bots and bots|length > 0 %}
     {% for game, game_bots in bots | groupby('game') %}
-      <section class="mb-8">
-        <h2 class="text-xl font-bold text-gray-800 mb-3">{{ game }}</h2>
-        <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <section class="profile-group">
+        <h2 class="profile-group-title">{{ game }}</h2>
+        <div class="profile-bot-grid">
           {% for bot in game_bots %}
-            <div class="bg-white p-4 rounded-lg shadow">
+            <div class="profile-bot">
               <div class="flex items-start justify-between">
-                <div>
-                  <div class="text-lg font-semibold text-gray-900">
+                <div class="min-w-0">
+                  <div class="profile-bot-name">
                     {{ bot.name }}
-                    {% if bot.latest_version %}<span class="text-sm text-gray-500">v{{ bot.latest_version }}</span>{% endif %}
+                    {% if bot.latest_version %}<span class="profile-version">v{{ bot.latest_version }}</span>{% endif %}
                   </div>
-                  {% if username %}
-                    <div class="text-sm text-gray-500">@{{ username }}</div>
-                  {% endif %}
+                  
                   {% if bot.versions is not none %}
-                    <div class="text-xs text-gray-400 mt-1">
+                    <div class="profile-stats">
                       versions: {{ bot.versions }}
                       {% if bot.latest_rating is not none %}
                         &middot; rating {{ '%.1f'|format(bot.latest_rating) }}
@@ -96,11 +95,11 @@
                 </div>
               </div>
               {% if bot.latest_description %}
-                <p class="mt-3 text-sm text-gray-700">{{ bot.latest_description }}</p>
+                <p class="profile-description">{{ bot.latest_description }}</p>
               {% endif %}
-              <div class="mt-4 flex gap-2">
+              <div class="profile-bot-actions">
                 <a href="{{ url_for('main.bot_detail', bot_id=bot.id) }}" title="View bot" aria-label="View bot"
-                   class="w-9 h-9 inline-flex items-center justify-center bg-blue-600 text-white rounded hover:bg-blue-500 transition-colors">
+                   class="profile-icon-button">
                   <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" />
                     <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -108,13 +107,13 @@
                 </a>
                 {% if is_owner %}
                   <a href="{{ url_for('upload.new_version_page', bot_id=bot.id) }}" title="Upload a new version" aria-label="Upload a new version"
-                     class="w-9 h-9 inline-flex items-center justify-center bg-green-600 text-white rounded hover:bg-green-500 transition-colors">
+                     class="profile-icon-button version">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
                     </svg>
                   </a>
                   <button type="button" title="Delete bot" aria-label="Delete bot"
-                          class="delete-bot-btn w-9 h-9 inline-flex items-center justify-center bg-red-600 text-white rounded hover:bg-red-500 transition-colors"
+                          class="delete-bot-btn profile-icon-button delete"
                           data-bot-id="{{ bot.id }}" data-bot-name="{{ bot.name }}">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
@@ -129,7 +128,7 @@
     {% endfor %}
   {% else %}
     {% if not user_not_found %}
-      <div class="bg-white p-6 rounded shadow text-center text-gray-600">
+      <div class="profile-empty">
         You haven't created any bots yet.
       </div>
     {% endif %}
@@ -137,70 +136,70 @@
 </div>
 
 <!-- Delete confirmation modal -->
-<div id="delete-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[100]">
-  <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-md">
-    <h3 class="text-lg font-semibold text-gray-900 mb-2">Delete bot</h3>
+<div id="delete-modal" class="profile-modal hidden" role="dialog" aria-modal="true" aria-labelledby="delete-title">
+  <div class="profile-modal-card">
+    <h3 id="delete-title" class="profile-modal-title">Delete bot</h3>
     <p class="text-sm text-gray-700 mb-1">
       This permanently deletes <span id="delete-bot-name" class="font-semibold"></span>,
       all of its versions, and its uploaded files. This cannot be undone.
     </p>
     <p class="text-sm text-gray-700 mb-2">Type <span class="font-mono font-bold">DELETE</span> to confirm.</p>
     <input id="delete-confirm-input" type="text" autocomplete="off"
-           class="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-red-500"
+           class="profile-field"
            placeholder="DELETE">
     <div class="flex justify-end space-x-3 mt-4">
-      <button id="delete-cancel" class="px-4 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300">Cancel</button>
+      <button id="delete-cancel" class="profile-button">Cancel</button>
       <button id="delete-confirm" disabled
-              class="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-40 disabled:cursor-not-allowed">Delete</button>
+              class="profile-button danger">Delete</button>
     </div>
   </div>
 </div>
 
 <!-- Create Bot modal -->
 {% if is_owner %}
-<div id="uploadModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[100]">
-  <div class="bg-white p-8 rounded-lg shadow-2xl w-full max-w-lg relative overflow-y-auto max-h-[90vh]">
-    <button class="absolute top-4 right-4 text-gray-500 hover:text-gray-700" id="upload-close" type="button">
+<div id="uploadModal" class="profile-modal hidden" role="dialog" aria-modal="true" aria-labelledby="upload-title">
+  <div class="profile-modal-card upload">
+    <button class="profile-modal-close" id="upload-close" type="button" aria-label="Close create bot dialog">
       <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
       </svg>
     </button>
 
-    <h2 class="text-2xl font-bold text-center text-blue-600 mb-6">Create Bot</h2>
+    <h2 id="upload-title" class="profile-modal-title">Create Bot</h2>
 
     <form id="uploadForm" class="space-y-5">
       <div>
         <label for="uploadGame" class="block text-sm font-medium text-gray-700">Game</label>
-        <select id="uploadGame" class="mt-1 block w-full border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm p-2" required>
+        <select id="uploadGame" class="profile-field" required>
           <option value="">Select a game…</option>
         </select>
       </div>
       <div>
         <label for="botName" class="block text-sm font-medium text-gray-700">Bot Name</label>
-        <input type="text" id="botName" autocomplete="off" class="mt-1 block w-full border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm p-2" placeholder="Enter bot name" required>
+        <input type="text" id="botName" autocomplete="off" class="profile-field" placeholder="Enter bot name" required>
       </div>
       <div>
         <label for="botDescription" class="block text-sm font-medium text-gray-700">Description</label>
-        <textarea id="botDescription" rows="3" autocomplete="off" class="mt-1 block w-full border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm p-2" placeholder="Enter bot description" required></textarea>
+        <textarea id="botDescription" rows="3" autocomplete="off" class="profile-field" placeholder="Enter bot description" required></textarea>
       </div>
       <div>
         <label for="language" class="block text-sm font-medium text-gray-700">Language</label>
-        <select id="language" class="mt-1 block w-full border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm p-2">
+        <select id="language" class="profile-field">
           <option value="python3">Python3</option>
           <option value="cpp">C++</option>
         </select>
       </div>
       <div>
         <label for="botFile" class="block text-sm font-medium text-gray-700">Bot Code File</label>
-        <input type="file" id="botFile" autocomplete="off" class="mt-1 block w-full border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm p-2">
+        <input type="file" id="botFile" autocomplete="off" class="profile-field">
       </div>
       <div>
         <label for="sourceCode" class="block text-sm font-medium text-gray-700">Or Paste Source Code</label>
-        <textarea id="sourceCode" rows="6" autocomplete="off" class="mt-1 block w-full border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm p-2" placeholder="Paste your source code here"></textarea>
+        <textarea id="sourceCode" rows="6" autocomplete="off" class="profile-field" placeholder="Paste your source code here"></textarea>
       </div>
       <div class="flex justify-end space-x-4">
-        <button type="button" class="bg-gray-500 text-white px-4 py-2 rounded-lg hover:bg-gray-600 transition" id="upload-cancel">Cancel</button>
-        <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition">Upload</button>
+        <button type="button" class="profile-button" id="upload-cancel">Cancel</button>
+        <button type="submit" class="profile-button primary">Upload</button>
       </div>
     </form>
   </div>
