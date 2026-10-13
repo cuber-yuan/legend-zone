@@ -14,6 +14,7 @@
 {% endblock %}
 
 {% block content %}
+<link rel="stylesheet" href="{{ url_for('static', filename='match-players.css') }}">
 
 <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/phaser@3.55.2/dist/phaser.js"></script>
@@ -32,11 +33,9 @@
     <section class="snake-arena" aria-label="{{ guide_game }} game board">
       <div class="snake-heading">
         <h1>{{ guide_game }}</h1>
-        <div class="snake-legend" aria-label="Snake colors">
-          <span><i class="snake-dot snake-dot-blue"></i>Blue</span>
-          <span><i class="snake-dot snake-dot-red"></i>Red</span>
-        </div>
       </div>
+      {% set player_sides = [{'label': 'Blue', 'marker': 'blue'}, {'label': 'Red', 'marker': 'red'}] %}
+      {% include 'components/match_players.html' %}
       <div class="snake-stage">
         <div class="snake-board-frame">
           <div id="phaser-container"></div>

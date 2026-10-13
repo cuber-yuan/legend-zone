@@ -3,6 +3,7 @@
 {% block title %}{% if match_id %}Watch Match{% else %}Tank Battle{% endif %}{% endblock %}
 
 {% block content %}
+<link rel="stylesheet" href="{{ url_for('static', filename='match-players.css') }}">
 <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/phaser@3.55.2/dist/phaser.js"></script>
 <!-- Shared replay player -->
@@ -22,13 +23,9 @@
         <h1>Tank Battle</h1>
         <p id="turnCounter">Turn: 1</p>
       </div>
-      {% if match_id and match %}
-      <div class="tank-players">
-        <span id="bluePlayerName" class="tank-player">Top Player</span>
-        <span id="spectatorBadge" class="tank-spectator">Spectator</span>
-        <span id="redPlayerName" class="tank-player">Bottom Player</span>
-      </div>
-      {% endif %}
+      {% set player_sides = [{'label': 'Blue', 'marker': 'blue'}, {'label': 'Red', 'marker': 'red'}] %}
+      {% include 'components/match_players.html' %}
+      {% if match_id and match %}<div id="spectatorBadge" class="tank-spectator">Spectator</div>{% endif %}
       <div class="tank-stage">
         <div class="tank-board-frame">
           <div class="tank-board-wrap">
@@ -74,7 +71,6 @@ const IS_MATCH_PAGE = {{ 'true' if match_id else 'false' }};
 const MATCH_ID = "{{ match_id or '' }}";
 const MATCH_STATUS = "{{ match.status if match_id and match else '' }}";
 const MATCH_GAME_NAME = "{{ match.game if match_id and match else '' }}";
-const MATCH_PLAYERS = {{ (match.players if match_id and match else none) | tojson }};
 </script>
 
 <script>
@@ -540,34 +536,6 @@ function startReplay(displays, winner) {
     replayController.play();
 }
 
-function showMatchPlayerNames() {
-    let players = [];
-    try {
-        const raw = (typeof MATCH_PLAYERS !== 'undefined') ? MATCH_PLAYERS : null;
-        if (!raw) return;
-        const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
-        const normalize = (p) => (typeof p === 'string' ? { name: p } : (p || {}));
-        if (Array.isArray(parsed)) {
-            players = parsed.map(normalize);
-        } else if (parsed && typeof parsed === 'object' && parsed.player_1) {
-            players = [normalize(parsed.player_1), normalize(parsed.player_2)];
-        }
-    } catch (e) {
-        console.error('Failed to parse match players:', e);
-        return;
-    }
-    if (players.length < 2) return;
-
-    const fmt = (p) => p && p.name ? (p.version ? `${p.name} v${p.version}` : p.name) : '';
-
-    const topEl = document.getElementById('bluePlayerName');
-    const bottomEl = document.getElementById('redPlayerName');
-    if (topEl) topEl.textContent = fmt(players[0]) || 'Top Player';
-    if (bottomEl) bottomEl.textContent = fmt(players[1]) || 'Bottom Player';
-}
-
-
-
 // --- Event Listeners & Phaser Initialization ---
 window.addEventListener('resize', () => {
   CANVAS_SIZE = getCanvasSize();
@@ -601,9 +569,6 @@ document.addEventListener('DOMContentLoaded', () => {
 function setupMatchPage() {
     // Wire replay controls (transport buttons, slider, speed selector)
     replayController.attach();
-
-    // Show player names
-    showMatchPlayerNames();
 
     // Join match room after socket connects
     const waitForSocket = () => {

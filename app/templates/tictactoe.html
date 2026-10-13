@@ -3,6 +3,7 @@
 {% block title %}{% if match_id %}Watch Match{% else %}Tic Tac Toe{% endif %}{% endblock %}
 
 {% block content %}
+<link rel="stylesheet" href="{{ url_for('static', filename='match-players.css') }}">
 <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
 <script src="{{ url_for('static', filename='replay-player.js') }}"></script>
 <link href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism.min.css" rel="stylesheet" />

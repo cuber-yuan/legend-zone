@@ -1,16 +1,9 @@
 <section class="board-game-arena board-game-{{ board_variant }}" aria-label="{{ board_game }} game board">
   <div class="board-game-heading">
     <h1>{{ board_game }}</h1>
-    <div class="board-game-legend">
-      {% if board_variant == 'gomoku' %}
-      <span><i class="board-dot board-dot-black"></i>Black</span>
-      <span><i class="board-dot board-dot-white"></i>White</span>
-      {% else %}
-      <span class="board-legend-x">X</span>
-      <span class="board-legend-o">O</span>
-      {% endif %}
-    </div>
   </div>
+  {% set player_sides = [{'label': 'Black', 'marker': 'black'}, {'label': 'White', 'marker': 'white'}] if board_variant == 'gomoku' else [{'label': 'X', 'marker': 'x'}, {'label': 'O', 'marker': 'o'}] %}
+  {% include 'components/match_players.html' %}
   <div class="board-game-stage">
     <div class="board-game-frame">
       <div id="phaser-container" class="board-game-surface"></div>

@@ -2,13 +2,6 @@
 .board-game-arena { overflow: hidden; border: 1px solid #e2e8f0; border-radius: 1.25rem; background: #fff; box-shadow: 0 16px 45px rgba(15,23,42,0.08); }
 .board-game-heading { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 1.25rem 1.5rem; }
 .board-game-heading h1 { color: #172b47; font-size: 1.5rem; font-weight: 700; letter-spacing: -0.035em; }
-.board-game-legend { display: flex; align-items: center; gap: 1rem; color: #64748b; font-size: 0.75rem; font-weight: 600; }
-.board-game-legend span { display: inline-flex; align-items: center; gap: 0.4rem; }
-.board-dot { width: 0.85rem; height: 0.85rem; border-radius: 50%; }
-.board-dot-black { background: radial-gradient(circle at 30% 25%,#64748b,#1e293b 65%); box-shadow: 0 1px 3px rgba(15,23,42,0.2); }
-.board-dot-white { background: radial-gradient(circle at 30% 25%,#fff,#e2e8f0); border: 1px solid #cbd5e1; box-shadow: 0 1px 3px rgba(15,23,42,0.1); }
-.board-game-legend .board-legend-x { color: #3b82f6; font-size: 1rem; }
-.board-game-legend .board-legend-o { color: #f16c7b; font-size: 1rem; }
 .board-game-stage { padding: 0.75rem 1.5rem 1.25rem; background: radial-gradient(ellipse at 50% 70%,#e2e8f0,#f8fafc 65%,#fff); }
 .board-game-frame { max-width: 736px; margin: auto; padding: 8px; border: 1px solid #b48a58; border-radius: 1rem; background: linear-gradient(140deg,#d9b682,#ad7c48); box-shadow: 0 12px 24px rgba(99,69,36,0.14),inset 0 1px 0 rgba(255,255,255,0.4); }
 .board-game-tictactoe .board-game-frame { max-width: 516px; border-color: #334155; background: linear-gradient(140deg,#334155,#172437 65%); box-shadow: 0 12px 24px rgba(15,23,42,0.14),inset 0 1px 0 rgba(255,255,255,0.12); }
@@ -24,6 +17,5 @@
   .board-game-heading h1 { font-size: 1.25rem; }
   .board-game-stage { padding: 0.25rem 0.65rem 1rem; }
   .board-game-frame { border-radius: 0.75rem; }
-  .board-game-legend { gap: 0.75rem; font-size: 0.7rem; }
   .board-game-footer { padding: 0 0.75rem; }
 }

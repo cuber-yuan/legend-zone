@@ -2,11 +2,6 @@
 .snake-arena { overflow: hidden; border: 1px solid #e2e8f0; border-radius: 1.25rem; background: #fff; box-shadow: 0 16px 45px rgba(15,23,42,0.08); }
 .snake-heading { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 1.25rem 1.5rem; }
 .snake-heading h1 { color: #172b47; font-size: 1.5rem; font-weight: 700; letter-spacing: -0.035em; }
-.snake-legend { display: flex; gap: 1rem; color: #64748b; font-size: 0.75rem; font-weight: 600; }
-.snake-legend span { display: flex; align-items: center; gap: 0.4rem; }
-.snake-dot { display: inline-block; width: 0.65rem; height: 0.65rem; border-radius: 50%; }
-.snake-dot-blue { background: #4198f5; box-shadow: 0 0 0 3px #eff6ff; }
-.snake-dot-red { background: #f16c7b; box-shadow: 0 0 0 3px #fff1f2; }
 .snake-stage { padding: 0.75rem 1.5rem 1.25rem; background: radial-gradient(ellipse at 50% 70%, #e2e8f0, #f8fafc 65%, #fff); }
 .snake-board-frame { max-width: 736px; margin: auto; padding: 8px; border: 1px solid #334155; border-radius: 1rem; background: linear-gradient(140deg, #334155, #172437 65%); box-shadow: 0 12px 24px rgba(15,23,42,0.16), inset 0 1px 0 rgba(255,255,255,0.12); }
 .snake-arena #phaser-container { width: 100%; max-width: 100%; margin: auto; overflow: hidden; border-radius: 0.5rem; background: #19293e; }
@@ -29,7 +24,6 @@
     .snake-page { margin: 1rem auto; }
     .snake-heading { padding: 1rem; }
     .snake-heading h1 { font-size: 1.25rem; }
-    .snake-legend { gap: 0.75rem; font-size: 0.7rem; }
     .snake-stage { padding: 0.25rem 0.65rem 1rem; }
     .snake-board-frame { border-radius: 0.75rem; }
     .snake-footer { padding: 0 0.75rem; }

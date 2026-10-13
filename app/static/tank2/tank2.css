@@ -186,12 +186,7 @@
 .tank-heading { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 1.25rem 1.5rem 1rem; }
 .tank-heading h1 { color: #172b47; font-size: 1.5rem; font-weight: 700; letter-spacing: -0.035em; }
 .tank-heading #turnCounter { color: #64748b; font: 600 0.75rem ui-monospace,monospace; white-space: nowrap; }
-.tank-players { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 0 1.5rem 1rem; }
-.tank-player { display: flex; align-items: center; gap: 0.5rem; min-width: 0; color: #334155; font-size: 0.8rem; font-weight: 600; overflow-wrap: anywhere; }
-.tank-player:last-child { flex-direction: row-reverse; text-align: right; }
-.tank-player::before { content: ''; flex: none; width: 0.65rem; height: 0.65rem; border-radius: 50%; background: #4198f5; box-shadow: 0 0 0 3px #eff6ff; }
-.tank-player:last-child::before { background: #f16c7b; box-shadow: 0 0 0 3px #fff1f2; }
-.tank-spectator { display: none; padding: 0.25rem 0.6rem; border: 1px solid #e2e8f0; border-radius: 999px; background: #f8fafc; color: #64748b; font-size: 0.65rem; }
+.tank-spectator { display: none; width: fit-content; margin: 0 auto 0.75rem; padding: 0.25rem 0.6rem; border: 1px solid #e2e8f0; border-radius: 999px; background: #f8fafc; color: #64748b; font-size: 0.65rem; }
 .tank-stage { padding: 0.75rem 1.5rem 1.25rem; background: radial-gradient(ellipse at 50% 70%,#e2e8f0,#f8fafc 65%,#fff); }
 .tank-board-frame { max-width: 736px; margin: auto; padding: 8px; border: 1px solid #334155; border-radius: 1rem; background: linear-gradient(140deg,#334155,#172437 65%); box-shadow: 0 12px 24px rgba(15,23,42,0.16),inset 0 1px 0 rgba(255,255,255,0.12); }
 .tank-board-wrap { position: relative; width: 100%; aspect-ratio: 1; }
@@ -202,8 +197,6 @@
   .tank-page { margin: 1rem auto; }
   .tank-heading { padding: 1rem; }
   .tank-heading h1 { font-size: 1.25rem; }
-  .tank-players { padding: 0 1rem 0.5rem; gap: 0.65rem; }
-  .tank-player { font-size: 0.7rem; }
   .tank-stage { padding: 0.25rem 0.65rem 1rem; }
   .tank-board-frame { border-radius: 0.75rem; }
 }

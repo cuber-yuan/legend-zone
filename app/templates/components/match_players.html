@@ -1,0 +1,16 @@
+{% set players = match.players if match is defined and match and match.players else none %}
+<div class="match-players" aria-label="Match players">
+  {% for side in player_sides %}
+    {% set player = none %}
+    {% if players is mapping %}
+      {% set player = players.get('player_' ~ loop.index) %}
+    {% elif players is sequence and players is not string and players|length >= loop.index %}
+      {% set player = players[loop.index0] %}
+    {% endif %}
+    {% set name = player if player is string else player.name if player and player.name else side.label %}
+    <div class="match-player" data-player-slot="{{ loop.index }}">
+      <span class="match-player-marker marker-{{ side.marker }}" role="img" aria-label="{{ side.label }}">{% if side.marker in ['x', 'o'] %}{{ side.label }}{% endif %}</span>
+      <span class="match-player-name">{{ name }}</span>
+    </div>
+  {% endfor %}
+</div>
