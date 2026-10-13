@@ -2,28 +2,6 @@
 
 {% block title %}{% if match_id %}Watch Match{% else %}Gomoku{% endif %}{% endblock %}
 
-{% block sidebar_left %}
-<aside class="sider-left">
-  <div style="padding: 2rem;">
-    <h2 style="font-size: 1.25rem; font-weight: bold;">Black</h2>
-    {% if match_id %}
-    <div id="blackPlayerName" style="margin-top: 0.5rem; font-size: 1rem; color: #555;">Loading...</div>
-    {% endif %}
-  </div>
-</aside>
-{% endblock %}
-
-{% block sidebar_right %}
-<aside class="sider-right">
-  <div style="padding: 2rem;">
-    <h2 style="font-size: 1.25rem; font-weight: bold;">White</h2>
-    {% if match_id %}
-    <div id="whitePlayerName" style="margin-top: 0.5rem; font-size: 1rem; color: #555;">Loading...</div>
-    {% endif %}
-  </div>
-</aside>
-{% endblock %}
-
 {% block content %}
 <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
 <script src="{{ url_for('static', filename='replay-player.js') }}"></script>
@@ -112,23 +90,6 @@
     margin-right: auto;
   }
 
-  @media (max-width: 1200px) {
-    .layout-main {
-      flex-direction: column;
-      align-items: center;
-    }
-    .main-content {
-      order: -1; 
-    }
-    .sider-left, .sider-right {
-      position: static;
-      width: 100%;
-      max-width: 500px;
-      margin-top: 1rem;
-      border-radius: 1rem;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.08);
-    }
-  }
 </style>
 
 <div class="bg-gray-100 py-10">
@@ -165,72 +126,8 @@
     <div id="replayStatus" class="replay-status"></div>
 
     {% if not match_id %}
-    <section class="sample-bot-section bg-white p-6 rounded-lg shadow-md mb-8 hidden xl:block" style="margin-top: 2rem;">
-      <h2 class="text-xl font-bold mb-4">Sample Bot Code (Python)</h2>
-      <pre class="bg-gray-100 p-4 rounded-lg border border-gray-300" style="white-space: pre-wrap; word-break: break-word;"><code class="language-python">import json
-import random
-
-EMPTY = 0
-
-def main():
-    data = json.loads(input())
-    move_history = data.get("move_history", [])
-    board = [[EMPTY] * 15 for _ in range(15)]
-    for i, m in enumerate(move_history):
-        board[m["y"]][m["x"]] = 1 if i % 2 == 0 else 2
-    options = [
-        (x, y) for y in range(15) for x in range(15) if board[y][x] == EMPTY
-    ]
-    if options:
-        x, y = random.choice(options)
-        print(json.dumps({"x": x, "y": y}))
-    else:
-        print(json.dumps({"error": "No valid move found or board is full."}))
-
-if __name__ == "__main__":
-    main()</code></pre>
-    </section>
-
-    <section class="io-section bg-white p-6 rounded-lg shadow-md hidden lg:block">
-        <h2 class="text-xl font-bold mb-4">I/O Format Specification</h2>
-        
-        <div class="prose max-w-none">
-            <p>This document details the standard data exchange format between your AI bot and the referee system. Your bot must read a JSON string from standard input (stdin) and write its move as a JSON string to standard output (stdout).</p>
-
-            <h3 class="font-bold mt-4">1. Board Coordinate System</h3>
-            <p>The platform uses a 15x15 board. The coordinate system is defined as `board[y][x]`, where `y` is the row (0-14, top to bottom) and `x` is the column (0-14, left to right).</p>
-
-            <h3 class="font-bold mt-4">2. Input Format (Referee -> Bot)</h3>
-            <p>On your turn, the referee sends a single-line JSON string to your program's **stdin**. It contains:</p>
-            <ul>
-                <li><code>move_history</code> (Array): An ordered list of all moves. Each move is an object: <code>{"x": int, "y": int, "player": int}</code> (1=Black, 2=White).</li>
-                <li><code>your_side</code> (Integer): The side you are currently playing (1 for Black, 2 for White).</li>
-            </ul>
-
-            <h3 class="font-bold mt-4">3. Output Format (Bot -> Referee)</h3>
-            <p>Your AI must print a single-line JSON string to **stdout** with your chosen move:</p>
-            <pre class="bg-gray-100 p-2 rounded"><code>{"x": 8, "y": 7}</code></pre>
-
-            <h3 class="font-bold mt-4">Example: Turn 3 (Black to move)</h3>
-            <p>If Black played at (7,7) and White at (7,8), the board is:</p>
-            <pre class="bg-gray-100 p-2 rounded font-mono">
-    ... (x) ...
-       6 7 8
- (y)┌─────────
-  6 │  . . .
-  7 │  . B .
-  8 │  . W .
-  9 │  . . .</pre>
-            <p>The referee sends this JSON to your Bot (as Black):</p>
-            <pre class="bg-gray-100 p-2 rounded"><code class="language-json">{
-  "move_history": [
-    {"x": 7, "y": 7, "player": 1},
-    {"x": 7, "y": 8, "player": 2}
-  ],
-  "your_side": 1
-}</code></pre>
-        </div>
-    </section>
+    {% set guide_game = "Gomoku" %}
+    {% include "game_guides/board.html" %}
     {% endif %}
   </div>
 </div>
@@ -523,32 +420,6 @@ document.addEventListener('DOMContentLoaded', function() {
   {% if match_id and match %}
   const matchId = "{{ match_id }}";
   const matchStatus = "{{ match.status }}";
-
-  let matchPlayers = [];
-  try {
-    const parsed = {{ match.players | tojson }};
-    const normalize = (p) => (typeof p === 'string' ? { name: p } : (p || {}));
-    if (Array.isArray(parsed)) {
-      matchPlayers = parsed.map(normalize);
-    } else if (parsed && parsed.player_1) {
-      matchPlayers = [normalize(parsed.player_1), normalize(parsed.player_2)];
-    }
-  } catch (e) {
-    console.error('Failed to parse match players:', e);
-  }
-
-  const labelFor = (p, fallback) => {
-    if (!p || !p.name) return fallback;
-    return p.version ? `${p.name} v${p.version}` : p.name;
-  };
-  const p1 = matchPlayers[0];
-  const p2 = matchPlayers[1];
-  const blackName = labelFor(p1, 'Player 1');
-  const whiteName = labelFor(p2, 'Player 2');
-  const blackEl = document.getElementById('blackPlayerName');
-  const whiteEl = document.getElementById('whitePlayerName');
-  if (blackEl) blackEl.textContent = blackName;
-  if (whiteEl) whiteEl.textContent = whiteName;
 
   if (matchStatus === 'finished') {
     let moveHistory = [];

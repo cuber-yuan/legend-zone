@@ -1,0 +1,100 @@
+{% from 'game_guides/macros.html' import section, execution_rules %}
+
+{% call section('How to Play as Human', 'human-guide') %}
+<ol class="list-decimal pl-5 space-y-2">
+  <li>Sign in, create a {{ guide_game }} match from Game Tables on <a href="{{ url_for('main.home') }}" class="text-blue-600 underline">the homepage</a>, choose one Human seat and a bot opponent, then start the match.</li>
+  <li>Use <strong>W / A / S / D</strong> or the <strong>arrow keys</strong> to move up / left / down / right. On a small screen, tap the on-screen directional buttons.</li>
+  <li>Choose one direction for each turn. The server waits for both players' decisions before advancing; this is a turn-based game, not continuous movement.</li>
+  <li>Avoid walls, obstacles, and snake bodies. Only one Human seat is supported per match. Spectating and replaying do not accept movement input.</li>
+</ol>
+{% endcall %}
+
+{% call section('Sample Bot Code (Python)', 'sample-bot') %}
+<p>This starter reconstructs both snakes from the history and chooses an immediately unoccupied neighboring cell. It works with both Snake and Mini Snake by reading the supplied dimensions. It does not predict the opponent's next move.</p>
+<pre class="bg-gray-100 p-4 rounded-lg border border-gray-300 overflow-x-auto text-sm"><code class="language-python">import json
+import random
+from collections import deque
+
+# Snake coordinates: x is the row, y is the column (both one-based).
+DELTA = [(-1, 0), (0, 1), (1, 0), (0, -1)]
+
+def grows(turn):
+    # Zero-based turn: 0..24 grow, then 27, 30, 33, ...
+    return turn &lt;= 24 or (turn - 24) % 3 == 0
+
+def advance(snake, direction):
+    dx, dy = DELTA[direction]
+    x, y = snake[0]
+    snake.appendleft((x + dx, y + dy))
+
+def main():
+    data = json.loads(input())
+    initial = data["requests"][0]
+    height, width = initial["height"], initial["width"]
+    start = (initial["x"], initial["y"])
+    other_start = (height, width) if start == (1, 1) else (1, 1)
+    mine, opponent = deque([start]), deque([other_start])
+    obstacles = {(cell["x"], cell["y"])
+                 for cell in initial.get("obstacle", [])}
+
+    for turn, (my_move, their_move) in enumerate(
+            zip(data["responses"], data["requests"][1:])):
+        if not grows(turn):
+            mine.pop()
+            opponent.pop()
+        advance(mine, my_move["direction"])
+        advance(opponent, their_move["direction"])
+
+    head = mine[0]
+    if not grows(len(data["responses"])):
+        mine.pop()
+        opponent.pop()
+    occupied = obstacles | set(mine) | set(opponent)
+    options = []
+    for direction, (dx, dy) in enumerate(DELTA):
+        target = (head[0] + dx, head[1] + dy)
+        if (1 &lt;= target[0] &lt;= height and 1 &lt;= target[1] &lt;= width
+                and target not in occupied):
+            options.append(direction)
+    direction = random.choice(options or [0, 1, 2, 3])
+    print(json.dumps({"response": {"direction": direction}}))
+
+if __name__ == "__main__":
+    main()</code></pre>
+{% endcall %}
+
+{% call section('I/O Format Specification', 'io-spec') %}
+<p>Read one JSON object with <code>requests</code> and <code>responses</code> from stdin. Output one JSON object with a <code>response</code> object containing an integer <code>direction</code>.</p>
+<h3 class="font-bold">Coordinates and input history</h3>
+<ul class="list-disc pl-5 space-y-2">
+  <li>Snake uses <strong>one-based coordinates</strong>: <code>x</code> is the row (1–height, downward) and <code>y</code> is the column (1–width, rightward). This differs from the board games.</li>
+  <li><code>requests[0]</code> contains <code>height</code>, <code>width</code>, your starting <code>x</code>/<code>y</code>, and <code>obstacle</code>, an array of blocked coordinates. Your snake starts at (1,1) or (height,width); the opponent starts at the opposite corner.</li>
+  <li><code>requests[1:]</code> contains the opponent's previous <code>{"direction": integer}</code> moves. <code>responses</code> contains your own previous moves, without the outer <code>response</code> wrapper. Pair <code>responses[i]</code> with <code>requests[i + 1]</code> to reconstruct completed turn <code>i</code>.</li>
+</ul>
+<pre class="bg-gray-100 p-3 rounded overflow-x-auto text-sm"><code class="language-json">{
+  "requests": [
+    {"height": 10, "width": 11, "x": 1, "y": 1, "obstacle": [{"x": 4, "y": 7}, {"x": 7, "y": 5}]},
+    {"direction": 3}
+  ],
+  "responses": [{"direction": 2}]
+}</code></pre>
+<h3 class="font-bold">Output</h3>
+<pre class="bg-gray-100 p-3 rounded overflow-x-auto text-sm"><code class="language-json">{"response": {"direction": 1}}</code></pre>
+<p>Directions are <strong>0=up, 1=right, 2=down, 3=left</strong>. The example moves right. A direction must be an integer in 0–3.</p>
+{% endcall %}
+
+{% call section('Regulations', 'regulations') %}
+<ul class="list-disc pl-5 space-y-2">
+  <li>Two snakes begin with length 1 at opposite corners. Both players choose a direction each turn; each head advances one cell.</li>
+  {% if guide_game == 'Mini Snake' %}
+  <li><strong>Mini Snake</strong> uses a fixed 10-row × 11-column map with randomly generated, centrally symmetric obstacles. Movement, growth, and the Bot protocol are the same as Snake.</li>
+  {% else %}
+  <li><strong>Snake</strong> generates a map with 10–13 rows and 11–17 columns, with an odd sum of height and width and centrally symmetric obstacles. Read the actual dimensions from the input.</li>
+  {% endif %}
+  <li>There is no food. Snakes grow every turn for turns 1–25, then on turns 28, 31, 34, and so on. On other turns, both tails are removed before moves are checked, so a vacated tail cell can be entered.</li>
+  <li>Moving outside the map, into an obstacle, or into either snake's remaining body kills the snake. If both heads enter the same cell, both snakes die.</li>
+  <li>If one snake dies, the survivor wins. If both die on the same turn, the game is a draw. The platform ends surviving matches at 200 turns as a draw.</li>
+  <li>Invalid direction values or malformed responses forfeit the game. Leaving while the Human seat is waiting also forfeits.</li>
+</ul>
+{{ execution_rules() }}
+{% endcall %}

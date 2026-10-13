@@ -1,0 +1,79 @@
+{% from 'game_guides/macros.html' import section, execution_rules %}
+
+{% call section('How to Play as Human', 'human-guide') %}
+<ol class="list-decimal pl-5 space-y-2">
+  <li>Sign in and create a Tank Battle match from Game Tables on <a href="{{ url_for('main.home') }}" class="text-blue-600 underline">the homepage</a>, setting one or both seats to Human, then start the match.</li>
+  <li>Each side commands two tanks. Hover over or tap a friendly tank to show its order controls. Follow the order indicator to see which side is answering.</li>
+  <li>Use a directional button to move one cell. Toggle the central fire button, then choose a direction to shoot. Select <strong>hold</strong> to stay still. Disabled actions are currently illegal.</li>
+  <li>Order every surviving tank. The pair of orders is submitted automatically when both tanks have orders; destroyed tanks require no input.</li>
+  <li>Both sides act in the same round. If both seats are Human, the same device collects orders for each seat in turn. Spectators and replays cannot issue orders.</li>
+</ol>
+{% endcall %}
+
+{% call section('Sample Bot Code (Python)', 'sample-bot') %}
+<p>This minimal starter stays in place and randomly fires when the cooldown permits. It demonstrates the two-tank output format without requiring a full battlefield simulator.</p>
+<pre class="bg-gray-100 p-4 rounded-lg border border-gray-300 overflow-x-auto text-sm"><code class="language-python">import json
+import random
+
+def main():
+    data = json.loads(input())
+    my_side = data["requests"][0]["mySide"]
+    previous = data["responses"][-1] if data["responses"] else [-1, -1]
+    actions = []
+    for last_action in previous:
+        # A tank cannot fire in consecutive rounds.
+        if last_action &gt;= 4:
+            actions.append(-1)
+        else:
+            actions.append(random.choice([-1, 4, 5, 6, 7]))
+    print(json.dumps({"response": actions}))
+
+if __name__ == "__main__":
+    main()</code></pre>
+{% endcall %}
+
+{% call section('I/O Format Specification', 'io-spec') %}
+<p>Read one JSON object containing <code>requests</code> and <code>responses</code> from stdin. Write one JSON object containing a two-element <code>response</code> array to stdout.</p>
+<h3 class="font-bold">Input history</h3>
+<ul class="list-disc pl-5 space-y-2">
+  <li><code>requests[0]</code> contains <code>mySide</code> (0=Blue/top, 1=Red/bottom) and the initial terrain arrays <code>brickfield</code>, <code>waterfield</code>, and <code>steelfield</code>.</li>
+  <li><code>requests[1:]</code> contains the opponent's previous two-tank actions, in round order.</li>
+  <li><code>responses</code> contains your own previous two-tank actions. For completed round <code>i</code>, pair <code>responses[i]</code> with <code>requests[i + 1]</code>. These arrays store action values directly, without the outer <code>response</code> wrapper.</li>
+</ul>
+<pre class="bg-gray-100 p-3 rounded overflow-x-auto text-sm"><code class="language-json">{
+  "requests": [
+    {"mySide": 0, "brickfield": [0, 0, 0], "waterfield": [0, 0, 0], "steelfield": [0, 0, 0]},
+    [-1, -1]
+  ],
+  "responses": [[-1, -1]]
+}</code></pre>
+<h3 class="font-bold">Coordinates and terrain</h3>
+<p>The battlefield is 9×9 with zero-based coordinates: <code>x</code> increases rightward and <code>y</code> downward. Blue tanks 0 and 1 start at (2,0) and (6,0); Red tanks 0 and 1 start at (6,8) and (2,8). Bases are at (4,0) and (4,8).</p>
+<p>Each terrain array contains three 27-bit masks. Array element <code>i</code> describes rows <code>3*i</code> through <code>3*i+2</code>. Cell (x,y) is occupied when <code>(field[y // 3] &gt;&gt; ((y % 3) * 9 + x)) &amp; 1</code> equals 1. Replay both players' histories to track tanks, destroyed terrain, and cooldowns.</p>
+<h3 class="font-bold">Output and action codes</h3>
+<pre class="bg-gray-100 p-3 rounded overflow-x-auto text-sm"><code class="language-json">{"response": [2, -1]}</code></pre>
+<p>The first entry orders tank 0, the second tank 1. In this example tank 0 moves down and tank 1 holds. Use <code>-1</code> for a destroyed tank's slot.</p>
+<div class="overflow-x-auto">
+  <table class="w-full text-left text-sm">
+    <thead><tr class="border-b"><th class="py-2 pr-4">Action</th><th class="py-2">Code</th></tr></thead>
+    <tbody>
+      <tr class="border-b"><td class="py-2 pr-4">Hold</td><td>-1</td></tr>
+      <tr class="border-b"><td class="py-2 pr-4">Move up / right / down / left</td><td>0 / 1 / 2 / 3</td></tr>
+      <tr><td class="py-2 pr-4">Fire up / right / down / left</td><td>4 / 5 / 6 / 7</td></tr>
+    </tbody>
+  </table>
+</div>
+{% endcall %}
+
+{% call section('Regulations', 'regulations') %}
+<ul class="list-disc pl-5 space-y-2">
+  <li>Each side has one base and two tanks. Both players choose orders before the round is resolved; tanks move before shots are resolved.</li>
+  <li>A move advances one cell and must target an empty in-bounds cell in the current battlefield. Bricks, steel, water, bases, and currently occupied tank cells block movement.</li>
+  <li>A shot travels in a straight line to the first blocking object. It can destroy bricks, tanks (including friendly tanks), and bases. Steel blocks shots and survives; shots pass over water.</li>
+  <li>A tank cannot shoot in two consecutive rounds. It must move or hold on the following round.</li>
+  <li>A side loses when its base is destroyed or both of its tanks are destroyed. If both sides lose in the same round, the game is a draw.</li>
+  <li>The default round limit is 100. If both sides survive that limit, the game is a draw.</li>
+  <li>Malformed orders or illegal actions for a surviving tank forfeit the game. Destroyed tanks' orders are ignored. Opposing single tanks shooting directly at one another in opposite directions cancel those shots.</li>
+</ul>
+{{ execution_rules() }}
+{% endcall %}

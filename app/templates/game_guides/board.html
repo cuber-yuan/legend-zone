@@ -1,0 +1,79 @@
+{% from 'game_guides/macros.html' import section, execution_rules %}
+{% set is_connect4 = guide_game == 'Connect Four' %}
+{% set size = 15 if guide_game == 'Gomoku' else 3 %}
+{% set cols = 7 if is_connect4 else size %}
+{% set rows = 6 if is_connect4 else size %}
+{% set first = 'Blue' if is_connect4 else ('Black' if guide_game == 'Gomoku' else 'X') %}
+{% set second = 'Red' if is_connect4 else ('White' if guide_game == 'Gomoku' else 'O') %}
+
+{% call section('How to Play as Human', 'human-guide') %}
+<ol class="list-decimal pl-5 space-y-2">
+  <li>Sign in, open <a href="{{ url_for('main.home') }}" class="text-blue-600 underline">the homepage</a>, select <strong>Create</strong> under Game Tables, and choose {{ guide_game }}.</li>
+  <li>Set either seat to <strong>Human</strong> and choose a bot for the other seat, then start the match. Two Human seats can also share the same device.</li>
+  <li>{{ first }} moves first. Wait for the turn indicator to show your Human seat.
+    {% if is_connect4 %}Click or tap a column with free space to drop a disc. It falls into the lowest empty cell; you cannot choose the row.
+    {% else %}Click or tap an empty cell on the board to place your {{ 'stone' if guide_game == 'Gomoku' else 'mark' }}.{% endif %}
+  </li>
+  <li>Each click submits one move. Wait for the opponent's move before acting again. A spectator or replay cannot submit moves.</li>
+</ol>
+{% endcall %}
+
+{% call section('Sample Bot Code (Python)', 'sample-bot') %}
+<p>This starter chooses a random legal {{ 'column' if is_connect4 else 'cell' }}. Save it as <code>main.py</code> and upload it as a Python3 bot for {{ guide_game }}.</p>
+<pre class="bg-gray-100 p-4 rounded-lg border border-gray-300 overflow-x-auto text-sm"><code class="language-python">import json
+import random
+
+COLS, ROWS = {{ cols }}, {{ rows }}
+
+def main():
+    data = json.loads(input())
+    board = [[0] * COLS for _ in range(ROWS)]
+    for move in data["move_history"]:
+        board[move["y"]][move["x"]] = move["player"]
+{% if is_connect4 %}
+    columns = [x for x in range(COLS) if board[0][x] == 0]
+    print(json.dumps({"x": random.choice(columns)}))
+{% else %}
+    options = [(x, y) for y in range(ROWS) for x in range(COLS)
+               if board[y][x] == 0]
+    x, y = random.choice(options)
+    print(json.dumps({"x": x, "y": y}))
+{% endif %}
+if __name__ == "__main__":
+    main()</code></pre>
+{% endcall %}
+
+{% call section('I/O Format Specification', 'io-spec') %}
+<p>Read one JSON line from stdin and write your chosen move as one JSON line to stdout. This game uses a direct move object, without a <code>response</code> wrapper.</p>
+<h3 class="font-bold">Board and input</h3>
+<p>The board has {{ cols }} columns and {{ rows }} rows. Coordinates are zero-based: <code>x</code> increases left to right (0–{{ cols - 1 }}), <code>y</code> increases top to bottom (0–{{ rows - 1 }}). Index cells as <code>board[y][x]</code>.</p>
+<ul class="list-disc pl-5 space-y-2">
+  <li><code>move_history</code>: every completed move, in order. Each entry contains integer <code>x</code>, <code>y</code>, and <code>player</code> (1={{ first }}, 2={{ second }}). It is empty on the first move.{% if is_connect4 %} The stored <code>y</code> is the row where the disc landed.{% endif %}</li>
+  <li><code>your_side</code>: 1 for {{ first }}, 2 for {{ second }}. Either side can be your bot.</li>
+</ul>
+<pre class="bg-gray-100 p-3 rounded overflow-x-auto text-sm"><code class="language-json">{"move_history": [], "your_side": 1}</code></pre>
+<h3 class="font-bold">Output</h3>
+{% if is_connect4 %}
+<pre class="bg-gray-100 p-3 rounded overflow-x-auto text-sm"><code class="language-json">{"x": 3}</code></pre>
+<p><code>x</code> must be an integer in 0–6 identifying a non-full column. A supplied <code>y</code> is ignored; gravity determines the row.</p>
+{% else %}
+<pre class="bg-gray-100 p-3 rounded overflow-x-auto text-sm"><code class="language-json">{"x": {{ size // 2 }}, "y": {{ size // 2 }}}</code></pre>
+<p>Both coordinates must be integers in 0–{{ size - 1 }} and identify an empty cell. Strings, fractions, and booleans are not valid coordinates.</p>
+{% endif %}
+{% endcall %}
+
+{% call section('Regulations', 'regulations') %}
+<ul class="list-disc pl-5 space-y-2">
+  <li>Two players alternate turns; {{ first }} starts.</li>
+  {% if guide_game == 'Gomoku' %}
+  <li>Play on a 15×15 board. The first player to connect at least five stones horizontally, vertically, or diagonally wins. Overlines also win; this implementation has no forbidden-move rules.</li>
+  {% elif is_connect4 %}
+  <li>Play on a 7-column × 6-row board. Discs fall to the lowest empty cell in the chosen column. The first player to connect four discs horizontally, vertically, or diagonally wins.</li>
+  {% else %}
+  <li>Play on a 3×3 board. The first player to complete a row, column, or diagonal of three matching marks wins.</li>
+  {% endif %}
+  <li>If the board fills without a winner, the game is a draw.</li>
+  <li>{% if is_connect4 %}Choosing a full column or an out-of-range column{% else %}Choosing an occupied cell or an out-of-range cell{% endif %} forfeits the game. Leaving while your Human seat is waiting for a move also forfeits.</li>
+</ul>
+{{ execution_rules() }}
+{% endcall %}

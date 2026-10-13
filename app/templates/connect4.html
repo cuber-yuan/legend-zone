@@ -2,28 +2,6 @@
 
 {% block title %}{% if match_id %}Watch Match{% else %}Connect Four{% endif %}{% endblock %}
 
-{% block sidebar_left %}
-<aside class="sider-left">
-  <div style="padding: 2rem;">
-    <h2 style="font-size: 1.25rem; font-weight: bold; color: #2563eb;">Blue</h2>
-    {% if match_id %}
-    <div id="blackPlayerName" style="margin-top: 0.5rem; font-size: 1rem; color: #555;">Loading...</div>
-    {% endif %}
-  </div>
-</aside>
-{% endblock %}
-
-{% block sidebar_right %}
-<aside class="sider-right">
-  <div style="padding: 2rem;">
-    {% if match_id %}
-    <h2 style="font-size: 1.25rem; font-weight: bold; color: #dc2626;">Red</h2>
-    <div id="whitePlayerName" style="margin-top: 0.5rem; font-size: 1rem; color: #555;">Loading...</div>
-    {% endif %}
-  </div>
-</aside>
-{% endblock %}
-
 {% block content %}
 <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
 <script src="{{ url_for('static', filename='replay-player.js') }}"></script>
@@ -92,14 +70,6 @@
     margin-left: auto;
     margin-right: auto;
   }
-  @media (max-width: 1200px) {
-    .layout-main { flex-direction: column; align-items: center; }
-    .main-content { order: -1; }
-    .sider-left, .sider-right {
-      position: static; width: 100%; max-width: 500px; margin-top: 1rem;
-      border-radius: 1rem; box-shadow: 0 4px 12px rgba(0,0,0,0.08);
-    }
-  }
 </style>
 
 <div class="bg-gray-100 py-10">
@@ -136,46 +106,8 @@
     <div id="replayStatus" class="replay-status"></div>
 
     {% if not match_id %}
-    <section class="sample-bot-section bg-white p-6 rounded-lg shadow-md mb-8 hidden xl:block" style="margin-top: 2rem;">
-      <h2 class="text-xl font-bold mb-4">Sample Bot Code (Python)</h2>
-      <pre class="bg-gray-100 p-4 rounded-lg border border-gray-300" style="white-space: pre-wrap; word-break: break-word;"><code class="language-python">import json
-import random
-
-COLS, ROWS = 7, 6
-
-def main():
-    data = json.loads(input())
-    # Rebuild the board from the move log; each entry is a resolved drop.
-    board = [[0] * COLS for _ in range(ROWS)]
-    for m in data.get("move_history", []):
-        board[m["y"]][m["x"]] = m["player"]
-
-    # A move is a column. Gravity decides the row, so only offer
-    # columns that still have room.
-    columns = [x for x in range(COLS) if board[0][x] == 0]
-    print(json.dumps({"x": random.choice(columns)}))
-
-if __name__ == "__main__":
-    main()</code></pre>
-    </section>
-
-    <section class="io-section bg-white p-6 rounded-lg shadow-md hidden lg:block">
-        <h2 class="text-xl font-bold mb-4">I/O Format Specification</h2>
-        <div class="prose max-w-none">
-            <p>Your bot reads one JSON line from stdin and writes one JSON line to stdout.</p>
-            <h3 class="font-bold mt-4">1. Board</h3>
-            <p>A 7-column by 6-row grid, indexed <code>board[y][x]</code> where y=0 is the <em>top</em> row. Cell values: 0 empty, 1 = Blue (moves first), 2 = Red.</p>
-            <h3 class="font-bold mt-4">2. Input (Referee -&gt; Bot)</h3>
-            <ul>
-                <li><code>move_history</code> (Array): ordered moves, each <code>{"x": int, "y": int, "player": int}</code>. The <code>y</code> is the row the disc actually landed on.</li>
-                <li><code>your_side</code> (Integer): 1 for Blue, 2 for Red.</li>
-            </ul>
-            <h3 class="font-bold mt-4">3. Output (Bot -&gt; Referee)</h3>
-            <p>Print the column you want to drop into. The row is decided by gravity, so any <code>y</code> you send is ignored:</p>
-            <pre class="bg-gray-100 p-2 rounded"><code>{"x": 3}</code></pre>
-            <p class="text-sm text-gray-600 mt-2">Dropping into a full column, or an out-of-range one, counts as an illegal move and loses the game.</p>
-        </div>
-    </section>
+    {% set guide_game = "Connect Four" %}
+    {% include "game_guides/board.html" %}
     {% endif %}
   </div>
 </div>
@@ -457,18 +389,6 @@ document.addEventListener('DOMContentLoaded', function() {
   {% if match_id and match %}
   const matchId = "{{ match_id }}";
   const matchStatus = "{{ match.status }}";
-
-  let matchPlayers = [];
-  try {
-    matchPlayers = parsePlayers({{ match.players | tojson }});
-  } catch (e) {
-    console.error('Failed to parse match players:', e);
-  }
-  const labelFor = (p, fallback) => (!p || !p.name) ? fallback : (p.version ? `${p.name} v${p.version}` : p.name);
-  const blackEl = document.getElementById('blackPlayerName');
-  const whiteEl = document.getElementById('whitePlayerName');
-  if (blackEl) blackEl.textContent = labelFor(matchPlayers[0], 'Player 1');
-  if (whiteEl) whiteEl.textContent = labelFor(matchPlayers[1], 'Player 2');
 
   if (matchStatus === 'finished') {
     let moveHistory = [];

@@ -3,36 +3,3 @@ canvas {
     margin-top: 20px;
     border: 2px solid #333;
 }
-
-
-@media (max-width: 1200px) {
-
-    /* Target the main layout container from base.html */
-    .layout-main {
-        flex-direction: column;
-        /* Stack items vertically */
-        align-items: center;
-        /* Center them horizontally */
-    }
-
-    /* Move the game board to the top */
-    .main-content {
-        order: -1;
-        padding: 0;
-    }
-    
-    /* Restyle the sidebars for their new position */
-    .sider-left,
-    .sider-right {
-        position: static;
-        width: 100%;
-        max-width: 500px;
-        margin-top: 1rem;
-        border-radius: 1rem;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-    }
-
-    .sider-right {
-        margin-top: 1rem;
-    }
-}

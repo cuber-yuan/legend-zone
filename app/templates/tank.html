@@ -2,40 +2,6 @@
 
 {% block title %}{% if match_id %}Watch Match{% else %}Tank Battle{% endif %}{% endblock %}
 
-{% block sidebar_left %}
-<aside class="sider-left">
-  <div style="padding: 2rem;">
-    <h2 style="font-size: 1.25rem; font-weight: bold;">Top Player</h2>
-    <select id="aiSelectTop" class="block w-full border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
-      {% for bot in bots %}
-      <option value="{{ bot.id }}">{{ bot.bot_name }}</option>
-      {% endfor %}
-    </select>
-    <div style="margin-top:1.5rem;">
-      <input type="checkbox" id="top-is-human" />
-      <label for="top-is-human" style="margin-left:0.5rem;">Human</label>
-    </div>
-  </div>
-</aside>
-{% endblock %}
-
-{% block sidebar_right %}
-<aside class="sider-right">
-  <div style="padding: 2rem;">
-    <h2 style="font-size: 1.25rem; font-weight: bold;">Bottom Player</h2>
-    <select id="aiSelectBottom" class="block w-full border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
-      {% for bot in bots %}
-      <option value="{{ bot.id }}">{{ bot.bot_name }}</option>
-      {% endfor %}
-    </select>
-    <div style="margin-top:1.5rem;">
-      <input type="checkbox" id="bottom-is-human" />
-      <label for="bottom-is-human" style="margin-left:0.5rem;">Human</label>
-    </div>
-  </div>
-</aside>
-{% endblock %}
-
 {% block content %}
 <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/phaser@3.55.2/dist/phaser.js"></script>
@@ -43,6 +9,9 @@
 <script src="{{ url_for('static', filename='replay-player.js') }}"></script>
 <!-- Load our game scene logic first -->
 <script src="{{ url_for('static', filename='tank2/tank2.js') }}"></script>
+<link href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism.min.css" rel="stylesheet" />
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/prism.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-python.min.js"></script>
 
 <style>
   canvas {
@@ -233,32 +202,6 @@
   }
 
   /* --- Responsive Layout Control (from Gomoku) --- */
-  @media (max-width: 1200px) {
-    /* Target the main layout container from base.html */
-    .layout-main {
-      flex-direction: column; /* Stack items vertically */
-      align-items: center;   /* Center them horizontally */
-    }
-
-    /* Move the game board to the top */
-    .main-content {
-      order: -1; 
-    }
-
-    /* Restyle the sidebars for their new position */
-    .sider-left, .sider-right {
-      position: static;
-      width: 100%;
-      max-width: 500px;
-      margin-top: 1rem;
-      border-radius: 1rem;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.08);
-    }
-
-    .sider-right {
-        margin-top: 1rem;
-    }
-  }
 </style>
 
 <div class="bg-gray-100 py-10">
@@ -295,9 +238,6 @@
     <br>
     <div style="text-align:center;">
         <p id="turnCounter" class="mt-4 text-lg font-semibold">Turn: 1</p>
-        {% if not match_id %}
-        <button id="newGameBtn" type="button" class="mt-4 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600">New Game</button>
-        {% endif %}
     </div>
 
     <div id="orderBar" class="order-bar">
@@ -324,6 +264,9 @@
       <span id="replayStatus" class="text-sm text-gray-600"></span>
     </div>
     {% endif %}
+    {% if not match_id %}
+    {% include "game_guides/tank.html" %}
+    {% endif %}
   </div>
 </div>
 
@@ -332,7 +275,7 @@ const IS_MATCH_PAGE = {{ 'true' if match_id else 'false' }};
 const MATCH_ID = "{{ match_id or '' }}";
 const MATCH_STATUS = "{{ match.status if match_id and match else '' }}";
 const MATCH_GAME_NAME = "{{ match.game if match_id and match else '' }}";
-const MATCH_PLAYERS = {{ match.players | tojson if match_id and match else '""' }};
+const MATCH_PLAYERS = {{ (match.players if match_id and match else none) | tojson }};
 </script>
 
 <script>
@@ -826,23 +769,7 @@ function showMatchPlayerNames() {
     if (bottomEl) bottomEl.textContent = fmt(players[1]) || 'Bottom Player';
 }
 
-function newGame() {
-  if (!userId) {
-    alert("Not connected to server yet.");
-    return;
-  }
 
-  const topPlayerId = document.getElementById('aiSelectTop').value;
-  const bottomPlayerId = document.getElementById('aiSelectBottom').value;
-
-  socket.emit('new_game', {
-    user_id: userId,
-    top_player_id: topPlayerId,
-    bottom_player_id: bottomPlayerId,
-    top_is_human: !!(document.getElementById('top-is-human') || {}).checked,
-    bottom_is_human: !!(document.getElementById('bottom-is-human') || {}).checked
-  });
-}
 
 // --- Event Listeners & Phaser Initialization ---
 window.addEventListener('resize', () => {
@@ -866,17 +793,8 @@ document.addEventListener('DOMContentLoaded', () => {
     // Match page vs normal page setup
     if (typeof IS_MATCH_PAGE !== 'undefined' && IS_MATCH_PAGE) {
         setupMatchPage();
-    } else {
-        setupNormalPage();
     }
 });
-
-function setupNormalPage() {
-    const newGameBtn = document.getElementById('newGameBtn');
-    if (newGameBtn) {
-        newGameBtn.addEventListener('click', newGame);
-    }
-}
 
 function setupMatchPage() {
     // Wire replay controls (transport buttons, slider, speed selector)

@@ -20,28 +20,6 @@
             width: 100%;
         }
 
-        .sider-left {
-            width: 240px;
-            background: #f3f4f6;
-            box-shadow: 2px 0 8px rgba(0, 0, 0, 0.04);
-            overflow-y: auto;
-            position: sticky;
-            top: 0;
-            align-self: flex-start;
-            min-height: 400px;
-        }
-
-        .sider-right {
-            width: 240px;
-            background: #f3f4f6;
-            box-shadow: -2px 0 8px rgba(0, 0, 0, 0.04);
-            overflow-y: auto;
-            position: sticky;
-            top: 0;
-            align-self: flex-start;
-            min-height: 400px;
-        }
-
         .main-content {
             flex: 1;
             padding: 24px;
@@ -51,10 +29,7 @@
             min-width: 0;
         }
 
-        /* Two fixed 240px rails already exceed a phone's width on their own, so they
-           come out entirely below the tablet breakpoint. */
         @media (max-width: 768px) {
-            .sider-left, .sider-right { display: none; }
             .main-content { padding: 16px; }
         }
 
@@ -244,17 +219,7 @@
 
     <div class="layout-main">
 
-
-        {% block sidebar_left %}
-        <aside class="sider-left">
-        </aside>
-        {% endblock %}
-
-
-
-
-
-        <main class="main-content">
+                <main class="main-content">
             {% block content %}{% endblock %}
         </main>
 
@@ -262,11 +227,7 @@
         
         {% endblock %}
 
-        {% block sidebar_right %}
-        <aside class="sider-right">
-        </aside>
-        {% endblock %}
-    </div>
+            </div>
 
     {% block footer %}
     <footer class="bg-gray-800 text-white py-6 mt-10">

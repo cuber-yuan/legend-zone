@@ -353,24 +353,6 @@ socket.on('match_finished', (data) => {
     startReplay(data.displays || [], data.winner);
 });
 
-// --- Game Control Functions ---
-function newGame() {
-    if (!userId) {
-        alert("Not connected to server yet.");
-        return;
-    }
-    const leftPlayerId = document.getElementById('aiSelectLeft').value;
-    const rightPlayerId = document.getElementById('aiSelectRight').value;
-    socket.emit('new_game', {
-        user_id: userId,
-        left_player_id: leftPlayerId,
-        right_player_id: rightPlayerId,
-        left_is_human: document.getElementById('left-is-human').checked,
-        right_is_human: document.getElementById('right-is-human').checked,
-        page_path: window.location.pathname
-    });
-}
-
 // --- Match Page: Auto Start ---
 function autoStartMatch(playersJson) {
     let players = [];
@@ -520,63 +502,12 @@ document.addEventListener('DOMContentLoaded', () => {
     // Match page vs normal page setup
     if (typeof IS_MATCH_PAGE !== 'undefined' && IS_MATCH_PAGE) {
         setupMatchPage();
-    } else {
-        setupNormalPage();
     }
 });
-
-function setupNormalPage() {
-    const newGameBtn = document.getElementById('newGameBtn');
-    if (newGameBtn) {
-        newGameBtn.addEventListener('click', () => { newGame(); });
-    }
-
-    const leftCheckbox = document.getElementById('left-is-human');
-    const rightCheckbox = document.getElementById('right-is-human');
-    const leftSelect = document.getElementById('aiSelectLeft');
-    const rightSelect = document.getElementById('aiSelectRight');
-
-    if (leftCheckbox) {
-        leftCheckbox.addEventListener('change', () => {
-            if (leftCheckbox.checked) {
-                if (rightCheckbox) rightCheckbox.checked = false;
-                if (rightSelect) {
-                    rightSelect.disabled = false;
-                    rightSelect.classList.remove('bg-gray-200', 'cursor-not-allowed');
-                }
-            }
-            if (leftSelect) {
-                leftSelect.disabled = leftCheckbox.checked;
-                leftSelect.classList.toggle('bg-gray-200', leftCheckbox.checked);
-                leftSelect.classList.toggle('cursor-not-allowed', leftCheckbox.checked);
-            }
-        });
-    }
-
-    if (rightCheckbox) {
-        rightCheckbox.addEventListener('change', () => {
-            if (rightCheckbox.checked) {
-                if (leftCheckbox) leftCheckbox.checked = false;
-                if (leftSelect) {
-                    leftSelect.disabled = false;
-                    leftSelect.classList.remove('bg-gray-200', 'cursor-not-allowed');
-                }
-            }
-            if (rightSelect) {
-                rightSelect.disabled = rightCheckbox.checked;
-                rightSelect.classList.toggle('bg-gray-200', rightCheckbox.checked);
-                rightSelect.classList.toggle('cursor-not-allowed', rightCheckbox.checked);
-            }
-        });
-    }
-}
 
 function setupMatchPage() {
     // Wire replay controls (transport buttons, slider, speed selector)
     replayController.attach();
-
-    // Show player names
-    showMatchPlayerNames();
 
     // Join match room after socket connects
     const waitForSocket = () => {
@@ -587,31 +518,6 @@ function setupMatchPage() {
         }
     };
     waitForSocket();
-}
-
-function showMatchPlayerNames() {
-    let players = [];
-    try {
-        const raw = (typeof MATCH_PLAYERS !== 'undefined') ? MATCH_PLAYERS : null;
-        if (!raw) return;
-        const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
-        const normalize = (p) => (typeof p === 'string' ? { name: p } : (p || {}));
-        if (Array.isArray(parsed)) {
-            players = parsed.map(normalize);
-        } else if (parsed && typeof parsed === 'object' && parsed.player_1) {
-            players = [normalize(parsed.player_1), normalize(parsed.player_2)];
-        }
-    } catch (e) {
-        console.error('Failed to parse match players:', e);
-        return;
-    }
-    if (players.length < 2) return;
-
-    const fmt = (p) => p && p.name ? (p.version ? `${p.name} v${p.version}` : p.name) : '';
-    const blueEl = document.getElementById('bluePlayerName');
-    const redEl = document.getElementById('redPlayerName');
-    if (blueEl) blueEl.textContent = fmt(players[0]) || 'Player 1';
-    if (redEl) redEl.textContent = fmt(players[1]) || 'Player 2';
 }
 
 // Keyboard control for the human seat: WASD or the arrow keys.
