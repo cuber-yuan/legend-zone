@@ -59,17 +59,18 @@
     padding: 0.45rem 0.9rem; border-radius: 0.5rem;
     font-size: 0.82rem; font-weight: 600; cursor: pointer;
     border: 1px solid transparent;
-    transition: transform 0.1s ease, background 0.12s ease, box-shadow 0.12s ease, border-color 0.12s ease;
+    transition: transform 0.1s ease, background 0.12s ease, filter 0.15s ease, box-shadow 0.12s ease, border-color 0.12s ease;
   }
   .dlg-btn:active:not(:disabled) { transform: translateY(1px); }
   .dlg-btn:disabled { opacity: 0.45; cursor: not-allowed; }
   .dlg-btn-ghost { background: #fff; border-color: #e5e7eb; color: #4b5563; }
   .dlg-btn-ghost:hover:not(:disabled) { background: #f9fafb; border-color: #d1d5db; }
   .dlg-btn-primary {
-    background: linear-gradient(180deg, #2563eb, #1d4ed8); color: #fff;
-    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.25) inset, 0 6px 16px rgba(37, 99, 235, 0.28);
+    background: linear-gradient(180deg, #3b82f6, #2563eb); color: #fff;
+    border-color: #2563eb;
+    box-shadow: 0 2px 6px rgba(37, 99, 235, 0.15);
   }
-  .dlg-btn-primary:hover:not(:disabled) { background: linear-gradient(180deg, #1d4ed8, #1e40af); }
+  .dlg-btn-primary:hover:not(:disabled) { filter: brightness(0.96); box-shadow: 0 3px 9px rgba(37, 99, 235, 0.18); }
   /* A beam of light crossing the one button that invites you to start a match.
      Scoped to the id so the dialog's own primary buttons stay calm. */
   #btn-create-table { position: relative; overflow: hidden; }

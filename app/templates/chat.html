@@ -3,42 +3,42 @@
 {% block title %}Chat Room{% endblock %}
 
 {% block content %}
-<div class="max-w-screen-lg mx-auto mt-8 space-y-8">
-    <!-- <section class="bg-gradient-to-r from-blue-600 to-blue-400 text-white p-8 rounded-lg shadow-lg">
-        <h1 class="text-4xl font-bold mb-4">Chat Room</h1>
-        <p class="text-lg">Welcome to the Legend Zone chat room. Logged-in users can send messages below.</p>
-    </section> -->
-
-    <section class="bg-gray-100 p-6 rounded-lg shadow-md">
-        <!-- <h2 class="text-2xl font-semibold mb-4">Chat History</h2> -->
-        <p class="text-sm text-gray-500 mb-2">Chat history is kept for up to 24 hours. Messages may be lost if the server restarts.</p>
-        <div id="chat-history" class="space-y-2 max-h-96 overflow-y-auto">
+<link rel="stylesheet" href="{{ url_for('static', filename='chat.css') }}">
+<div class="chat-page">
+    <section class="chat-card">
+        <div class="chat-note">
+            <p>Chat history is kept for up to 24 hours. Messages may be lost if the server restarts.</p>
+        </div>
+        <div class="chat-history-wrap">
+        <div id="chat-history" class="chat-history">
             {% for msg in messages %}
-            <div class="p-2 rounded {% if msg.user == current_user.get_id() %}bg-blue-100{% else %}bg-gray-200{% endif %}">
-                <span class="font-semibold">{{ msg.user }}</span>:
-                <span>{{ msg.text }}</span>
-                <span class="text-xs text-gray-500 float-right">{{ msg.time }}</span>
+            <div class="chat-message{% if msg.user == current_user.get_id() %} is-own{% endif %}">
+                <div class="chat-message-meta">
+                    <span class="chat-message-user">{{ msg.user }}</span>
+                    <span class="chat-message-time">{{ msg.time }}</span>
+                </div>
+                <div class="chat-message-text">{{ msg.text }}</div>
             </div>
-            {% else %}
-            <!-- <p class="text-gray-500">No messages yet.</p> -->
             {% endfor %}
         </div>
-    </section>
+        <button id="chat-new-messages" class="chat-new-messages" type="button" hidden>New messages ↓</button>
+        </div>
 
-    {% if current_user.is_authenticated %}
-    <section class="bg-white p-6 rounded-lg shadow-md sticky bottom-0">
-        <form id="chat-form" method="post" action="{{ url_for('main.chat') }}" onsubmit="return sendMessage(event);">
-            <div class="mb-4">
-                <textarea name="message" id="message" rows="3" class="w-full border rounded p-2 resize-none" placeholder="Type your message..." required></textarea>
-            </div>
-            <button type="submit" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded">Send</button>
-        </form>
+        {% if current_user.is_authenticated %}
+        <div class="chat-composer">
+            <form id="chat-form" method="post" action="{{ url_for('main.chat') }}" onsubmit="return sendMessage(event);">
+                <textarea name="message" id="message" rows="3" placeholder="Type your message..." aria-label="Message" required></textarea>
+                <div class="chat-composer-actions">
+                    <button type="submit" class="chat-send">Send</button>
+                </div>
+            </form>
+        </div>
+        {% else %}
+        <div class="chat-login-notice">
+            <p>You must be logged in to send messages.</p>
+        </div>
+        {% endif %}
     </section>
-    {% else %}
-    <section class="bg-white p-6 rounded-lg shadow-md">
-        <p class="text-gray-700">You must be logged in to send messages.</p>
-    </section>
-    {% endif %}
 </div>
 <script>
 // Escape HTML to prevent XSS
@@ -48,40 +48,94 @@ function escapeHtml(text) {
     return div.innerHTML;
 }
 
-// Periodically fetch chat messages and update chat history
-function fetchMessages() {
-    fetch('{{ url_for("main.chat_messages") }}')
-        .then(response => response.json())
-        .then(data => {
-            const chatHistory = document.getElementById('chat-history');
-            if (!chatHistory) return;
-            chatHistory.innerHTML = '';
-            data.forEach(msg => {
-                const msgDiv = document.createElement('div');
-                // Highlight messages sent by the current user
-                {% if current_user.is_authenticated %}
-                if (msg.user === "{{ current_user.get_id() }}") {
-                    msgDiv.className = 'p-2 rounded bg-blue-100';
-                } else {
-                    msgDiv.className = 'p-2 rounded bg-gray-200';
-                }
-                {% else %}
-                msgDiv.className = 'p-2 rounded bg-gray-200';
-                {% endif %}
-                msgDiv.innerHTML = `<span class="font-semibold">${escapeHtml(msg.user)}</span>: <span>${escapeHtml(msg.text)}</span> <span class="text-xs text-gray-500 float-right">${escapeHtml(msg.time)}</span>`;
-                chatHistory.appendChild(msgDiv);
-            });
-            scrollChatToBottom();
-        });
+const chatHistory = document.getElementById('chat-history');
+const newMessagesButton = document.getElementById('chat-new-messages');
+const messageKey = msg => JSON.stringify([msg.user, msg.text, msg.time]);
+let messageKeys = Array.from(chatHistory.children, node => messageKey({
+    user: node.querySelector('.chat-message-user').textContent,
+    text: node.querySelector('.chat-message-text').textContent,
+    time: node.querySelector('.chat-message-time').textContent
+}));
+let requestSequence = 0;
+let appliedSequence = 0;
+
+function isChatAtBottom() {
+    return chatHistory.scrollHeight - chatHistory.clientHeight - chatHistory.scrollTop <= 2;
 }
 
-// Scroll chat history to the bottom
-function scrollChatToBottom() {
-    const chatHistory = document.getElementById('chat-history');
-    if (chatHistory) {
-        chatHistory.scrollTop = chatHistory.scrollHeight;
-    }
+function createMessage(msg) {
+    const node = document.createElement('div');
+    {% if current_user.is_authenticated %}
+    const isOwn = msg.user === {{ current_user.get_id() | tojson }};
+    {% else %}
+    const isOwn = false;
+    {% endif %}
+    node.className = 'chat-message' + (isOwn ? ' is-own' : '');
+    node.innerHTML = `<div class="chat-message-meta"><span class="chat-message-user">${escapeHtml(msg.user)}</span><span class="chat-message-time">${escapeHtml(msg.time)}</span></div><div class="chat-message-text">${escapeHtml(msg.text)}</div>`;
+    return node;
 }
+
+// Reuse message nodes and preserve the visible message when old records expire.
+function updateMessages(data) {
+    const nextKeys = data.map(messageKey);
+    if (nextKeys.length === messageKeys.length && nextKeys.every((key, i) => key === messageKeys[i])) return;
+    const wasAtBottom = isChatAtBottom();
+    const oldScrollTop = chatHistory.scrollTop;
+    const viewportTop = chatHistory.getBoundingClientRect().top;
+    const remainingKeys = new Set(nextKeys);
+    const anchor = Array.from(chatHistory.children).find((node, i) => remainingKeys.has(messageKeys[i]) && node.getBoundingClientRect().bottom > viewportTop);
+    const anchorTop = anchor ? anchor.getBoundingClientRect().top : 0;
+    const available = new Map();
+    messageKeys.forEach((key, i) => {
+        if (!available.has(key)) available.set(key, []);
+        available.get(key).push(chatHistory.children[i]);
+    });
+    let hasNewMessages = false;
+    data.forEach((msg, i) => {
+        const existing = available.get(nextKeys[i]);
+        const isNew = !existing || !existing.length;
+        const node = isNew ? createMessage(msg) : existing.shift();
+        // A repeated message can share the same user, text and second-level timestamp.
+        if (isNew) hasNewMessages = true;
+        if (chatHistory.children[i] !== node) chatHistory.insertBefore(node, chatHistory.children[i] || null);
+    });
+    while (chatHistory.children.length > data.length) chatHistory.lastElementChild.remove();
+    messageKeys = nextKeys;
+    if (wasAtBottom) {
+        scrollChatToBottom();
+        return;
+    }
+    if (anchor && anchor.parentElement === chatHistory) {
+        chatHistory.scrollTop = oldScrollTop + anchor.getBoundingClientRect().top - anchorTop;
+    } else {
+        chatHistory.scrollTop = oldScrollTop;
+    }
+    if (hasNewMessages && !isChatAtBottom()) newMessagesButton.hidden = false;
+    if (isChatAtBottom()) newMessagesButton.hidden = true;
+}
+
+function fetchMessages() {
+    const sequence = ++requestSequence;
+    return fetch('{{ url_for("main.chat_messages") }}')
+        .then(response => response.json())
+        .then(data => {
+            // A slower earlier request must not replace a newer response.
+            if (sequence < appliedSequence) return;
+            appliedSequence = sequence;
+            updateMessages(data);
+        })
+        .catch(() => {}); // Keep the current history visible on a transient polling failure.
+}
+
+function scrollChatToBottom() {
+    chatHistory.scrollTop = chatHistory.scrollHeight;
+    newMessagesButton.hidden = true;
+}
+
+newMessagesButton.addEventListener('click', scrollChatToBottom);
+chatHistory.addEventListener('scroll', () => {
+    if (isChatAtBottom()) newMessagesButton.hidden = true;
+});
 
 {% if current_user is defined and current_user.is_authenticated %}
 // Send message via AJAX, do not reload page
@@ -109,11 +163,9 @@ function sendMessage(event) {
 
 // On page load, scroll to bottom and start polling for new messages
 window.addEventListener('DOMContentLoaded', function() {
+    scrollChatToBottom();
     fetchMessages();
     setInterval(fetchMessages, 3000); // Poll every 3 seconds
 });
 </script>
 {% endblock %}
-
-
-
