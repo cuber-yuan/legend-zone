@@ -1,73 +1,150 @@
 {% extends 'base.html' %}
-
 {% block title %}Rating{% endblock %}
 
 {% block content %}
-<div class="max-w-screen-lg mx-auto mt-8">
-    <h1 class="text-3xl font-bold mb-6 text-gray-800 text-center">🏆 Bot Rating Rankings</h1>
-    
-    {% if ratings %}
-        {% for game, bot_list in ratings.items() %}
-        <div class="mb-10 rounded-xl shadow-2xl bg-white overflow-hidden">
-            <div class="bg-indigo-600 p-4">
-                <h2 class="text-2xl font-semibold text-white">{{ game }} Rankings</h2>
-            </div>
+{% set totals = namespace(bots=0) %}
+{% for bot_list in ratings.values() %}
+  {% set totals.bots = totals.bots + bot_list|length %}
+{% endfor %}
 
-            <div class="p-4">
-                {% if bot_list %}
-                <div class="overflow-x-auto">
-                    <table class="min-w-full divide-y divide-gray-200">
-                        <thead class="bg-gray-50">
-                            <tr>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                    Rank
-                                </th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                    Bot Name
-                                </th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                    Rating
-                                </th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                    Owner
-                                </th>
-                            </tr>
-                        </thead>
-                        <tbody class="bg-white divide-y divide-gray-200">
-                            {% for bot in bot_list %}
-                            <tr class="hover:bg-gray-100">
-                                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                                    {{ loop.index }} </td>
-                                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-indigo-600">
-                                    <a href="{{ url_for('main.bot_detail', bot_id=bot.id) }}" class="hover:underline">
-                                        {{ bot.name }}
-                                    </a>
-                                </td>
-                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-bold">
-                                    {{ bot.rating | round(2) }} </td>
-                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                    <a href="{{ url_for('main.profile', username=bot.owner) }}" class="hover:underline">
-                                        {{ bot.owner }}
-                                    </a>
-                                </td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-                {% else %}
-                <p class="p-4 text-gray-500">No bots found for this game.</p>
-                {% endif %}
-            </div>
-        </div>
+<style>
+  .rating-page { --rank-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+  .rating-meta { font-family: var(--rank-mono); font-size: 0.7rem; letter-spacing: 0.06em; }
+  .rating-nav { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+  .rating-nav a {
+    display: inline-flex; align-items: center; gap: 0.6rem; padding: 0.5rem 0.8rem;
+    border: 1px solid #e2e8f0; border-radius: 999px; background: #fff;
+    color: #475569; font-size: 0.8rem; font-weight: 600; transition: background 0.15s, border-color 0.15s;
+  }
+  .rating-nav a:hover { background: #eff6ff; border-color: #93c5fd; color: #1d4ed8; }
+  .rating-nav-count { font-family: var(--rank-mono); font-size: 0.65rem; color: #94a3b8; }
+  .rating-card { scroll-margin-top: 1.5rem; }
+  .rating-count {
+    padding: 0.2rem 0.5rem; border: 1px solid #e2e8f0; border-radius: 999px;
+    background: #f1f5f9; color: #475569; font-family: var(--rank-mono);
+    font-size: 0.62rem; letter-spacing: 0.08em; white-space: nowrap;
+  }
+  .rating-table { width: 100%; table-layout: fixed; border-collapse: collapse; text-align: left; }
+  .rating-table th { padding: 0.6rem 1rem; font-size: 0.8rem; font-weight: 600; }
+  .rating-table td { padding: 0.8rem 1rem; border-top: 1px solid #f1f5f9; vertical-align: middle; }
+  .rating-table tbody tr:first-child td { border-top: 0; }
+  .rating-table tbody tr:nth-child(even) { background: #f8fafc; }
+  .rating-table tbody tr:hover { background: #eff6ff; }
+  .rating-rank-column { width: 4.75rem; }
+  .rating-score-column { width: 7.5rem; }
+  .rating-owner-column { width: 26%; }
+  .rating-table .rating-score { text-align: right; }
+  .rating-score { color: #0f172a; font-family: var(--rank-mono); font-size: 0.9rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .rating-table thead .rating-score { color: #fff; }
+  .rank-mark {
+    display: inline-flex; align-items: center; justify-content: center; width: 1.9rem; height: 1.9rem;
+    border: 1px solid transparent; border-radius: 0.5rem; color: #64748b;
+    font-family: var(--rank-mono); font-size: 0.8rem; font-weight: 700;
+  }
+  .rank-1 { background: #fffbeb; border-color: #fde68a; color: #a16207; }
+  .rank-2 { background: #f1f5f9; border-color: #cbd5e1; color: #475569; }
+  .rank-3 { background: #fff7ed; border-color: #fed7aa; color: #9a3412; }
+  .rating-chip {
+    display: inline-flex; align-items: center; gap: 0.35rem; max-width: 100%; padding: 0.25rem 0.6rem;
+    border-radius: 999px; font-size: 0.85rem; font-weight: 500; line-height: 1.4;
+    transition: background 0.15s;
+  }
+  .rating-bot { background: #ccfbf1; color: #134e4a; }
+  .rating-bot:hover { background: #99f6e4; }
+  .rating-owner { background: #f3e8ff; color: #6b21a8; }
+  .rating-owner:hover { background: #e9d5ff; }
+  .rating-name { min-width: 0; overflow-wrap: anywhere; }
+  .rating-chip svg { width: 0.875rem; height: 0.875rem; flex: none; opacity: 0.8; }
+  .rating-version { flex: none; color: #0f766e; font-size: 0.7rem; white-space: nowrap; }
+  .rating-mobile-owner { display: none; }
+  .rating-nav a:focus-visible, .rating-chip:focus-visible { outline: 2px solid #2563eb; outline-offset: 3px; }
+  @media (max-width: 639px) {
+    .rating-table th, .rating-table td { padding-left: 0.5rem; padding-right: 0.5rem; }
+    .rating-rank-column { width: 3rem; }
+    .rating-score-column { width: 5.25rem; }
+    .rating-owner-column { display: none; }
+    .rating-mobile-owner { display: block; margin-top: 0.4rem; }
+    .rating-mobile-owner .rating-chip { padding: 0.15rem 0.5rem; font-size: 0.7rem; }
+    .rating-chip { font-size: 0.8rem; }
+    .rating-score { font-size: 0.8rem; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .rating-nav a, .rating-chip { transition: none; }
+  }
+</style>
+
+{% macro bot_icon() -%}
+<svg fill="none" viewBox="0 0 24 24" stroke-width="1.7" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M9 10h.01M15 10h.01M8.5 15h7M12 3v2m-6 4H4m16 0h-2M6.75 7.5h10.5a2.25 2.25 0 0 1 2.25 2.25v6a2.25 2.25 0 0 1-2.25 2.25H6.75A2.25 2.25 0 0 1 4.5 15.75v-6A2.25 2.25 0 0 1 6.75 7.5Z"/></svg>
+{%- endmacro %}
+{% macro owner_link(owner) -%}
+<a href="{{ url_for('main.profile', username=owner) }}" class="rating-chip rating-owner">
+  <svg fill="none" viewBox="0 0 24 24" stroke-width="1.7" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.997 0A17.733 17.733 0 0 0 12 19.5c-1.677 0-3.277.23-4.798.618Z"/></svg>
+  <span class="rating-name">{{ owner }}</span>
+</a>
+{%- endmacro %}
+
+<div class="rating-page max-w-screen-lg mx-auto mt-8 space-y-8">
+  <header class="bg-gradient-to-r from-blue-600 to-blue-400 text-white p-6 sm:p-8 rounded-lg shadow-lg">
+    <div class="rating-meta uppercase text-blue-100 mb-3">The leaderboard</div>
+    <h1 class="text-3xl sm:text-4xl font-bold mb-3">Bot Rankings</h1>
+    <!-- <p class="text-sm sm:text-base text-blue-50">See which bots lead the arena. Every game has its own Elo ranking.</p> -->
+    <div class="rating-meta flex flex-wrap gap-x-5 gap-y-2 mt-5 text-blue-100">
+      <span><strong class="text-white">{{ ratings|length }}</strong> games</span>
+      <span><strong class="text-white">{{ totals.bots }}</strong> bots</span>
+    </div>
+  </header>
+
+  {% if ratings %}
+  <nav class="rating-nav" aria-label="Jump to a game ranking">
+    {% for game, bot_list in ratings.items() %}
+    <a href="#ranking-{{ loop.index }}"><span>{{ game }}</span><span class="rating-nav-count">{{ bot_list|length }}</span></a>
+    {% endfor %}
+  </nav>
+  {% for game, bot_list in ratings.items() %}
+  <section id="ranking-{{ loop.index }}" class="rating-card bg-white rounded-lg overflow-hidden shadow-md" aria-labelledby="ranking-title-{{ loop.index }}">
+    <div class="flex items-center justify-between gap-3 px-4 py-4 sm:px-6 sm:py-5">
+      <h2 id="ranking-title-{{ loop.index }}" class="text-xl sm:text-2xl font-semibold text-gray-900">{{ game }}</h2>
+      <span class="rating-count">{{ bot_list|length }} {{ 'BOT' if bot_list|length == 1 else 'BOTS' }}</span>
+    </div>
+    {% if bot_list %}
+    <table class="rating-table text-gray-700" aria-label="{{ game }} bot rankings">
+      <thead class="bg-gradient-to-r from-blue-600 to-blue-400 text-white">
+        <tr>
+          <th scope="col" class="rating-rank-column">Rank</th>
+          <th scope="col">Bot</th>
+          <th scope="col" class="rating-score-column rating-score">Elo</th>
+          <th scope="col" class="rating-owner-column">Owner</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for bot in bot_list %}
+        <tr>
+          <td><span class="rank-mark{% if loop.index <= 3 %} rank-{{ loop.index }}{% endif %}">{{ loop.index }}</span></td>
+          <td>
+            <a href="{{ url_for('main.bot_detail', bot_id=bot.id) }}" class="rating-chip rating-bot">
+              {{ bot_icon() }}<span class="rating-name">{{ bot.name }}</span>
+              {% if bot.version %}<span class="rating-version">v{{ bot.version }}</span>{% endif %}
+            </a>
+            <div class="rating-mobile-owner">{{ owner_link(bot.owner) }}</div>
+          </td>
+          <td class="rating-score">{% if bot.rating is not none %}{{ '%.2f'|format(bot.rating) }}{% else %}&mdash;{% endif %}</td>
+          <td class="rating-owner-column">{{ owner_link(bot.owner) }}</td>
+        </tr>
         {% endfor %}
+      </tbody>
+    </table>
     {% else %}
-        <div class="text-center p-10 bg-white rounded-xl shadow-lg">
-            <p class="text-xl text-gray-600">No rating data available yet. Check back later!</p>
-        </div>
+    <p class="px-4 py-8 text-center text-sm text-gray-500">No bots ranked for this game yet.</p>
     {% endif %}
+  </section>
+  {% endfor %}
+  <p class="text-xs text-gray-500 text-center">Rankings show each bot's latest version, ordered by Elo.</p>
+  {% else %}
+  <section class="bg-white rounded-lg shadow-md px-6 py-12 text-center">
+    <h2 class="text-xl font-semibold text-gray-900 mb-2">The arena is waiting</h2>
+    <p class="text-sm text-gray-500 mb-5">No bots have entered the rankings yet. Create a bot to get started.</p>
+    <a href="{{ url_for('main.profile_root') if current_user.is_authenticated else url_for('auth.login') }}" class="inline-flex px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-500">{{ 'Go to my bots' if current_user.is_authenticated else 'Sign in to create a bot' }}</a>
+  </section>
+  {% endif %}
 </div>
 {% endblock %}
-
-
-
