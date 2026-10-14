@@ -14,7 +14,7 @@ upload_bp = Blueprint('upload', __name__)
 
 
 UPLOAD_ROOT = 'uploads/bots'
-MAX_CONTENT_LENGTH = 1 * 1024 * 1024  # 1MB max file size
+MAX_CONTENT_LENGTH = 16 * 1024 * 1024  # 16 MiB upload request limit, including form overhead
 ALLOWED_EXTENSIONS = {'.py', '.cpp', '.cc', '.zip'}
 LANGUAGE_TO_ENTRY = {'python3': 'main.py', 'cpp': 'main.cpp'}
 EXTENSION_TO_LANGUAGE = {'.py': 'python3', '.cpp': 'cpp', '.cc': 'cpp'}
