@@ -31,7 +31,7 @@ if 'ALLOWED_ORIGINS' not in os.environ:
 socketio = SocketIO(cors_allowed_origins=ALLOWED_ORIGINS, allow_upgrades=False)
 login_manager = LoginManager()
 
-def create_app():
+def create_app(*, start_background_jobs=True):
     app = Flask(__name__, template_folder='templates', static_folder='static')
     app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', os.urandom(32).hex())
     app.debug = os.environ.get('FLASK_DEBUG', '0') == '1'
@@ -91,7 +91,8 @@ def create_app():
     app.register_blueprint(tictactoe_bp)
     app.register_blueprint(connect4_bp)
 
-    start_scheduler(app)
+    if start_background_jobs:
+        start_scheduler(app)
     
     return app
 
