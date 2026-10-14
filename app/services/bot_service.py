@@ -61,6 +61,8 @@ def get_bot_executor(bot_id):
     executor = CodeExecutor(workdir=rec['file_path'], language=rec['language'])
     executor.bot_id = rec['bot_id']
     executor.version_id = rec['version_id']
+    executor.version_number = rec['version_number']
+    executor.bot_name = rec['bot_name']
     return executor
 
 

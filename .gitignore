@@ -15,6 +15,7 @@ build/
 .vscode/
 .idea/
 tests/*
+!tests/test_schema_migrations.py
 
 *.swp
 *.bak
@@ -39,6 +40,8 @@ judges/msnake_judge
 judges/tank2_judge
 
 *.db
+*.db-wal
+*.db-shm
 
 AGENTS.md
 

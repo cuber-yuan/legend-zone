@@ -6,18 +6,19 @@ from dataclasses import dataclass, field
 import json
 import logging
 
-from .match_service import finalize_match_record, create_match_record
+from .match_service import finalize_match_record, create_match_record, bind_match_players
 from .debug_service import (DebugRecorder, current_recorder, bind_recorder, reset_recorder,
-                            trace_fields, trace_failure, trace_callback_output)
+                            trace_fields, trace_failure, trace_callback_output, current_event_status)
 from .rating_service import update_bot_ratings
 
 logger = logging.getLogger(__name__)
 
 
 class PlayerForfeit(Exception):
-    def __init__(self, player, message):
+    def __init__(self, player, message, reason='protocol_error'):
         super().__init__(message)
         self.winner = -1 if player is None else 1 - player
+        self.reason = reason
 
 
 @dataclass
@@ -26,6 +27,7 @@ class MatchResult:
     payload: list = field(default_factory=list)
     error_msg: str = None
     rated: bool = True
+    termination_reason: str = 'normal'
 
 
 def read_player_action(get_output, player, input_str=None, validate=None):
@@ -38,6 +40,7 @@ def read_player_action(get_output, player, input_str=None, validate=None):
             # run_process records original bytes first; this also covers Human callbacks.
             trace_callback_output(output)
             if output is None:
+                trace_failure('disconnect', 'Opponent left the game.')
                 raise ValueError('Opponent left the game.')
             try:
                 action = json.loads(output)
@@ -53,7 +56,8 @@ def read_player_action(get_output, player, input_str=None, validate=None):
             return action
         except Exception as exc:
             trace_failure('protocol_error' if isinstance(exc, UnicodeDecodeError) else 'execution_error', str(exc))
-            raise PlayerForfeit(player, 'Player failed to return a valid action.') from exc
+            raise PlayerForfeit(player, 'Player failed to return a valid action.',
+                                current_event_status() or 'execution_error') from exc
 
 
 def read_board_move(get_output, player, column_only=False, input_str=None):
@@ -88,7 +92,8 @@ def read_simultaneous_actions(get_outputs, inputs=None):
                     if future.exception() is not None]
         if failures:
             raise PlayerForfeit(failures[0] if len(failures) == 1 else None,
-                                'Player failed to return a valid action.')
+                                'Player failed to return a valid action.',
+                                futures[failures[0]].exception().reason if len(failures) == 1 else 'double_forfeit')
         return tuple(future.result() for future in futures)
 
 
@@ -124,7 +129,7 @@ def play_board_game(game, get_outputs, send_update, max_turns, column_only=False
             if not game.apply_move(*move):
                 trace_fields(status='invalid_move', stdout={'accepted': False, 'board': game.board},
                              diagnostic='Player made an invalid move.')
-                raise PlayerForfeit(player, 'Player made an invalid move.')
+                raise PlayerForfeit(player, 'Player made an invalid move.', 'invalid_move')
             landed = game.move_history[-1]
             winner = game.check_win(landed['x'], landed['y'])
             if winner:
@@ -155,6 +160,7 @@ def match_lifecycle(*, match_id, game_name, players, player_ids, player_types,
         result.payload = board_game.move_history
     try:
         recording_id = match_id or create_match_record(game_name, players)
+        players = bind_match_players(recording_id, players, player_types, executors)
         recorder = DebugRecorder(recording_id, executors, player_types)
         trace_token = bind_recorder(recorder)
         try:
@@ -162,11 +168,13 @@ def match_lifecycle(*, match_id, game_name, players, player_ids, player_types,
         except PlayerForfeit as exc:
             result.winner = exc.winner
             result.error_msg = str(exc)
+            result.termination_reason = exc.reason
         except Exception:
             logger.exception('%s match %s aborted', game_name, match_id)
             result.winner = -1
             result.rated = False
             result.error_msg = 'Match aborted due to a server or judge error.'
+            result.termination_reason = 'server_error'
 
         if board_game is not None:
             result.payload = board_game.move_history
@@ -174,9 +182,15 @@ def match_lifecycle(*, match_id, game_name, players, player_ids, player_types,
                 result.winner = board_game.winner - 1 if board_game.winner in (1, 2) else -1
             board_game.winner = result.winner + 1 if result.winner in (0, 1) else 0
 
+        if result.error_msg and result.termination_reason == 'normal':
+            message = result.error_msg.lower()
+            result.termination_reason = ('disconnect' if 'left the game' in message else 'turn_limit'
+                                         if 'turn limit' in message else 'unsupported' if 'supports one human' in message else 'unknown')
         saved_id = finalize_match_record(
             recording_id, game_name, players, result.winner,
             json.dumps(result.payload), payload_col,
+            termination_reason=result.termination_reason, error_message=result.error_msg,
+            rated=result.rated and player_types == ('bot', 'bot'),
         )
         frame_count = len(result.payload) if payload_col == 'move_history' else max(0, len(result.payload) - 1)
         recorder.finish(frame_count, result.error_msg)

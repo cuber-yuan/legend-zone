@@ -47,9 +47,10 @@ class DictLiteConnection:
     """sqlite3 connection wrapper that mimics pymysql connection interface."""
 
     def __init__(self, db_path):
-        self._conn = sqlite3.connect(db_path)
+        self._conn = sqlite3.connect(db_path, timeout=30)
         self._conn.row_factory = sqlite3.Row
         self._conn.execute("PRAGMA journal_mode=WAL")
+        self._conn.execute('PRAGMA foreign_keys=ON')
 
     def cursor(self, cursorclass=None):
         return DictLiteCursor(self._conn.cursor())

@@ -181,7 +181,7 @@
                 return;
             }
             const labels = { success: 'Success', timeout: 'Timed out', protocol_error: 'Invalid output',
-                runtime_error: 'Runtime error', compile_error: 'Compilation failed', execution_error: 'Execution error', invalid_move: 'Illegal move' };
+                runtime_error: 'Runtime error', compile_error: 'Compilation failed', execution_error: 'Execution error', invalid_move: 'Illegal move', disconnect: 'Disconnected' };
             status.textContent = labels[event.status] || event.status;
             status.classList.remove('rd-inactive');
             status.classList.toggle('rd-error', event.status !== 'success');

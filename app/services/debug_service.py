@@ -21,6 +21,11 @@ def current_recorder():
     return _recorder.get()
 
 
+def current_event_status():
+    event = _event.get()
+    return event['status'] if event else None
+
+
 def bind_recorder(recorder):
     return _recorder.set(recorder)
 
@@ -112,15 +117,22 @@ class DebugRecorder:
         self.enabled = self._write('INSERT INTO match_debug_sessions (match_id, created_at) VALUES (?, ?)',
                                    (match_id, utc_now_iso()))
 
-    def _write(self, sql, params):
+    def _write(self, sql, params, extra=()):
         connection = None
         try:
             connection = get_db_connection()
             with connection.cursor() as cursor:
                 cursor.execute(sql, params)
+                for extra_sql, extra_params in extra:
+                    cursor.execute(extra_sql, extra_params)
             connection.commit()
             return True
         except Exception:
+            if connection:
+                try:
+                    connection.rollback()
+                except Exception:
+                    logger.exception('Failed to roll back the debug transaction')
             self.incomplete = True
             logger.exception('Failed to persist a debug record for match %s', self.match_id)
             return False
@@ -187,12 +199,12 @@ class DebugRecorder:
             else:
                 self.bytes_used += size
             self.truncated = self.truncated or bool(event['truncated_fields'])
+            update = ('UPDATE match_debug_sessions SET last_turn=?, frame_count=?, truncated=?, incomplete=?, '
+                      'event_count=event_count+1, stored_bytes=stored_bytes+? WHERE match_id=?',
+                      (self.turn, self.frame, int(self.truncated), int(self.incomplete), len(raw.encode('utf-8')), self.match_id))
             self._write('INSERT INTO match_debug_events (match_id, sequence, turn_index, actor, status, payload) '
                         'VALUES (?, ?, ?, ?, ?, ?)',
-                        (self.match_id, sequence, turn, event['actor'], event['status'], raw))
-            self._write('UPDATE match_debug_sessions SET last_turn = ?, frame_count = ?, truncated = ?, incomplete = ? '
-                        'WHERE match_id = ?',
-                        (self.turn, self.frame, int(self.truncated), int(self.incomplete), self.match_id))
+                        (self.match_id, sequence, turn, event['actor'], event['status'], raw), extra=(update,))
 
     def finish(self, frame_count, error=None, interrupted=False):
         self.frame = max(0, frame_count)

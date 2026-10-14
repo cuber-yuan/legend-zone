@@ -3,7 +3,7 @@ import os
 import sys
 from datetime import datetime, timezone
 from werkzeug.security import generate_password_hash
-from db_migrations import migrate_debug_schema
+from db_migrations import migrate_schema
 
 
 DB_PATH = os.path.join(os.path.dirname(__file__), 'legend_zone.db')
@@ -21,89 +21,7 @@ def init_db():
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
 
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT UNIQUE NOT NULL,
-            password_hash TEXT NOT NULL,
-            email TEXT,
-            created_at TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
-        )
-    """)
-
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS bots (
-            id TEXT PRIMARY KEY,
-            user_id INTEGER NOT NULL,
-            bot_name TEXT NOT NULL,
-            game TEXT NOT NULL,
-            language TEXT NOT NULL DEFAULT 'cpp',
-            is_private INTEGER NOT NULL DEFAULT 0,
-            created_at TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
-            UNIQUE (bot_name, game)
-        )
-    """)
-
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS bot_versions (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            bot_id TEXT NOT NULL,
-            version_number INTEGER NOT NULL,
-            description TEXT,
-            source_code TEXT,
-            file_path TEXT,
-            rating REAL DEFAULT 1500,
-            created_at TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
-            FOREIGN KEY (bot_id) REFERENCES bots(id) ON DELETE CASCADE,
-            UNIQUE (bot_id, version_number)
-        )
-    """)
-
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS matches (
-            id TEXT PRIMARY KEY,
-            game TEXT NOT NULL,
-            players TEXT,
-            winner INTEGER,
-            displays TEXT,
-            move_history TEXT,
-            status TEXT DEFAULT 'playing',
-            created_at TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
-        )
-    """)
-
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS games (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT UNIQUE NOT NULL,
-            description TEXT,
-            author_id INTEGER,
-            min_players INTEGER DEFAULT 2,
-            max_players INTEGER DEFAULT 4,
-            created_at TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
-        )
-    """)
-
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS rating_history (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            bot_id TEXT NOT NULL,
-            version_id INTEGER NOT NULL,
-            match_id TEXT,
-            rating REAL NOT NULL,
-            created_at TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
-            UNIQUE (version_id, match_id)
-        )
-    """)
-
-    cursor.execute("""
-        CREATE INDEX IF NOT EXISTS idx_rating_history_bot
-            ON rating_history (bot_id, created_at)
-    """)
-
-
-    conn.commit()
-    migrate_debug_schema(conn)
+    migrate_schema(conn)
 
     # Insert test data
     now = datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')

@@ -41,11 +41,11 @@ def create_app(*, start_background_jobs=True):
     login_manager.init_app(app)
     login_manager.login_view = 'auth.login'
 
-    from db_migrations import migrate_debug_schema
+    from db_migrations import migrate_schema
     from .db import get_db_connection
     connection = get_db_connection()
     try:
-        migrate_debug_schema(connection._conn)
+        migrate_schema(connection._conn)
     finally:
         connection.close()
 
