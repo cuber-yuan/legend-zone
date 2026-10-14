@@ -7,7 +7,7 @@
     {% elif players is sequence and players is not string and players|length >= loop.index %}
       {% set player = players[loop.index0] %}
     {% endif %}
-    {% set name = player if player is string else player.name if player and player.name else side.label %}
+    {% set name = player if player is string and player else player.name if player and player.name else 'Player ' ~ loop.index %}
     <div class="match-player" data-player-slot="{{ loop.index }}">
       <span class="match-player-marker marker-{{ side.marker }}" role="img" aria-label="{{ side.label }}">{% if side.marker in ['x', 'o'] %}{{ side.label }}{% endif %}</span>
       <span class="match-player-name">{{ name }}</span>

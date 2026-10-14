@@ -3,6 +3,7 @@
 {% block title %}{% if match_id %}Watch Match{% else %}Tank Battle{% endif %}{% endblock %}
 
 {% block content %}
+<link rel="stylesheet" href="{{ url_for('static', filename='game-arena.css') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='match-players.css') }}">
 <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/phaser@3.55.2/dist/phaser.js"></script>
@@ -19,13 +20,11 @@
 <div class="tank-page">
   <div class="max-w-screen-xl mx-auto">
     <section class="tank-arena" aria-label="Tank Battle game board">
-      <div class="tank-heading">
+      <div class="tank-heading game-heading">
         <h1>Tank Battle</h1>
-        <p id="turnCounter">Turn: 1</p>
       </div>
       {% set player_sides = [{'label': 'Blue', 'marker': 'blue'}, {'label': 'Red', 'marker': 'red'}] %}
       {% include 'components/match_players.html' %}
-      {% if match_id and match %}<div id="spectatorBadge" class="tank-spectator">Spectator</div>{% endif %}
       <div class="tank-stage">
         <div class="tank-board-frame">
           <div class="tank-board-wrap">
@@ -49,9 +48,12 @@
           </div>
         </div>
       </div>
-      <div id="orderBar" class="order-bar">
-        <span class="ob-seat" id="obSeat"></span>
-        <span class="ob-count" id="obCount"></span>
+      <div class="game-footer">
+        <div id="spectatorBadge" class="spectator-badge">Spectating</div>
+        <div id="orderBar" class="order-bar">
+          <span class="ob-seat" id="obSeat"></span>
+          <span class="ob-count" id="obCount"></span>
+        </div>
       </div>
     </section>
 

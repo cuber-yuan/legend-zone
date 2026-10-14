@@ -2,35 +2,33 @@
 {% block title %}{% if match_id %}Watch Match{% else %}Connect Four{% endif %}{% endblock %}
 
 {% block content %}
+<link rel="stylesheet" href="{{ url_for('static', filename='game-arena.css') }}">
 <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/phaser@3.55.2/dist/phaser.js"></script>
 <script src="{{ url_for('static', filename='replay-player.js') }}"></script>
 <link rel="stylesheet" href="{{ url_for('static', filename='connect4/connect4.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='match-players.css') }}">
 <link href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism.min.css" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/prism.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-python.min.js"></script>
 
 <div class="c4-page">
   <section class="c4-arena" aria-labelledby="c4-title">
-    <header class="c4-heading">
-      <div><p class="c4-eyebrow">The gravity game</p><h1 id="c4-title" class="c4-title">Connect Four</h1></div>
-      <span id="modeBadge" class="c4-mode">Ready</span>
+    <header class="c4-heading game-heading">
+      <h1 id="c4-title" class="c4-title">Connect Four</h1>
     </header>
-    <div class="c4-players">
-      <div class="c4-player" data-player="1"><span class="c4-player-dot" aria-hidden="true"></span><div class="c4-player-info"><div class="c4-player-label">Player 1</div><div class="c4-player-side">First move</div></div></div>
-      <div class="c4-move-count"><span id="dropCount">0 / 42</span><br><span class="c4-eyebrow">Drops</span></div>
-      <div class="c4-player" data-player="2"><span class="c4-player-dot" aria-hidden="true"></span><div class="c4-player-info"><div class="c4-player-label">Player 2</div><div class="c4-player-side">Second move</div></div></div>
-    </div>
+    {% set player_sides = [{'label': 'Blue', 'marker': 'blue'}, {'label': 'Red', 'marker': 'red'}] %}
+    {% include 'components/match_players.html' %}
     <div class="c4-stage">
       <div id="phaser-container" role="img" aria-label="Connect Four board: seven columns and six rows"></div>
       <div class="c4-columns" role="group" aria-label="Choose a column">
         {% for column in range(7) %}<button type="button" data-column="{{ column }}" aria-label="Drop in column {{ column + 1 }}" disabled>{{ column + 1 }}</button>{% endfor %}
       </div>
     </div>
-    <footer class="c4-footer">
+    <footer class="c4-footer game-footer">
       <div id="gameResult" class="c4-result" role="status"><strong id="resultTitle"></strong><span id="resultDetail"></span></div>
-      <p id="turnHint" role="status" aria-live="polite">Seven columns. Four in a row.</p>
-      {% if not match_id %}<a href="{{ url_for('main.home') }}" class="c4-create">Create a match <span aria-hidden="true">&rarr;</span></a>{% endif %}
+      <div id="spectatorBadge" class="spectator-badge">Spectating</div>
+      <p id="turnHint" class="turn-hint" role="status" aria-live="polite"></p>
     </footer>
   </section>
 

@@ -43,25 +43,19 @@ function applyPlayers(value) {
 }
 
 function renderHUD(message) {
-  const count = displayBoard.flat().filter(Boolean).length;
-  document.getElementById('dropCount').textContent = `${count} / 42`;
-  document.getElementById('modeBadge').textContent = isReplayMode ? 'Replay' : isSpectator ? 'Watching' : gameOver ? 'Ready' : 'Live';
-  document.querySelectorAll('.c4-player').forEach(el => {
-    const side = Number(el.dataset.player);
-    const player = players[side - 1] || {};
-    el.querySelector('.c4-player-label').textContent = playerName(side);
-    const kind = player.type === 'human' ? 'Human' : player.bot_id ? `Bot${player.version ? ` v${player.version}` : ''}` : '';
-    el.querySelector('.c4-player-side').textContent = [kind, side === 1 ? 'First move' : 'Second move'].filter(Boolean).join(' · ');
-    el.classList.toggle('active', !gameOver && !isReplayMode && side === currentPlayer);
+  document.querySelectorAll('.match-player').forEach(el => {
+    const side = Number(el.dataset.playerSlot);
+    el.querySelector('.match-player-name').textContent = playerName(side);
   });
   document.querySelectorAll('[data-column]').forEach(button => {
     button.disabled = !canPlay() || board[0][Number(button.dataset.column)] !== 0;
   });
+  document.getElementById('spectatorBadge').style.display = isSpectator && !isReplayMode ? 'block' : 'none';
   const hint = document.getElementById('turnHint');
-  if (message) hint.textContent = message;
-  else if (isReplayMode) hint.textContent = 'Replay · use the controls to explore the game';
-  else if (isSpectator) hint.textContent = 'Watching the match live';
-  else if (gameOver) hint.textContent = currentGameId ? 'Match complete' : 'Seven columns. Four in a row.';
+  const showHint = !gameOver && !isReplayMode && !isSpectator && Object.values(playerTypes).includes('human');
+  hint.style.display = showHint ? 'block' : 'none';
+  if (!showHint) hint.textContent = '';
+  else if (message) hint.textContent = message;
   else if (isAnimating || frames.length) hint.textContent = 'Disc in motion…';
   else if (awaitingMove) hint.textContent = 'Move submitted · waiting for the board';
   else hint.textContent = playerTypes[String(currentPlayer)] === 'human'
@@ -235,9 +229,9 @@ function showResult(winner, error) {
   const result = document.getElementById('gameResult');
   result.classList.add('visible');
   document.getElementById('resultTitle').textContent = error && !winner ? 'Match ended' : resultMessage(winner);
-  document.getElementById('resultDetail').textContent = error || (winner
-    ? (winningCells(displayBoard).length ? 'Four connected. Well played.' : 'Match complete. Well played.')
-    : 'No more moves. A well-matched game.');
+  const detail = document.getElementById('resultDetail');
+  detail.textContent = error || '';
+  detail.hidden = !error;
 }
 
 function applyState(data) {

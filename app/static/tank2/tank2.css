@@ -183,20 +183,14 @@
 
 .tank-page { max-width: 1000px; margin: 2rem auto; }
 .tank-arena { overflow: hidden; border: 1px solid #e2e8f0; border-radius: 1.25rem; background: #fff; box-shadow: 0 16px 45px rgba(15,23,42,0.08); }
-.tank-heading { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 1.25rem 1.5rem 1rem; }
-.tank-heading h1 { color: #172b47; font-size: 1.5rem; font-weight: 700; letter-spacing: -0.035em; }
-.tank-heading #turnCounter { color: #64748b; font: 600 0.75rem ui-monospace,monospace; white-space: nowrap; }
-.tank-spectator { display: none; width: fit-content; margin: 0 auto 0.75rem; padding: 0.25rem 0.6rem; border: 1px solid #e2e8f0; border-radius: 999px; background: #f8fafc; color: #64748b; font-size: 0.65rem; }
 .tank-stage { padding: 0.75rem 1.5rem 1.25rem; background: radial-gradient(ellipse at 50% 70%,#e2e8f0,#f8fafc 65%,#fff); }
 .tank-board-frame { max-width: 736px; margin: auto; padding: 8px; border: 1px solid #334155; border-radius: 1rem; background: linear-gradient(140deg,#334155,#172437 65%); box-shadow: 0 12px 24px rgba(15,23,42,0.16),inset 0 1px 0 rgba(255,255,255,0.12); }
 .tank-board-wrap { position: relative; width: 100%; aspect-ratio: 1; }
 .tank-arena #phaser-container { width: 100%; height: 100%; overflow: hidden; border-radius: 0.5rem; background: #233b34; }
 .tank-arena canvas { display: block; max-width: 100%; margin: 0; border: 0; }
-.tank-arena .order-bar { max-width: none; margin: 0; padding: 0 1rem 1.25rem; font-size: 0.65rem; letter-spacing: 0.08em; flex-wrap: wrap; }
+.tank-arena .order-bar { max-width: none; margin: 0 0 1rem; padding: 0; font-size: 0.65rem; letter-spacing: 0.08em; flex-wrap: wrap; }
 @media (max-width: 600px) {
   .tank-page { margin: 1rem auto; }
-  .tank-heading { padding: 1rem; }
-  .tank-heading h1 { font-size: 1.25rem; }
   .tank-stage { padding: 0.25rem 0.65rem 1rem; }
   .tank-board-frame { border-radius: 0.75rem; }
 }

@@ -1,5 +1,5 @@
 <section class="board-game-arena board-game-{{ board_variant }}" aria-label="{{ board_game }} game board">
-  <div class="board-game-heading">
+  <div class="board-game-heading game-heading">
     <h1>{{ board_game }}</h1>
   </div>
   {% set player_sides = [{'label': 'Black', 'marker': 'black'}, {'label': 'White', 'marker': 'white'}] if board_variant == 'gomoku' else [{'label': 'X', 'marker': 'x'}, {'label': 'O', 'marker': 'o'}] %}
@@ -9,7 +9,7 @@
       <div id="phaser-container" class="board-game-surface"></div>
     </div>
   </div>
-  <div class="board-game-footer">
+  <div class="board-game-footer game-footer">
     <div id="spectatorBadge" class="spectator-badge">Spectating</div>
     <div id="turnHint" class="turn-hint"></div>
   </div>

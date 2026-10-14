@@ -26,6 +26,7 @@ __pycache__/
 *.py[cod]
 
 myenv/
+.venv/
 
 test.py
 
@@ -40,3 +41,10 @@ judges/tank2_judge
 *.db
 
 AGENTS.md
+
+# Temporarily keep generated project documentation local.
+/README.md
+/CONTRIBUTING.md
+/SECURITY.md
+/docs/
+/.env.example

@@ -275,11 +275,6 @@ class TankScene extends Phaser.Scene {
             this.baseLayer.clear(true, true);
             this.setOrderMarks([]);
             this.renderTanksAndBases();
-            // Update the turn counter display
-            const turnCounter = document.getElementById('turnCounter');
-            if (turnCounter) {
-                turnCounter.textContent = `Turn: ${this.turn}`;
-            }
             return;
         }
 
@@ -291,11 +286,6 @@ class TankScene extends Phaser.Scene {
             this.tankLayer.clear(true, true);
             this.baseLayer.clear(true, true);
             this.renderTanksAndBases();
-            // Update the turn counter display
-            const turnCounter = document.getElementById('turnCounter');
-            if (turnCounter) {
-                turnCounter.textContent = `Turn: ${this.turn}`;
-            }
             return;
         }
     }

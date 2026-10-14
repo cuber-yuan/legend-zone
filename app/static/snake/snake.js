@@ -51,10 +51,6 @@ class SnakeScene extends Phaser.Scene {
         } else {
             this.applyActions(state);
         }
-        const turnCounter = document.getElementById('turnCounter');
-        if (turnCounter) {
-            turnCounter.textContent = `Turn: ${this.turn}`;
-        }
     }
 
     drawInitialState(state) {
