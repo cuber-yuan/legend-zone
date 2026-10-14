@@ -1,3 +1,4 @@
+import json
 from ..db import get_db_connection
 from .utils import utc_now_iso
 
@@ -77,13 +78,16 @@ def update_bot_ratings(player_1_id, player_2_id, winner, match_id=None):
                 return status
 
             if match_id:
-                cursor.execute('SELECT status,winner,rating_status FROM matches WHERE id=?', (match_id,))
+                cursor.execute('SELECT status,winner,rating_status,players FROM matches WHERE id=?', (match_id,))
                 match = cursor.fetchone()
                 if not match or match['status'] != 'finished' or match['winner'] != winner:
                     raise ValueError('Only a saved, matching result can be rated.')
                 if match['rating_status'] in ('applied', 'skipped'):
                     conn.commit()
                     return match['rating_status']
+                if any(player.get('rating_eligible') is False
+                       for player in json.loads(match['players'] or '{}').values() if isinstance(player, dict)):
+                    return finish('skipped', 'Older bot versions do not change ratings.')
                 cursor.execute('SELECT p.seat,p.bot_id_snapshot,p.bot_version_id,p.snapshot_source,v.id,'
                                'COALESCE(v.rating,?) AS rating FROM match_players p '
                                'LEFT JOIN bot_versions v ON v.id=p.bot_version_id WHERE p.match_id=? ORDER BY p.seat',

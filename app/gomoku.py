@@ -143,8 +143,8 @@ def register_gomoku_events(socketio):
         player_1_type = 'human' if data.get('black_is_human', False) else 'bot'
         player_2_type = 'human' if data.get('white_is_human', False) else 'bot'
 
-        executor_1 = _get_bot_executor(player_1_id) if player_1_type == 'bot' else None
-        executor_2 = _get_bot_executor(player_2_id) if player_2_type == 'bot' else None
+        executor_1 = _get_bot_executor(player_1_id, match_id=match_id, seat=1) if player_1_type == 'bot' else None
+        executor_2 = _get_bot_executor(player_2_id, match_id=match_id, seat=2) if player_2_type == 'bot' else None
 
         game.new_game(
             black_player_type=player_1_type,

@@ -61,10 +61,12 @@ def bind_match_players(match_id, players_json, player_types, executors):
         try:
             conn._conn.execute('BEGIN IMMEDIATE')
             with conn.cursor() as cursor:
-                cursor.execute('SELECT status, started_at FROM matches WHERE id=?', (match_id,))
+                cursor.execute('SELECT status, started_at, players FROM matches WHERE id=?', (match_id,))
                 match = cursor.fetchone()
                 if not match or match['status'] != 'playing' or match['started_at'] is not None:
                     raise ValueError('Match is missing, finished or already started.')
+                saved_players = json.loads(match['players'] or '{}')
+                saved_players = saved_players if isinstance(saved_players, dict) else {}
                 for seat, player_type in enumerate(player_types, 1):
                     player = players.get(f'player_{seat}', {})
                     player = dict(player) if isinstance(player, dict) else {'name': str(player)}
@@ -76,7 +78,9 @@ def bind_match_players(match_id, players_json, player_types, executors):
                     bot_exists = cursor.fetchone() if player_type == 'bot' else None
                     version = None
                     if player_type == 'bot' and type(version_id) is int:
-                        cursor.execute('SELECT id, bot_id, version_number FROM bot_versions WHERE id=?', (version_id,))
+                        cursor.execute('SELECT id, bot_id, version_number, '
+                                       '(SELECT MAX(version_number) FROM bot_versions WHERE bot_id=v.bot_id) AS latest '
+                                       'FROM bot_versions v WHERE id=?', (version_id,))
                         version = cursor.fetchone()
                         if version and version['bot_id'] != bot_id:
                             raise ValueError('Executor version does not belong to the selected bot.')
@@ -87,6 +91,11 @@ def bind_match_players(match_id, players_json, player_types, executors):
                         number = version['version_number'] if version else getattr(executor, 'version_number', None)
                         number = number if type(number) is int and number > 0 else None
                         player.update(bot_id=bot_id, version=number)
+                        saved_player = saved_players.get(f'player_{seat}', {})
+                        was_unrated = isinstance(saved_player, dict) and saved_player.get('rating_eligible') is False
+                        player['rating_eligible'] = (player.get('rating_eligible') is not False and
+                                                     not was_unrated and
+                                                     (version is None or number == version['latest']))
                     else:
                         bot_id, number = None, None
                         player = {'name': player.get('name') or 'HUMAN', 'type': 'human'}
@@ -99,8 +108,10 @@ def bind_match_players(match_id, players_json, player_types, executors):
                                    (match_id, seat, player_type, bot_id if bot_exists else None,
                                     version['id'] if version else None, bot_id, player['name'], number))
                 normalized = json.dumps(players)
+                eligible = player_types == ('bot', 'bot') and all(
+                    players[f'player_{seat}'].get('rating_eligible', False) for seat in (1, 2))
                 cursor.execute('UPDATE matches SET players=?, started_at=?, rating_status=? WHERE id=?',
-                               (normalized, utc_now_iso(), 'pending' if player_types == ('bot', 'bot') else 'skipped', match_id))
+                               (normalized, utc_now_iso(), 'pending' if eligible else 'skipped', match_id))
             conn.commit()
             return normalized
         except Exception:

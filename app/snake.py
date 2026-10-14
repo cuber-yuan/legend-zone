@@ -145,8 +145,8 @@ def register_snake_events(socketio):
                 result.error_msg = 'Snake supports one human seat per match.'
             return
 
-        executor_1 = _get_bot_executor(player_1_id_str) if player_1_type == 'bot' else None
-        executor_2 = _get_bot_executor(player_2_id_str) if player_2_type == 'bot' else None
+        executor_1 = _get_bot_executor(player_1_id_str, match_id=match_id, seat=1) if player_1_type == 'bot' else None
+        executor_2 = _get_bot_executor(player_2_id_str, match_id=match_id, seat=2) if player_2_type == 'bot' else None
 
         sessions[user_id] = {'sid': sid, 'match_id': match_id, 'game': game}
 

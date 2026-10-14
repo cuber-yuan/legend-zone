@@ -161,6 +161,8 @@ def match_lifecycle(*, match_id, game_name, players, player_ids, player_types,
     try:
         recording_id = match_id or create_match_record(game_name, players)
         players = bind_match_players(recording_id, players, player_types, executors)
+        if any(player.get('rating_eligible') is False for player in json.loads(players).values()):
+            result.rated = False
         recorder = DebugRecorder(recording_id, executors, player_types)
         trace_token = bind_recorder(recorder)
         try:

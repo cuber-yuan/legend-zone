@@ -117,8 +117,8 @@ def register_tank_events(socketio):
         player_1_type = 'human' if data.get('top_is_human') or data.get('p1_is_human') else 'bot'
         player_2_type = 'human' if data.get('bottom_is_human') or data.get('p2_is_human') else 'bot'
 
-        executor_1 = _get_bot_executor(player_1_id_str) if player_1_type == 'bot' else None
-        executor_2 = _get_bot_executor(player_2_id_str) if player_2_type == 'bot' else None
+        executor_1 = _get_bot_executor(player_1_id_str, match_id=match_id, seat=1) if player_1_type == 'bot' else None
+        executor_2 = _get_bot_executor(player_2_id_str, match_id=match_id, seat=2) if player_2_type == 'bot' else None
 
         sessions[user_id] = {'sid': sid, 'match_id': match_id, 'game': game}
 

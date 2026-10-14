@@ -149,6 +149,85 @@ class SchemaTests(unittest.TestCase):
         self.assertEqual(match['termination_reason'], 'normal')
         self.assertTrue(match['started_at'] and match['finished_at'] and match['rated_at'])
 
+    def test_selected_old_version_is_executed_and_neither_player_is_rated(self):
+        for number in (1,2):
+            directory = Path(self.temp.name)/f'v{number}'
+            directory.mkdir()
+            (directory/'main.py').write_text(f'print({number})',encoding='utf-8')
+        self.sql("UPDATE bot_versions SET file_path=? WHERE bot_id='a'", (str(Path(self.temp.name)/'v1'),))
+        self.sql("INSERT INTO bot_versions(bot_id,version_number,rating,file_path) VALUES ('a',2,1600,?)", (str(Path(self.temp.name)/'v2'),))
+        players = json.dumps({'player_1': bot_service.player_json_for_bot('a', 1),
+                              'player_2': bot_service.player_json_for_bot('b')})
+        mid = match_service.create_match_record('Tic Tac Toe', players)
+        executors = (bot_service.get_bot_executor('a', match_id=mid, seat=1),
+                     bot_service.get_bot_executor('b', match_id=mid, seat=2))
+        self.assertEqual(executors[0].version_number, 1)
+        self.assertEqual(executors[0].run('{}').strip(), '1')
+        with self.scope(mid, players, executors) as result:
+            result.winner = 0
+        row = self.sql('SELECT players,rating_status FROM matches WHERE id=?', (mid,))[0]
+        self.assertEqual(row['rating_status'], 'skipped')
+        self.assertEqual(json.loads(row['players'])['player_1']['version'], 1)
+        self.assertEqual([r['rating'] for r in self.sql('SELECT rating FROM bot_versions ORDER BY id')], [1500,1500,1600])
+        self.assertEqual(self.sql('SELECT id FROM rating_history WHERE match_id=?', (mid,)), [])
+        self.assertEqual(rating_service.update_bot_ratings('a','b',0,mid), 'skipped')
+
+    def test_old_selection_remains_unrated_if_newer_version_is_removed(self):
+        first = dict(bot_service.player_json_for_bot('a'), rating_eligible=False)
+        players = json.dumps({'player_1':first,'player_2':bot_service.player_json_for_bot('b')})
+        mid = match_service.create_match_record('Tic Tac Toe',players)
+        executors = (bot_service.get_bot_executor('a',match_id=mid,seat=1),bot_service.get_bot_executor('b'))
+        # Game handlers rebuild display metadata; the saved eligibility must survive it.
+        display_players = bot_service.build_players_json('a','bot','b','bot')
+        with self.scope(mid,display_players,executors) as result:
+            result.winner = 0
+        self.assertEqual(self.sql('SELECT rating_status FROM matches WHERE id=?',(mid,))[0]['rating_status'],'skipped')
+
+    def test_new_upload_before_start_keeps_saved_version_and_skips_rating(self):
+        mid, players, _ = self.new_match()
+        self.sql("INSERT INTO bot_versions(bot_id,version_number,rating,file_path) VALUES ('a',2,1500,?)", (self.temp.name,))
+        executor = bot_service.get_bot_executor('a', match_id=mid, seat=1)
+        self.assertEqual(executor.version_number, 1)
+        with self.scope(mid, players, (executor,bot_service.get_bot_executor('b'))) as result:
+            result.winner = 0
+        self.assertEqual(self.sql('SELECT rating_status FROM matches WHERE id=?',(mid,))[0]['rating_status'], 'skipped')
+
+    def test_saved_version_cannot_be_replaced_by_socket_or_missing_version(self):
+        mid, _, _ = self.new_match()
+        with self.assertRaisesRegex(ValueError, 'saved seat'):
+            bot_service.get_bot_executor('b', match_id=mid, seat=1)
+        self.sql("INSERT INTO bot_versions(bot_id,version_number,rating,file_path) VALUES ('a',2,1500,?)", (self.temp.name,))
+        self.sql("DELETE FROM bot_versions WHERE bot_id='a' AND version_number=1")
+        self.assertIsNone(bot_service.get_bot_executor('a', match_id=mid, seat=1))
+
+    def test_creation_api_validates_and_saves_version_choices(self):
+        from flask import Flask
+        main = importlib.import_module('app.main')
+        web = Flask(__name__)
+        web.config['LOGIN_DISABLED'] = True
+        web.register_blueprint(main.main_bp)
+        self.sql("INSERT INTO games(id,name) VALUES (1,'Tic Tac Toe'),(2,'Gomoku')")
+        self.sql("INSERT INTO bot_versions(bot_id,version_number,rating,file_path) VALUES ('a',2,1500,?)", (self.temp.name,))
+        with patch.object(main, 'get_db_connection', self.factory), \
+             patch.object(main, 'clear_setup_tables'), \
+             patch.object(main, 'current_user', types.SimpleNamespace(id=1,username='fixture')):
+            client = web.test_client()
+            bots = client.get('/api/bots?game_id=1').json
+            self.assertEqual(bots[0], {'id':'a','name':'a','versions':[2,1]})
+            base = [{'type':'bot','botId':'a','version':1}, {'type':'bot','botId':'b'}]
+            response = client.post('/api/matches',json={'game_id':1,'players':base})
+            self.assertEqual(response.status_code,200)
+            mid = response.json['match_id']
+            players = json.loads(self.sql('SELECT players FROM matches WHERE id=?',(mid,))[0]['players'])
+            self.assertFalse(players['player_1']['rating_eligible'])
+            self.assertTrue(players['player_2']['rating_eligible'])
+            self.assertEqual(players['player_1']['version'],1)
+            for version in (True,0,-1,'1',999):
+                invalid = [dict(base[0],version=version),base[1]]
+                self.assertEqual(client.post('/api/matches',json={'game_id':1,'players':invalid}).status_code,400)
+            self.assertEqual(client.post('/api/matches',json={'game_id':2,'players':base}).status_code,400)
+            self.assertEqual(client.post('/api/matches',json={'game_id':1,'players':base[:1]}).status_code,400)
+
     def test_stale_setup_snapshot_is_replaced_with_actual_executor_version(self):
         mid, players, _ = self.new_match()
         self.sql("INSERT INTO bot_versions(bot_id,version_number,rating) VALUES ('a',2,1500)")

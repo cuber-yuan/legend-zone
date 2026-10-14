@@ -24,16 +24,18 @@
 .rp-toolbar { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 0.75rem; }
 .rp-transport { grid-column: 2; display: flex; align-items: center; justify-content: center; gap: 0.35rem; }
 .rp-button {
+  appearance: none; flex: none;
   display: inline-flex; align-items: center; justify-content: center; gap: 0.4rem;
-  width: 2.35rem; height: 2.35rem; padding: 0; border: 1px solid transparent;
+  width: 2.35rem; height: 2.35rem; padding: 0; border: 1px solid #e2e8f0;
   border-radius: 0.6rem; background: #f8fafc; color: #64748b; cursor: pointer;
-  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  font: inherit; line-height: 1;
+  transition: background-color 0.15s, color 0.15s, border-color 0.15s;
 }
-.rp-button svg { width: 1.1rem; height: 1.1rem; }
+.rp-button svg { display: block; flex: none; width: 1.1rem; height: 1.1rem; }
 .rp-button:hover:not(:disabled) { border-color: #dbeafe; background: #eff6ff; color: #2563eb; }
-.rp-button:disabled { opacity: 0.3; cursor: default; }
-.rp-play { width: 6rem; color: #fff; background: linear-gradient(180deg, #3b82f6, #2563eb); font-size: 0.75rem; font-weight: 600; box-shadow: 0 2px 6px rgba(37,99,235,0.15); }
-.rp-play:hover:not(:disabled) { background: #1d4ed8; border-color: transparent; color: #fff; }
+.rp-button:disabled { color: #cbd5e1; background: #f8fafc; border-color: #f1f5f9; cursor: default; }
+.rp-play { width: 6rem; color: #2563eb; background: #eff6ff; border-color: #bfdbfe; font-size: 0.75rem; font-weight: 600; }
+.rp-play:hover:not(:disabled) { background: #dbeafe; border-color: #93c5fd; color: #2563eb; }
 .rp-icon-play, .rp-icon-pause { display: inline-flex; }
 .rp-speed { grid-column: 3; justify-self: end; display: flex; align-items: center; gap: 0.5rem; color: #94a3b8; font-size: 0.65rem; }
 .rp-speed select { min-height: 2.35rem; padding: 0.4rem 0.5rem; border: 1px solid #e2e8f0; border-radius: 0.6rem; background: #fff; color: #475569; font-size: 0.75rem; cursor: pointer; }
@@ -50,7 +52,7 @@
   .rp-transport { gap: 0.15rem; }
   .rp-speed { gap: 0; }
   .rp-speed > span { display: none; }
-  .rp-speed select { padding: 0.3rem; }
+  .rp-speed select { height: 2.25rem; min-height: 2.25rem; padding: 0.3rem; }
   .rp-toolbar { gap: 0.25rem; }
 }
 @media (prefers-reduced-motion: reduce) { .rp-button { transition: none; } }

@@ -4,7 +4,7 @@ import datetime
 import uuid
 import json
 from .db import get_db_connection
-from .services.bot_service import player_json_for_bot, player_json_for_human
+from .services.bot_service import player_json_for_human
 from .services.utils import utc_now_iso
 from .home import clear_setup_tables
 
@@ -266,8 +266,7 @@ def api_bots():
             if not game:
                 return jsonify([])
             
-            # Get latest bots for this game (one row per logical bot; the
-            # game runner always plays against the newest version)
+            # Public version metadata only; never expose source or file paths.
             cursor.execute("""
                 SELECT id, bot_name AS name
                 FROM bots
@@ -275,7 +274,14 @@ def api_bots():
                 ORDER BY bot_name
             """, (game['name'],))
             bots = cursor.fetchall()
-        return jsonify([{'id': b['id'], 'name': b['name']} for b in bots])
+            cursor.execute('SELECT v.bot_id, v.version_number FROM bot_versions v '
+                           'JOIN bots b ON b.id=v.bot_id WHERE b.game=? '
+                           'ORDER BY v.version_number DESC', (game['name'],))
+            versions = {}
+            for version in cursor.fetchall():
+                versions.setdefault(version['bot_id'], []).append(version['version_number'])
+        return jsonify([{'id': b['id'], 'name': b['name'], 'versions': versions.get(b['id'], [])}
+                        for b in bots])
     except Exception as e:
         print(f"Error fetching bots: {e}")
         return jsonify([])
@@ -295,9 +301,13 @@ GAME_TEMPLATES = {
 @main_bp.route('/api/matches', methods=['POST'])
 @login_required
 def api_create_match():
-    data = request.get_json()
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return jsonify({'error': 'Expected a JSON object'}), 400
     game_id = data.get('game_id')
     players = data.get('players', [])
+    if not isinstance(players, list) or len(players) != 2:
+        return jsonify({'error': 'Exactly two players are required'}), 400
 
     conn = None
     try:
@@ -310,15 +320,33 @@ def api_create_match():
 
         players_map = {}
         for idx, player in enumerate(players, start=1):
-            if player.get('type') == 'bot' and player.get('botId'):
-                players_map[f"player_{idx}"] = player_json_for_bot(player['botId'])
+            if not isinstance(player, dict) or player.get('type') not in ('bot', 'human'):
+                return jsonify({'error': 'Invalid player type'}), 400
+            if player['type'] == 'bot':
+                version = player.get('version')
+                if version is not None and (type(version) is not int or version < 1):
+                    return jsonify({'error': 'Invalid bot version'}), 400
+                with conn.cursor() as cursor:
+                    cursor.execute('SELECT b.bot_name, v.version_number, '
+                                   '(SELECT MAX(version_number) FROM bot_versions WHERE bot_id=b.id) AS latest '
+                                   'FROM bots b JOIN bot_versions v ON v.bot_id=b.id '
+                                   'WHERE b.id=? AND b.game=? AND (? IS NULL OR v.version_number=?) '
+                                   'ORDER BY v.version_number DESC LIMIT 1',
+                                   (player.get('botId'), game['name'], version, version))
+                    selected = cursor.fetchone()
+                if not selected:
+                    return jsonify({'error': 'Bot or version not found for this game'}), 400
+                players_map[f"player_{idx}"] = {
+                    'name': selected['bot_name'], 'bot_id': player['botId'],
+                    'version': selected['version_number'],
+                    'rating_eligible': selected['version_number'] == selected['latest'],
+                }
             else:
                 # A human seat is the signed-in user; the client shows it read-only,
                 # so derive it here instead of trusting whatever was posted.
                 players_map[f"player_{idx}"] = player_json_for_human(current_user.username)
 
         match_id = uuid.uuid4().hex
-        conn = get_db_connection()
         with conn.cursor() as cursor:
             cursor.execute(
                 "INSERT INTO matches (id, game, players, status, created_at) VALUES (?, ?, ?, ?, ?)",

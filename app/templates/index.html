@@ -145,6 +145,24 @@
     background: #faf5ff; color: #6b21a8; cursor: default;
   }
   .seat-hidden { display: none; }
+  .seat-bot-row { display: flex; align-items: center; gap: 0.5rem; min-width: 0; }
+  .seat-bot-row.seat-hidden { display: none; }
+  .seat-bot-row > .seat-select { flex: 1; min-width: 0; }
+  .seat-version { position: relative; flex: 0 0 4.5rem; min-width: 0; }
+  .seat-version summary {
+    display: flex; align-items: center; justify-content: flex-end; gap: 0.35rem; padding: 0.4rem 0.25rem;
+    color: #0f766e; font-size: 0.75rem; cursor: pointer; list-style: none;
+  }
+  .seat-version summary::-webkit-details-marker { display: none; }
+  .seat-version [data-version-label] { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .seat-version summary::after { content: ''; width: 0.35rem; height: 0.35rem; border-right: 1px solid currentColor; border-bottom: 1px solid currentColor; transform: rotate(45deg); margin: -0.2rem 0.1rem 0 0; }
+  .seat-version[open] summary::after { transform: rotate(225deg); margin-top: 0.2rem; }
+  .seat-version summary:hover { color: #115e59; }
+  .seat-version summary:focus-visible { outline: 2px solid #93c5fd; outline-offset: 2px; border-radius: 0.3rem; }
+  .version-options { position: absolute; right: 0; top: calc(100% + 0.25rem); width: 10rem; max-height: 12rem; overflow-y: auto; padding: 0.25rem; border: 1px solid #d1d5db; border-radius: 0.5rem; background: #fff; z-index: 2; box-shadow: 0 4px 12px rgb(15 23 42 / 0.1); }
+  .version-option { display: block; width: 100%; padding: 0.5rem 0.6rem; border-radius: 0.3rem; text-align: left; font-size: 0.8rem; color: #475569; }
+  .version-option:hover, .version-option[aria-pressed="true"] { background: #f0fdfa; color: #0f766e; }
+  .version-option:focus-visible { outline: 2px solid #93c5fd; outline-offset: -2px; }
 
   @keyframes dialogFade { from { opacity: 0; } to { opacity: 1; } }
   @keyframes dialogRise { from { opacity: 0; transform: translateY(10px) scale(0.985); } to { opacity: 1; transform: none; } }
@@ -692,7 +710,14 @@
                         <button type="button" class="seg-btn seg-human" role="radio" aria-checked="false">Human</button>
                     </span>
                 </div>
-                <select class="seat-select player-bot" aria-label="Bot for seat ${i}">${botOptions}</select>
+                <div class="seat-bot-row">
+                    <select class="seat-select player-bot" aria-label="Bot for seat ${i}">${botOptions}</select>
+                    <details class="seat-version">
+                        <summary aria-label="Change bot version for seat ${i}"><span data-version-label>Latest</span></summary>
+                        <div class="version-options" role="group" aria-label="Bot version for seat ${i}"></div>
+                    </details>
+                    <input type="hidden" class="player-version">
+                </div>
                 <input type="text" readonly tabindex="-1" aria-disabled="true" class="seat-name player-name seat-hidden" placeholder="Player ${i}">
             </div>
         `;
@@ -704,8 +729,12 @@
         const isBot = slotType(slot) === 'bot';
         const bot = slot.querySelector('.player-bot');
         const name = slot.querySelector('.player-name');
+        const version = slot.querySelector('.player-version');
+        slot.querySelector('.seat-bot-row').classList.toggle('seat-hidden', !isBot);
+        if (!isBot) slot.querySelector('.seat-version').open = false;
         slot.dataset.type = isBot ? 'bot' : 'human';
         if (bot) { bot.classList.toggle('seat-hidden', !isBot); bot.disabled = !isBot; }
+        if (version) { version.classList.toggle('seat-hidden', !isBot); version.disabled = !isBot || !version.value; }
         if (name) {
             name.classList.toggle('seat-hidden', isBot);
             if (!isBot && !name.value) name.value = HUMAN_LABEL;
@@ -724,7 +753,10 @@
                 const sel = slot.querySelector('.player-bot');
                 const botId = sel ? sel.value : '';
                 const label = sel && sel.selectedIndex >= 0 ? sel.options[sel.selectedIndex].text : `Bot ${idx + 1}`;
-                seats.push({ type: 'bot', botId, name: botId ? label : '' });
+                const versionSelect = slot.querySelector('.player-version');
+                const version = Number(versionSelect.value) || null;
+                seats.push({ type: 'bot', botId, name: botId ? label : '', version,
+                    oldVersion: versionSelect.value !== versionSelect.dataset.latest });
             } else {
                 const input = slot.querySelector('.player-name');
                 seats.push({ type: 'human', botId: null, name: (input && input.value) || HUMAN_LABEL });
@@ -734,11 +766,12 @@
     }
 
     function updateLineupNote() {
-        // The footer only speaks up when a seat cannot be filled: a bot seat with no
-        // bot uploaded would otherwise post an empty botId and quietly become human.
-        const stuck = currentLineup().some((s) => s.type === 'bot' && !s.botId);
+        // Explain blocked seats and the rating rule only when relevant.
+        const lineup = currentLineup();
+        const stuck = lineup.some((s) => s.type === 'bot' && (!s.botId || !s.version));
         btnStartGame.disabled = stuck;
-        lineupNote.textContent = stuck ? 'A bot seat still has no bot to pick.' : '';
+        lineupNote.textContent = stuck ? 'A bot seat still has no bot to pick.' :
+            lineup.some(s => s.type === 'bot' && s.oldVersion) ? 'Older bot versions do not affect ratings for either player.' : '';
         syncGameTable();
     }
 
@@ -755,8 +788,35 @@
                     syncPlayerSlot(slot);
                 });
             });
-            slot.querySelector('.player-bot').addEventListener('change', updateLineupNote);
-            syncPlayerSlot(slot);
+            const syncVersions = () => {
+                const bot = slot.querySelector('.player-bot');
+                const select = slot.querySelector('.player-version');
+                const versions = (bot.selectedOptions[0]?.dataset.versions || '').split(',').filter(Boolean);
+                select.value = versions[0] || '';
+                select.dataset.latest = select.value;
+                slot.querySelector('.version-options').replaceChildren(...versions.map((v, index) => {
+                    const option = document.createElement('button');
+                    option.type = 'button';
+                    option.className = 'version-option';
+                    option.dataset.version = v;
+                    option.textContent = `v${v}${index === 0 ? ' (latest)' : ''}`;
+                    option.setAttribute('aria-pressed', String(index === 0));
+                    option.addEventListener('click', () => {
+                        select.value = v;
+                        slot.querySelector('[data-version-label]').textContent = index === 0 ? 'Latest' : `v${v}`;
+                        slot.querySelectorAll('.version-option').forEach(button => button.setAttribute('aria-pressed', String(button === option)));
+                        slot.querySelector('.seat-version').open = false;
+                        slot.querySelector('.seat-version summary').focus();
+                        updateLineupNote();
+                    });
+                    return option;
+                }));
+                slot.querySelector('[data-version-label]').textContent = 'Latest';
+                slot.querySelector('.seat-version').open = false;
+                syncPlayerSlot(slot);
+            };
+            slot.querySelector('.player-bot').addEventListener('change', syncVersions);
+            syncVersions();
         });
         openDialog(playerModal);
     }
@@ -781,7 +841,7 @@
             .then(resp => resp.json())
             .then(bots => {
                 const botOptions = bots.length
-                    ? bots.map(b => `<option value="${escapeHtml(String(b.id))}">${escapeHtml(b.name)}</option>`).join('')
+                    ? bots.map(b => `<option value="${escapeHtml(String(b.id))}" data-versions="${(b.versions || []).filter(Number.isInteger).join(',')}">${escapeHtml(b.name)}</option>`).join('')
                     : '<option value="">No bots available</option>';
                 renderPlayerSlots(botOptions, selectedGame.id);
             })
@@ -800,8 +860,20 @@
         }
     });
 
+    document.addEventListener('click', (e) => {
+        playerSlots.querySelectorAll('.seat-version[open]').forEach(picker => {
+            if (!picker.contains(e.target)) picker.open = false;
+        });
+    });
+
     document.addEventListener('keydown', (e) => {
         if (e.key !== 'Escape') return;
+        const versionPicker = playerSlots.querySelector('.seat-version[open]');
+        if (versionPicker) {
+            versionPicker.open = false;
+            versionPicker.querySelector('summary').focus();
+            return;
+        }
         if (isDialogOpen(playerModal)) {
             closeDialog(playerModal);
             closeGameTable();
@@ -811,7 +883,8 @@
     });
 
     btnStartGame.addEventListener('click', async () => {
-        const players = currentLineup().map((s) => ({ type: s.type, name: s.name, botId: s.botId }));
+        const players = currentLineup().map((s) => ({ type: s.type, name: s.name, botId: s.botId,
+            version: s.oldVersion ? s.version : null }));
         const missing = players.some((p) => !p.name);
         if (missing) {
             alert('Fill both seats before starting.');
