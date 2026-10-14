@@ -1,11 +1,14 @@
 """One exit path for interactive and scheduled matches."""
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
+from contextvars import copy_context
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 import json
 import logging
 
-from .match_service import finalize_match_record
+from .match_service import finalize_match_record, create_match_record
+from .debug_service import (DebugRecorder, current_recorder, bind_recorder, reset_recorder,
+                            trace_fields, trace_failure, trace_callback_output)
 from .rating_service import update_bot_ratings
 
 logger = logging.getLogger(__name__)
@@ -25,40 +28,62 @@ class MatchResult:
     rated: bool = True
 
 
-def read_player_action(get_output, player):
-    """Attribute execution and JSON protocol failures to the acting player."""
-    try:
-        output = get_output()
-        if output is None:
-            raise ValueError('Opponent left the game.')
-        action = json.loads(output)
-        if not isinstance(action, dict):
-            raise ValueError('Player output must be a JSON object.')
-        return action
-    except Exception as exc:
-        raise PlayerForfeit(player, 'Player failed to return a valid action.') from exc
+def read_player_action(get_output, player, input_str=None, validate=None):
+    """Capture raw data before parsing; preserve execution errors and invalid JSON."""
+    recorder = current_recorder()
+    capture = recorder.capture(f'player_{player + 1}', input_str) if recorder else nullcontext()
+    with capture:
+        try:
+            output = get_output()
+            # run_process records original bytes first; this also covers Human callbacks.
+            trace_callback_output(output)
+            if output is None:
+                raise ValueError('Opponent left the game.')
+            try:
+                action = json.loads(output)
+                if not isinstance(action, dict):
+                    raise ValueError('Player output must be a JSON object.')
+                if recorder and player < len(recorder.player_types) and recorder.player_types[player] == 'human':
+                    action = {key: action[key] for key in ('x', 'y', 'response') if key in action}
+                if validate:
+                    validate(action)
+            except (ValueError, TypeError) as exc:
+                trace_failure('protocol_error', str(exc))
+                raise
+            return action
+        except Exception as exc:
+            trace_failure('protocol_error' if isinstance(exc, UnicodeDecodeError) else 'execution_error', str(exc))
+            raise PlayerForfeit(player, 'Player failed to return a valid action.') from exc
 
 
-def read_board_move(get_output, player, column_only=False):
-    action = read_player_action(get_output, player)
+def read_board_move(get_output, player, column_only=False, input_str=None):
     keys = ('x',) if column_only else ('x', 'y')
-    if any(type(action.get(key)) is not int for key in keys):
-        raise PlayerForfeit(player, 'Move coordinates must be integers.')
+
+    def validate(action):
+        if any(type(action.get(key)) is not int for key in keys):
+            raise ValueError('Move coordinates must be integers.')
+
+    action = read_player_action(get_output, player, input_str, validate)
     return tuple(action[key] for key in keys)
 
 
-def read_response(get_output, player):
-    action = read_player_action(get_output, player)
-    if 'response' not in action:
-        raise PlayerForfeit(player, 'Player output is missing response.')
-    return action
+def read_response(get_output, player, input_str=None):
+    def validate(action):
+        if 'response' not in action:
+            raise ValueError('Player output is missing response.')
+
+    return read_player_action(get_output, player, input_str, validate)
 
 
-def read_simultaneous_actions(get_outputs):
+def read_simultaneous_actions(get_outputs, inputs=None):
+    recorder = current_recorder()
+    if recorder:
+        recorder.begin_turn()
+    inputs = inputs or (None, None)
     with ThreadPoolExecutor(max_workers=2) as pool:
-        futures = [pool.submit(read_response, get_output, player)
+        # ContextVars do not automatically propagate into executor threads.
+        futures = [pool.submit(copy_context().run, read_response, get_output, player, inputs[player])
                    for player, get_output in enumerate(get_outputs)]
-        # Wait for both so simultaneous failures are treated symmetrically.
         failures = [player for player, future in enumerate(futures)
                     if future.exception() is not None]
         if failures:
@@ -79,19 +104,35 @@ def wait_for_move(sessions, user_id, sid, game, socketio):
 
 
 def play_board_game(game, get_outputs, send_update, max_turns, column_only=False):
-    """Run turns; execution/protocol/illegal-move failures use one forfeit path."""
+    """Run turns with the same trace format as process-based judges."""
+    recorder = current_recorder()
+    if recorder:
+        with recorder.capture('judge', {'board_size': len(game.board), 'columns': len(game.board[0])}, 'python_judge'):
+            trace_fields(stdout={'board': game.board, 'current_player': game.current_player, 'winner': game.winner})
     for _ in range(max_turns):
+        if recorder:
+            recorder.begin_turn(len(game.move_history) + 1)
         if game.is_terminated:
             raise RuntimeError('Game was terminated.')
         player = game.current_player - 1
         input_str = game.send_action_to_ai()
-        move = read_board_move(lambda: get_outputs[player](input_str), player, column_only)
-        if not game.apply_move(*move):
-            raise PlayerForfeit(player, 'Player made an invalid move.')
-        landed = game.move_history[-1]
-        winner = game.check_win(landed['x'], landed['y'])
-        if winner:
-            game.winner = winner
+        move = read_board_move(lambda: get_outputs[player](input_str), player, column_only, input_str)
+        context = {'board': game.board, 'player': game.current_player,
+                   'action': dict(zip(('x',) if column_only else ('x', 'y'), move))}
+        capture = recorder.capture('judge', context, 'python_judge') if recorder else nullcontext()
+        with capture:
+            if not game.apply_move(*move):
+                trace_fields(status='invalid_move', stdout={'accepted': False, 'board': game.board},
+                             diagnostic='Player made an invalid move.')
+                raise PlayerForfeit(player, 'Player made an invalid move.')
+            landed = game.move_history[-1]
+            winner = game.check_win(landed['x'], landed['y'])
+            if winner:
+                game.winner = winner
+            trace_fields(stdout={'accepted': True, 'board': game.board, 'current_player': game.current_player,
+                                 'winner': game.winner, 'board_full': game.is_board_full()})
+        if recorder:
+            recorder.complete_frame(len(game.move_history))
         send_update({'ai_move': landed})
         if game.winner or game.is_board_full():
             break
@@ -107,10 +148,15 @@ def match_lifecycle(*, match_id, game_name, players, player_ids, player_types,
     without moving Elo. Persistence failures propagate instead of announcing
     a result that was never saved.
     """
+    recorder = None
+    trace_token = None
     result = MatchResult()
     if board_game is not None:
         result.payload = board_game.move_history
     try:
+        recording_id = match_id or create_match_record(game_name, players)
+        recorder = DebugRecorder(recording_id, executors, player_types)
+        trace_token = bind_recorder(recorder)
         try:
             yield result
         except PlayerForfeit as exc:
@@ -129,9 +175,11 @@ def match_lifecycle(*, match_id, game_name, players, player_ids, player_types,
             board_game.winner = result.winner + 1 if result.winner in (0, 1) else 0
 
         saved_id = finalize_match_record(
-            match_id, game_name, players, result.winner,
+            recording_id, game_name, players, result.winner,
             json.dumps(result.payload), payload_col,
         )
+        frame_count = len(result.payload) if payload_col == 'move_history' else max(0, len(result.payload) - 1)
+        recorder.finish(frame_count, result.error_msg)
         if result.rated and player_types == ('bot', 'bot'):
             try:
                 update_bot_ratings(*player_ids, result.winner, saved_id)
@@ -153,6 +201,11 @@ def match_lifecycle(*, match_id, game_name, players, player_ids, player_types,
         except Exception:
             logger.exception('Failed to announce match %s', saved_id)
     finally:
+        if trace_token is not None:
+            reset_recorder(trace_token)
+        if recorder is not None and not recorder.finished:
+            frame_count = len(result.payload) if payload_col == 'move_history' else max(0, len(result.payload) - 1)
+            recorder.finish(frame_count, 'Match completion was interrupted.', interrupted=True)
         if match_id:
             active_matches.pop(match_id, None)
         for executor in executors:

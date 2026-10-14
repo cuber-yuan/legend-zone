@@ -14,7 +14,9 @@ build/
 
 .vscode/
 .idea/
-tests/
+tests/*
+!tests/test_replay_debug.py
+!tests/replay-debug-ui.cjs
 
 *.swp
 *.bak

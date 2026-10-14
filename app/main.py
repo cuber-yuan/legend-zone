@@ -392,6 +392,72 @@ def api_get_match(match_id):
         if conn:
             conn.close()
 
+@main_bp.route('/api/matches/<match_id>/debug')
+def match_debug(match_id):
+    """Public debug snapshot, with optional bulk events for local replay caching."""
+    include_all = request.args.get('all') == '1'
+    raw_turn = request.args.get('turn')
+    if ('all' in request.args and not include_all) or (include_all and raw_turn is not None):
+        return jsonify({'error': 'Use all=1 or turn=N, not both.'}), 400
+    turn = None
+    if raw_turn is not None:
+        try:
+            turn = int(raw_turn)
+            if turn < 0 or turn > 100000:
+                raise ValueError()
+        except (TypeError, ValueError):
+            return jsonify({'error': 'turn must be a non-negative integer.'}), 400
+    connection = get_db_connection()
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute('SELECT status FROM matches WHERE id = ?', (match_id,))
+            match = cursor.fetchone()
+            if not match:
+                return jsonify({'error': 'Match not found.'}), 404
+            cursor.execute('SELECT * FROM match_debug_sessions WHERE match_id = ?', (match_id,))
+            session = cursor.fetchone()
+            if not session:
+                return jsonify({'available': False, 'events': [], 'turns': []})
+            if turn is not None:
+                cursor.execute('SELECT sequence, turn_index, payload FROM match_debug_events '
+                               'WHERE match_id = ? AND turn_index = ? ORDER BY sequence LIMIT 100',
+                               (match_id, turn))
+                events = []
+                for row in cursor.fetchall():
+                    event = json.loads(row['payload'])
+                    event.update(sequence=row['sequence'], turn=row['turn_index'])
+                    events.append(event)
+                return jsonify({'available': True, 'turn': turn, 'events': events})
+            cursor.execute("SELECT turn_index, COUNT(*) AS event_count, "
+                           "MAX(CASE WHEN status != 'success' THEN 1 ELSE 0 END) AS has_error "
+                           'FROM match_debug_events WHERE match_id = ? GROUP BY turn_index ORDER BY turn_index',
+                           (match_id,))
+            turns = [{'turn': row['turn_index'], 'event_count': row['event_count'],
+                      'has_error': bool(row['has_error'])} for row in cursor.fetchall()]
+            result = {
+                'available': True, 'schema_version': session['schema_version'],
+                'status': session['status'], 'frame_count': session['frame_count'],
+                'last_turn': session['last_turn'], 'turns': turns,
+                'truncated': bool(session['truncated']), 'incomplete': bool(session['incomplete']),
+                'error': session['error'],
+                'failure_turn': session['last_turn'] if session['last_turn'] > session['frame_count']
+                or (session['last_turn'] == 0 and session['error']) else None,
+            }
+            if include_all:
+                cursor.execute('SELECT sequence, turn_index, payload FROM match_debug_events '
+                               'WHERE match_id = ? ORDER BY sequence', (match_id,))
+                result['events'] = []
+                for row in cursor.fetchall():
+                    event = json.loads(row['payload'])
+                    event.update(sequence=row['sequence'], turn=row['turn_index'])
+                    result['events'].append(event)
+            response = jsonify(result)
+            response.headers['Cache-Control'] = 'no-store'
+            return response
+    finally:
+        connection.close()
+
+
 @main_bp.route('/bot/<string:bot_id>')
 def bot_detail(bot_id):
     conn = None

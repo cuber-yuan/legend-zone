@@ -4,6 +4,7 @@ import os
 import sys
 import shutil
 from . import cpp_compiler
+from .services.debug_service import run_process, trace_fields
 
 
 class CodeExecutor:
@@ -45,7 +46,7 @@ class CodeExecutor:
         entry = self._resolve_entry(self.PYTHON_ENTRIES)
         try:
             env = self._get_sandbox_env()
-            result = subprocess.run(
+            result = run_process(
                 [sys.executable, "-u", entry],
                 input=input_str.encode('utf-8'),
                 capture_output=True,
@@ -67,7 +68,11 @@ class CodeExecutor:
     def _run_cpp(self, input_str: str) -> str:
         entry = self._resolve_entry(self.CPP_ENTRIES)
         compiler = cpp_compiler.CppCompiler()
-        exec_path = compiler.compile_file(entry)
+        try:
+            exec_path = compiler.compile_file(entry)
+        except Exception as exc:
+            trace_fields(status='compile_error', diagnostic=f'Bot compilation failed. {exc}')
+            raise
 
         with tempfile.TemporaryDirectory() as sandbox_dir:
             temp_exec = os.path.join(sandbox_dir, os.path.basename(exec_path))
@@ -75,7 +80,7 @@ class CodeExecutor:
 
             env = self._get_sandbox_env()
             try:
-                result = subprocess.run(
+                result = run_process(
                     [temp_exec],
                     input=input_str.encode('utf-8'),
                     stdout=subprocess.PIPE,

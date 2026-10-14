@@ -61,10 +61,14 @@ class ReplayController {
         on('replaySlider', 'input', (e) => this.goto(parseInt(e.target.value, 10)));
         on('replaySpeed', 'change', (e) => this.setSpeed(parseFloat(e.target.value) || 1));
         on('replayControls', 'keydown', (e) => {
+            if (e.target.closest('[data-replay-debug]')) return;
             if (e.target.matches('input, select, textarea, a')) return;
             if (e.key === 'ArrowLeft') { e.preventDefault(); this.step(-1); }
             else if (e.key === 'ArrowRight') { e.preventDefault(); this.step(1); }
             else if (e.key === ' ' && e.target.id === 'replayControls') { e.preventDefault(); this.toggle(); }
+        });
+        on('replayControls', 'replay:seek', (e) => {
+            if (Number.isInteger(e.detail?.index)) this.goto(e.detail.index);
         });
         this._syncUI();
     }
@@ -186,7 +190,12 @@ class ReplayController {
             slider.setAttribute('aria-valuetext', `${this.index} of ${this.maxIndex}`);
         }
         const root = document.getElementById('replayControls');
-        if (root) root.style.setProperty('--rp-progress', `${this.maxIndex ? this.index / this.maxIndex * 100 : 0}%`);
+        if (root) {
+            root.style.setProperty('--rp-progress', `${this.maxIndex ? this.index / this.maxIndex * 100 : 0}%`);
+            root.dataset.frame = this.index;
+            root.dataset.maxFrame = this.maxIndex;
+            root.dispatchEvent(new CustomEvent('replay:frame', { detail: { index: this.index, maxIndex: this.maxIndex } }));
+        }
         const speed = document.getElementById('replaySpeed');
         if (speed) speed.value = String(this.speed);
 

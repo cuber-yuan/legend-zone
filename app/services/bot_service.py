@@ -58,7 +58,10 @@ def get_bot_executor(bot_id):
     rec = load_latest_version(bot_id)
     if not rec:
         return None
-    return CodeExecutor(workdir=rec['file_path'], language=rec['language'])
+    executor = CodeExecutor(workdir=rec['file_path'], language=rec['language'])
+    executor.bot_id = rec['bot_id']
+    executor.version_id = rec['version_id']
+    return executor
 
 
 def build_players_json(p1_id, p1_type, p2_id, p2_type, human_name=None):

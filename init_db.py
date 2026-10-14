@@ -3,6 +3,7 @@ import os
 import sys
 from datetime import datetime, timezone
 from werkzeug.security import generate_password_hash
+from db_migrations import migrate_debug_schema
 
 
 DB_PATH = os.path.join(os.path.dirname(__file__), 'legend_zone.db')
@@ -102,7 +103,8 @@ def init_db():
 
 
     conn.commit()
-    
+    migrate_debug_schema(conn)
+
     # Insert test data
     now = datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
     cursor.execute("SELECT COUNT(*) FROM users")

@@ -2,6 +2,7 @@ import subprocess
 import json
 import os
 from typing import Dict, Any
+from .services.debug_service import current_recorder, run_process, trace_failure
 
 class CppJudgeExecutor:
     """
@@ -27,6 +28,16 @@ class CppJudgeExecutor:
             )
 
     def run_raw_json(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
+        recorder = current_recorder()
+        if recorder is None:
+            return self._run_raw_json(input_data)
+        with recorder.capture('judge', json.dumps(input_data), kind='cpp_judge'):
+            result = self._run_raw_json(input_data)
+            if 'display' in result:
+                recorder.complete_frame()
+            return result
+
+    def _run_raw_json(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
         """
         Run one complete interaction with the C++ program.
 
@@ -50,27 +61,30 @@ class CppJudgeExecutor:
             input_json_str = json.dumps(input_data)
 
             # Run the C++ executable, passing the JSON string to its standard input
-            # text=True: handle encoding/decoding automatically
             # check=True: raise if the process returns a non-zero exit code
             # capture_output=True: capture stdout and stderr
-            result = subprocess.run(
+            # Keep bytes so Windows CRLF and malformed output survive in the trace.
+            result = run_process(
                 [self.executable_path],
-                input=input_json_str,
+                input=input_json_str.encode('utf-8'),
                 capture_output=True,
-                text=True,
                 check=True,
                 timeout=2  # Timeout to prevent a hung process
             )
 
             # Parse the JSON returned by the C++ program on stdout
             output_json = json.loads(result.stdout)
+            if not isinstance(output_json, dict):
+                trace_failure('protocol_error', 'Judge output must be a JSON object.')
+                raise ValueError('Judge output must be a JSON object.')
             return output_json
 
         except subprocess.CalledProcessError as e:
             # If the C++ program crashed, print its stderr to ease debugging
             print(f"Error executing C++ judge. Stderr:\n{e.stderr}")
             raise
-        except json.JSONDecodeError as e:
+        except (json.JSONDecodeError, UnicodeDecodeError) as e:
+            trace_failure('protocol_error', str(e))
             # If the output is not valid JSON, print it to ease debugging
             print(f"Failed to decode JSON from C++ judge output. Output was:\n{result.stdout}")
             raise

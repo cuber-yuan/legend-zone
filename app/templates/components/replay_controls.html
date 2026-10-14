@@ -16,7 +16,6 @@
   </div>
   <input id="replaySlider" class="rp-timeline" type="range" min="0" max="0" value="0" aria-label="Replay position" disabled>
   <div class="rp-toolbar">
-    <span class="rp-shortcuts" aria-hidden="true">&larr; &rarr; step <span>&middot;</span> Space play</span>
     <div class="rp-transport" role="group" aria-label="Playback">
       <button id="btnFirst" class="rp-button" type="button" aria-label="Go to beginning" title="Go to beginning">{{ icon('first') }}</button>
       <button id="btnPrev" class="rp-button" type="button" aria-label="Previous step" title="Previous step">{{ icon('prev') }}</button>
@@ -28,4 +27,34 @@
     </div>
     <label class="rp-speed"><span>Speed</span><select id="replaySpeed" aria-label="Playback speed"><option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="2">2×</option><option value="4">4×</option></select></label>
   </div>
+  {% if match_id %}
+  <div class="replay-debug" data-replay-debug data-url="{{ url_for('main.match_debug', match_id=match_id) }}">
+    <div class="rd-toggle-row">
+      <button type="button" class="rd-toggle" data-debug-toggle aria-expanded="false" aria-controls="replayDebugPanel"><span>Debug mode</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>
+      <button type="button" class="rd-failed" data-debug-failure hidden aria-pressed="false">Failed round</button>
+    </div>
+    <div id="replayDebugPanel" data-debug-panel hidden>
+      <p class="rd-notice" data-debug-notice role="status"></p>
+      <div data-debug-content hidden>
+        <div class="rd-heading"><strong data-debug-title></strong><span data-debug-frame></span></div>
+        <div class="rd-tabs" role="tablist" aria-label="Debug record source">
+          <button type="button" id="rdPlayer1Tab" role="tab" data-debug-actor="player_1" aria-controls="rdRecord" aria-selected="true">Player 1</button>
+          <button type="button" id="rdPlayer2Tab" role="tab" data-debug-actor="player_2" aria-controls="rdRecord" aria-selected="false" tabindex="-1">Player 2</button>
+        </div>
+        <div id="rdRecord" role="tabpanel" aria-labelledby="rdPlayer1Tab" class="rd-record">
+          <div class="rd-meta" aria-live="polite"><span data-debug-status></span><span data-debug-duration></span><span data-debug-exit></span></div>
+          <p class="rd-diagnostic" data-debug-diagnostic hidden></p>
+          <p class="rd-empty" data-debug-empty hidden></p>
+          <div class="rd-fields" data-debug-fields>
+            <details open><summary data-debug-input-label>Input · stdin</summary><pre data-debug-input tabindex="0" aria-label="Player input"></pre><p class="rd-cut" data-debug-cut="input" hidden>Input truncated.</p></details>
+            <details open><summary data-debug-output-label>Output · stdout (raw)</summary><pre data-debug-output tabindex="0" aria-label="Player output"></pre><p class="rd-cut" data-debug-cut="stdout" hidden>Output truncated.</p></details>
+          </div>
+          <details class="rd-stderr" data-debug-stderr-section open><summary>stderr <span data-debug-stderr-state></span></summary><pre data-debug-stderr tabindex="0" aria-label="Player stderr"></pre><p class="rd-cut" data-debug-cut="stderr" hidden>stderr truncated.</p></details>
+        </div>
+      </div>
+    </div>
+  </div>
+  <link rel="stylesheet" href="{{ url_for('static', filename='replay-debug.css') }}">
+  <script src="{{ url_for('static', filename='replay-debug.js') }}" defer></script>
+  {% endif %}
 </section>

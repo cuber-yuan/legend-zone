@@ -10,7 +10,7 @@ import json
 from .db import get_db_connection
 from .services.bot_service import get_bot_executor as _get_bot_executor, build_players_json
 from .services.match_service import create_match_record
-from .services.match_lifecycle import match_lifecycle, read_response, read_simultaneous_actions
+from .services.match_lifecycle import match_lifecycle, read_simultaneous_actions
 
 tank_bp = Blueprint('tank', __name__)
 sessions = {}
@@ -197,7 +197,7 @@ def register_tank_events(socketio):
                 def get_output_2():
                     return wait_for_human('2') if player_2_type == 'human' else executor_2.run(input_str_2)
 
-                output_1, output_2 = read_simultaneous_actions((get_output_1, get_output_2))
+                output_1, output_2 = read_simultaneous_actions((get_output_1, get_output_2), (input_str_1, input_str_2))
 
                 judge_input_dict['log'].append({})
                 judge_input_dict['log'].append({"0": output_1, "1": output_2})
@@ -303,8 +303,11 @@ def run_auto_tank_match(player_1_id, player_2_id):
         displays.append(game_state_dict['display'])
 
         for _ in range(max_turn):
-            out1 = read_response(lambda: executor_1.run(json.dumps(input_1)), 0)
-            out2 = read_response(lambda: executor_2.run(json.dumps(input_2)), 1)
+            input_str_1, input_str_2 = json.dumps(input_1), json.dumps(input_2)
+            out1, out2 = read_simultaneous_actions(
+                (lambda: executor_1.run(input_str_1), lambda: executor_2.run(input_str_2)),
+                (input_str_1, input_str_2),
+            )
             judge_input['log'].append({})
             judge_input['log'].append({"0": out1, "1": out2})
             game_state_dict = cpp_judge.run_raw_json(judge_input)
