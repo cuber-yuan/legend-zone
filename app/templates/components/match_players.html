@@ -1,3 +1,4 @@
+{% if match_id %}
 {% set players = match.players if match is defined and match and match.players else none %}
 <div class="match-players" aria-label="Match players">
   {% for side in player_sides %}
@@ -14,3 +15,4 @@
     </div>
   {% endfor %}
 </div>
+{% endif %}

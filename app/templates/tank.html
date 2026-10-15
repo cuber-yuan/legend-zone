@@ -57,11 +57,9 @@
       </div>
     </section>
 
-    <!-- Replay Controls (match page only) -->
-    {% if match_id %}
+    <!-- Shared match controls or introduction demo data -->
     {% set replay_unit = "Turn" %}
     {% include "components/replay_controls.html" %}
-    {% endif %}
     {% if not match_id %}
     {% include "game_guides/tank.html" %}
     {% endif %}

@@ -41,6 +41,8 @@ class ReplayController {
         this.playing = false;
         this.timer = null;
         this.attached = false;
+        this.demo = false;
+        this.loopTimer = null;
     }
 
     /** Bind DOM events. Call once after the DOM is ready. Idempotent. */
@@ -113,7 +115,10 @@ class ReplayController {
         this.index = Math.max(0, Math.min(this.maxIndex, index));
         this.onRender(this.index);
         this._syncUI();
-        if (this.playing && this.index >= this.maxIndex) this.pause();
+        if (this.playing && this.index >= this.maxIndex) {
+            this.pause();
+            if (this.demo) this.loopTimer = setTimeout(() => this.play(), 2000);
+        }
     }
 
     play() {
@@ -132,6 +137,8 @@ class ReplayController {
     }
 
     pause() {
+        clearTimeout(this.loopTimer);
+        this.loopTimer = null;
         this.playing = false;
         this._setPlayIcon(false);
         if (this.timer) {

@@ -16,6 +16,8 @@ examples/
 .vscode/
 .idea/
 tests/*
+!tests/game-demo-ui.cjs
+!tests/test_game_demo.py
 
 *.swp
 *.bak

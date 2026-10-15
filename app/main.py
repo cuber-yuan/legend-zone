@@ -194,33 +194,33 @@ def get_latest_bots_for_game(game_name):
 
 @main_bp.route('/gomoku')
 def gomoku():
-    bots = get_latest_bots_for_game('Gomoku')
-    return render_template('gomoku.html', bots=bots)
+    return render_game_intro('Gomoku', 'gomoku.html')
 
 @main_bp.route('/tank')
 def tank():
-    bots = get_latest_bots_for_game('Tank Battle')
-    return render_template('tank.html', bots=bots)
+    return render_game_intro('Tank Battle', 'tank.html')
 
 @main_bp.route('/snake')
 def snake():
-    bots = get_latest_bots_for_game('Snake')
-    return render_template('snake.html', bots=bots)
+    return render_game_intro('Snake', 'snake.html')
 
 @main_bp.route('/tictactoe')
 def tictactoe():
-    bots = get_latest_bots_for_game('Tic Tac Toe')
-    return render_template('tictactoe.html', bots=bots)
+    return render_game_intro('Tic Tac Toe', 'tictactoe.html')
 
 @main_bp.route('/connect4')
 def connect4():
-    bots = get_latest_bots_for_game('Connect Four')
-    return render_template('connect4.html', bots=bots)
+    return render_game_intro('Connect Four', 'connect4.html')
 
 @main_bp.route('/msnake')
 def msnake():
-    bots = get_latest_bots_for_game('Mini Snake')
-    return render_template('snake.html', bots=bots)
+    return render_game_intro('Mini Snake', 'snake.html')
+
+
+def render_game_intro(game, template):
+    from .services.game_demo import get_game_demo
+    demo = get_game_demo(game)
+    return render_template(template, bots=[], demo=demo, match=demo)
 
 @main_bp.route('/yahtzee')
 def yahtzee():

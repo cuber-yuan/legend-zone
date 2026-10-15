@@ -1,3 +1,9 @@
+{% if not match_id %}
+{% if demo %}
+<script type="application/json" id="gameDemoData">{{ demo | tojson }}</script>
+<script src="{{ url_for('static', filename='game-demo.js') }}" defer></script>
+{% endif %}
+{% else %}
 {% macro icon(kind) -%}
 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
   {% if kind == 'first' %}<path d="M5 5v14m13-13-8 6 8 6V6Z"/>
@@ -58,3 +64,4 @@
   <script src="{{ url_for('static', filename='replay-debug.js') }}" defer></script>
   {% endif %}
 </section>
+{% endif %}

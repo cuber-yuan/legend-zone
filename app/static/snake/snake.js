@@ -461,8 +461,8 @@ function renderReplayFrame(index) {
     }
 
     // Mirror the live-match audio: a move each turn, explosion+gameover at the end.
-    if (index > 0) _tryPlay(moveAudio);
-    if (index >= replayDisplays.length - 1 && replayDisplays.length > 1) {
+    if (index > 0 && !replayController.demo) _tryPlay(moveAudio);
+    if (!replayController.demo && index >= replayDisplays.length - 1 && replayDisplays.length > 1) {
         if (bgmAudio) { bgmAudio.pause(); bgmAudio.currentTime = 0; }
         _tryPlay(explosionAudio);
         _tryPlay(gameoverAudio);
@@ -484,7 +484,7 @@ function startReplay(displays, winner) {
 
     // Start BGM; browsers block autoplay without a gesture, so arm a one-time
     // unlock that resumes it on the first click/keypress.
-    if (bgmAudio) {
+    if (bgmAudio && !replayController.demo) {
         gameoverAudio.pause();
         gameoverAudio.currentTime = 0;
         bgmAudio.currentTime = 0;
