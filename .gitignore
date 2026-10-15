@@ -16,8 +16,6 @@ examples/
 .vscode/
 .idea/
 tests/*
-!tests/test_schema_migrations.py
-!tests/bot-versions-ui.cjs
 
 *.swp
 *.bak

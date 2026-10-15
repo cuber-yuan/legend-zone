@@ -26,7 +26,7 @@ from app.services import match_lifecycle as lifecycle
 from app.services import match_service
 from app.code_executor import CodeExecutor
 from app.cpp_judge_executor import CppJudgeExecutor
-from db_migrations import migrate_debug_schema
+from db_schema import initialize_schema, validate_schema
 from flask import Flask, request
 
 logging.disable(logging.CRITICAL)
@@ -38,9 +38,7 @@ class DebugTests(unittest.TestCase):
         self.addCleanup(self.temp.cleanup)
         self.db_path = Path(self.temp.name) / 'isolated.db'
         with closing(sqlite3.connect(self.db_path)) as connection:
-            connection.execute('CREATE TABLE matches (id TEXT PRIMARY KEY, game TEXT, players TEXT, '
-                               'winner INTEGER, move_history TEXT, displays TEXT, status TEXT, created_at TEXT)')
-            migrate_debug_schema(connection)
+            initialize_schema(connection)
         self.connection = lambda: DictLiteConnection(str(self.db_path))
         for module in (debug, match_service):
             mocked = patch.object(module, 'get_db_connection', self.connection)
@@ -72,16 +70,13 @@ class DebugTests(unittest.TestCase):
         defaults.update(kwargs)
         return lifecycle.match_lifecycle(**defaults)
 
-    def test_additive_migration_and_cli(self):
+    def test_schema_validation_preserves_existing_matches(self):
         with closing(sqlite3.connect(self.db_path)) as connection:
             before = connection.execute('SELECT * FROM matches').fetchall()
-            migrate_debug_schema(connection)
-            migrate_debug_schema(connection)
+            validate_schema(connection)
+            validate_schema(connection)
             self.assertEqual(before, connection.execute('SELECT * FROM matches').fetchall())
-        missing = Path(self.temp.name) / 'missing.db'
-        result = subprocess.run([sys.executable, str(ROOT / 'migrate_db.py'), '--database', str(missing)], capture_output=True)
-        self.assertNotEqual(result.returncode, 0)
-        self.assertFalse(missing.exists())
+            self.assertEqual(connection.total_changes, 0)
 
     def test_raw_python_output_and_stderr(self):
         work = Path(self.temp.name) / 'fixture_bot'

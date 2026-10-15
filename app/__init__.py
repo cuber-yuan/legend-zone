@@ -41,13 +41,8 @@ def create_app(*, start_background_jobs=True):
     login_manager.init_app(app)
     login_manager.login_view = 'auth.login'
 
-    from db_migrations import migrate_schema
-    from .db import get_db_connection
-    connection = get_db_connection()
-    try:
-        migrate_schema(connection._conn)
-    finally:
-        connection.close()
+    from db_schema import check_database
+    check_database()
 
     # Build any C++ game judge binary that is missing or stale for this platform.
     from judges.build import ensure_judges_built
