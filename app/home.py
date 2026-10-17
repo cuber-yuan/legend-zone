@@ -4,11 +4,11 @@ from . import socketio
 from judges.gomoku_judge import GomokuJudge
 from uuid import uuid4
 from flask_socketio import emit, join_room
-import json
 import os
 from .code_executor import CodeExecutor
 import uuid
 from .db import get_db_connection
+from .services.match_listing import format_match
 
 home_bp = Blueprint('home', __name__)
 
@@ -59,46 +59,17 @@ def clear_setup_tables(user_id):
         _broadcast_tables()
 
 
-def _player_entry(payload):
-    """Return (name, bot_id, version, is_human) from one players-JSON slot.
-
-    Old rows stored a bare string; new rows store {name, bot_id, version} or
-    {name, type: "human"}. Accept both so pre-versioning matches don't disappear
-    from the homepage.
-    """
-    if isinstance(payload, str):
-        return payload, None, None, False
-    if isinstance(payload, dict):
-        return (payload.get('name'), payload.get('bot_id'), payload.get('version'),
-                payload.get('type') == 'human')
-    return None, None, None, False
-
-
 def register_home_events(socketio):
     @socketio.on('connect', namespace='/')
     def handle_connect():
         user_id = str(uuid4())
 
+        conn = None
         try:
             conn = get_db_connection()
             with conn.cursor() as cursor:
-                cursor.execute("SELECT * FROM matches WHERE status = 'finished' ORDER BY created_at DESC LIMIT 20")
-                matches = cursor.fetchall()
-                for match in matches:
-                    try:
-                        p = json.loads(match['players']) if match['players'] else {}
-                    except (json.JSONDecodeError, TypeError):
-                        p = {}
-                    p1_name, p1_bot, p1_ver, p1_human = _player_entry(p.get('player_1'))
-                    p2_name, p2_bot, p2_ver, p2_human = _player_entry(p.get('player_2'))
-                    match['player_1'] = p1_name
-                    match['player_2'] = p2_name
-                    match['player_1_id'] = p1_bot
-                    match['player_2_id'] = p2_bot
-                    match['player_1_version'] = p1_ver
-                    match['player_2_version'] = p2_ver
-                    match['player_1_is_human'] = p1_human
-                    match['player_2_is_human'] = p2_human
+                cursor.execute("SELECT id, game, players, winner, status, created_at FROM matches WHERE status = 'finished' ORDER BY created_at DESC, id DESC LIMIT 20")
+                matches = [format_match(row) for row in cursor.fetchall()]
         except Exception as e:
             print("Failed to fetch matches:", e)
             matches = []

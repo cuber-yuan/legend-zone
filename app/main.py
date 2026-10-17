@@ -7,6 +7,7 @@ from .db import get_db_connection
 from .services.bot_service import player_json_for_human
 from .services.utils import utc_now_iso
 from .home import clear_setup_tables
+from .services.match_listing import recent_bot_matches
 
 main_bp = Blueprint('main', __name__)
 
@@ -493,6 +494,7 @@ def bot_detail(bot_id):
     versions = []
     history = []
     history_total = 0
+    recent_matches = []
     try:
         conn = get_db_connection()
         with conn.cursor() as cursor:
@@ -513,6 +515,7 @@ def bot_detail(bot_id):
             bot = cursor.fetchone()
 
             if bot:
+                recent_matches = recent_bot_matches(cursor, bot_id)
                 cursor.execute("""
                     SELECT id, version_number, description, source_code, file_path, rating, created_at
                     FROM bot_versions
@@ -562,4 +565,5 @@ def bot_detail(bot_id):
         abort(404)
 
     return render_template('bot_detail.html', bot=bot, versions=versions, history=history,
-                           history_total=history_total, history_limit=RATING_HISTORY_LIMIT)
+                           history_total=history_total, history_limit=RATING_HISTORY_LIMIT,
+                           recent_matches=recent_matches)

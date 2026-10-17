@@ -18,6 +18,8 @@ examples/
 tests/*
 !tests/game-demo-ui.cjs
 !tests/test_game_demo.py
+!tests/test_bot_matches.py
+!tests/bot-matches-ui.cjs
 
 *.swp
 *.bak

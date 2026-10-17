@@ -1,4 +1,5 @@
 // --- Audio Setup ---
+const BGM_ENABLED = false; // Temporarily disable background and game-over music; keep sound effects.
 let bgmAudio = new Audio('/static/snake/assets/snake.m4a');
 bgmAudio.loop = true;
 bgmAudio.volume = 1;
@@ -13,6 +14,7 @@ gameoverAudio.volume = 1;
 // Swallows the autoplay-policy rejection (resolved after the first user gesture).
 function _tryPlay(audio) {
     if (!audio) return;
+    if (!BGM_ENABLED && (audio === bgmAudio || audio === gameoverAudio)) return;
     if (!audio.loop) audio.currentTime = 0;
     const p = audio.play();
     if (p && p.catch) p.catch(() => {});

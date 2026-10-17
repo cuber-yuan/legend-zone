@@ -3,6 +3,14 @@
 {% block title %}{{ bot.name }}{% endblock %}
 
 {% block content %}
+<link rel="stylesheet" href="{{ url_for('static', filename='match-table.css') }}">
+<style>
+  .bot-tab { padding: 1rem 1.25rem; border-bottom: 2px solid transparent; color: #64748b; font-weight: 600; }
+  .bot-tab:hover { color: #1d4ed8; background: #f8fafc; }
+  .bot-tab[aria-selected="true"] { color: #1d4ed8; border-bottom-color: #3b82f6; }
+  .bot-tab:focus-visible { outline: 2px solid #3b82f6; outline-offset: -4px; }
+  .bot-panel[hidden] { display: none; }
+</style>
 <div class="max-w-screen-lg mx-auto">
 
   <!-- Bot summary -->
@@ -99,8 +107,20 @@
     </div>
   {% endif %}
 
-  <!-- Source code -->
+  <!-- Match history and source share one card to keep the page compact. -->
   <div class="bg-white rounded-lg shadow overflow-hidden">
+    <div role="tablist" aria-label="Bot details" class="flex border-b border-slate-200">
+      <button type="button" id="matches-tab" class="bot-tab" role="tab" aria-selected="true"
+              aria-controls="matches-panel">Recent Matches</button>
+      <button type="button" id="source-tab" class="bot-tab" role="tab" aria-selected="false"
+              aria-controls="source-panel" tabindex="-1">Source Code</button>
+    </div>
+    <div id="matches-panel" class="bot-panel" role="tabpanel" aria-labelledby="matches-tab" tabindex="0">
+      {% with match_table_id='bot-matches-tbody', show_rating_delta=true %}
+        {% include 'components/match_table.html' %}
+      {% endwith %}
+    </div>
+    <div id="source-panel" class="bot-panel" role="tabpanel" aria-labelledby="source-tab" tabindex="0" hidden>
     <div class="flex items-center justify-between bg-gray-800 px-4 py-2">
       <div class="flex items-center gap-2">
         <h2 class="text-white font-semibold">Source code</h2>
@@ -140,12 +160,44 @@
     {% else %}
       <div class="p-6 text-gray-500 text-sm">No source code is available for this bot.</div>
     {% endif %}
+    </div>
   </div>
 
   <div class="mt-6">
     <a href="{{ url_for('main.rating') }}" class="text-sm text-indigo-600 hover:underline">&larr; Back to ratings</a>
   </div>
 </div>
+
+<script src="{{ url_for('static', filename='match-table.js') }}"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    MatchTable.render(document.getElementById('bot-matches-tbody'), {{ recent_matches | tojson }},
+      'No matches yet.', {showRatingDelta: true});
+    const tabs = Array.from(document.querySelectorAll('.bot-tab'));
+    function selectTab(selected) {
+      tabs.forEach(tab => {
+        const active = tab === selected;
+        tab.setAttribute('aria-selected', String(active));
+        tab.tabIndex = active ? 0 : -1;
+        document.getElementById(tab.getAttribute('aria-controls')).hidden = !active;
+      });
+    }
+    tabs.forEach((tab, index) => {
+      tab.addEventListener('click', () => selectTab(tab));
+      tab.addEventListener('keydown', event => {
+        const offsets = {ArrowRight: 1, ArrowLeft: -1};
+        let next;
+        if (event.key in offsets) next = tabs[(index + offsets[event.key] + tabs.length) % tabs.length];
+        else if (event.key === 'Home') next = tabs[0];
+        else if (event.key === 'End') next = tabs[tabs.length - 1];
+        if (!next) return;
+        event.preventDefault();
+        selectTab(next);
+        next.focus();
+      });
+    });
+  });
+</script>
 
 {% if bot.source_code %}
 <script>
