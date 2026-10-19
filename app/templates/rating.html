@@ -2,6 +2,7 @@
 {% block title %}Rating{% endblock %}
 
 {% block content %}
+<link rel="stylesheet" href="{{ url_for('static', filename='bot-rating.css') }}">
 {% set totals = namespace(bots=0) %}
 {% for bot_list in ratings.values() %}
   {% set totals.bots = totals.bots + bot_list|length %}
@@ -49,8 +50,6 @@
     border-radius: 999px; font-size: 0.85rem; font-weight: 500; line-height: 1.4;
     transition: background 0.15s;
   }
-  .rating-bot { background: #ccfbf1; color: #134e4a; }
-  .rating-bot:hover { background: #99f6e4; }
   .rating-owner { background: #f3e8ff; color: #6b21a8; }
   .rating-owner:hover { background: #e9d5ff; }
   .rating-name { min-width: 0; overflow-wrap: anywhere; }
@@ -121,7 +120,9 @@
         <tr>
           <td><span class="rank-mark{% if loop.index <= 3 %} rank-{{ loop.index }}{% endif %}">{{ loop.index }}</span></td>
           <td>
-            <a href="{{ url_for('main.bot_detail', bot_id=bot.id) }}" class="rating-chip rating-bot">
+            <a href="{{ url_for('main.bot_detail', bot_id=bot.id) }}" class="rating-chip bot-rating-label"
+               data-bot-rating="{{ bot.rating if bot.rating is not none else '' }}"
+               title="{{ 'Current rating: %.2f'|format(bot.rating) if bot.rating is not none else 'Rating unavailable' }}">
               {{ bot_icon() }}<span class="rating-name">{{ bot.name }}</span>
               {% if bot.version %}<span class="rating-version">v{{ bot.version }}</span>{% endif %}
             </a>
@@ -147,4 +148,6 @@
   </section>
   {% endif %}
 </div>
+<script src="{{ url_for('static', filename='bot-rating.js') }}"></script>
+<script>BotRating.apply(document);</script>
 {% endblock %}

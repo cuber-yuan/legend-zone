@@ -24,10 +24,10 @@ window.MatchTable = (() => {
             purple: 'bg-purple-100 text-purple-800 hover:bg-purple-200'
         };
         // Bot ratings control their tone; humans keep their existing colors.
-        const cls = isHuman ? (tones[tone] || tones.blue) : 'lm-bot-chip';
+        const cls = isHuman ? (tones[tone] || tones.blue) : 'lm-bot-chip bot-rating-label';
         const hasRating = typeof rating === 'number' && Number.isFinite(rating);
         const ratingAttr = isHuman ? '' : ` data-bot-rating="${hasRating ? rating : ''}"`;
-        const ratingTitle = !isHuman && hasRating ? ` · Pre-match rating: ${rating.toFixed(2)}` : '';
+        const ratingTitle = !isHuman && hasRating ? ` · Current rating: ${rating.toFixed(2)}` : '';
         const glyph = glyphSvg(isHuman ? 'human' : 'bot', ' class="w-3.5 h-3.5 mr-1 opacity-80 flex-none"');
         const badge = isWinner
             ? '<span class="absolute -top-1.5 -right-1.5 flex items-center justify-center w-4 h-4 rounded-full bg-green-500 text-white text-[10px] font-bold shadow" title="Winner">W</span>'
@@ -44,7 +44,7 @@ window.MatchTable = (() => {
             const label = botId ? 'View bot' : 'View profile';
             return `<a href="${escapeAttr(href)}"${ratingAttr} class="lm-chip relative inline-flex items-center px-2.5 py-1 rounded-full ${cls} text-sm font-medium whitespace-nowrap transition-colors" title="${escapeAttr(label + ' — ' + name + ratingTitle)}">${inner}</a>`;
         }
-        return `<span${ratingAttr} class="lm-chip relative inline-flex items-center px-2.5 py-1 rounded-full ${cls} text-sm font-medium whitespace-nowrap"${ratingTitle ? ` title="${escapeAttr('Pre-match rating: ' + rating.toFixed(2))}"` : ''}>${inner}</span>`;
+        return `<span${ratingAttr} class="lm-chip relative inline-flex items-center px-2.5 py-1 rounded-full ${cls} text-sm font-medium whitespace-nowrap"${ratingTitle ? ` title="${escapeAttr('Current rating: ' + rating.toFixed(2))}"` : ''}>${inner}</span>`;
     }
 
     function ratingChange(delta) {

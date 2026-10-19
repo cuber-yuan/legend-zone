@@ -31,36 +31,34 @@ def format_match(match):
         match[f'{key}_id'] = player.get('bot_id')
         match[f'{key}_version'] = player.get('version')
         match[f'{key}_is_human'] = player.get('type') == 'human'
-        match[f'{key}_rating'] = _rating(player.get('rating_before'))
+        match[f'{key}_rating'] = None
     return match
 
 
 def add_match_ratings(cursor, matches):
-    """Fill only provable historical ratings; never substitute current ratings."""
-    if not matches:
+    """Use one current latest-version rating per Bot across the entire list."""
+    bot_ids = list(dict.fromkeys(
+        match.get(f'player_{seat}_id') for match in matches for seat in (1, 2)
+        if not match.get(f'player_{seat}_is_human')
+        and isinstance(match.get(f'player_{seat}_id'), str)))
+    if not bot_ids:
         return matches
-    placeholders = ','.join('?' for _ in matches)
+    placeholders = ','.join('?' for _ in bot_ids)
     cursor.execute(f"""
-        SELECT p.match_id, p.seat, p.bot_id_snapshot, p.version_number_snapshot, previous.rating
-        FROM match_players p
-        JOIN matches m ON m.id=p.match_id
-        JOIN rating_history h ON h.match_id=p.match_id AND h.version_id=p.bot_version_id
-        JOIN rating_history previous ON previous.id=(
-            SELECT prior.id FROM rating_history prior
-            WHERE prior.version_id=h.version_id AND prior.id<h.id ORDER BY prior.id DESC LIMIT 1
+        SELECT b.id, v.rating FROM bots b
+        JOIN bot_versions v ON v.id=(
+            SELECT latest.id FROM bot_versions latest WHERE latest.bot_id=b.id
+            ORDER BY latest.version_number DESC LIMIT 1
         )
-        WHERE p.match_id IN ({placeholders}) AND p.player_type='bot'
-          AND p.snapshot_source='execution' AND previous.created_at < m.started_at
-          AND h.created_at >= m.started_at
-    """, tuple(match['id'] for match in matches))
-    by_id = {match['id']: match for match in matches}
-    for row in cursor.fetchall():
-        match = by_id[row['match_id']]
-        key = f"player_{row['seat']}"
-        if (match.get(f'{key}_rating') is None and not match.get(f'{key}_is_human')
-                and match.get(f'{key}_id') == row['bot_id_snapshot']
-                and match.get(f'{key}_version') == row['version_number_snapshot']):
-            match[f'{key}_rating'] = _rating(row['rating'])
+        WHERE b.id IN ({placeholders})
+    """, tuple(bot_ids))
+    ratings = {row['id']: _rating(row['rating']) for row in cursor.fetchall()}
+    for match in matches:
+        for seat in (1, 2):
+            key = f'player_{seat}'
+            bot_id = match.get(f'{key}_id')
+            match[f'{key}_rating'] = (ratings.get(bot_id) if isinstance(bot_id, str)
+                                     and not match.get(f'{key}_is_human') else None)
     return matches
 
 

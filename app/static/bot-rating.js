@@ -24,7 +24,7 @@ window.BotRating = (() => {
                 foreground: color(0.36, 0.65), border: color(0.87, 0.35)};
     }
     function apply(root) {
-        root.querySelectorAll('.lm-bot-chip').forEach(label => {
+        root.querySelectorAll('.bot-rating-label').forEach(label => {
             const raw = label.dataset.botRating;
             const rating = raw === '' || raw === undefined ? null : Number(raw);
             const colors = palette(rating);

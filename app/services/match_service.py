@@ -78,7 +78,7 @@ def bind_match_players(match_id, players_json, player_types, executors):
                     bot_exists = cursor.fetchone() if player_type == 'bot' else None
                     version = None
                     if player_type == 'bot' and type(version_id) is int:
-                        cursor.execute('SELECT id, bot_id, version_number, COALESCE(rating,1500) AS rating, '
+                        cursor.execute('SELECT id, bot_id, version_number, '
                                        '(SELECT MAX(version_number) FROM bot_versions WHERE bot_id=v.bot_id) AS latest '
                                        'FROM bot_versions v WHERE id=?', (version_id,))
                         version = cursor.fetchone()
@@ -91,8 +91,6 @@ def bind_match_players(match_id, players_json, player_types, executors):
                         number = version['version_number'] if version else getattr(executor, 'version_number', None)
                         number = number if type(number) is int and number > 0 else None
                         player.update(bot_id=bot_id, version=number)
-                        # Capture the actual version's rating, never a client value.
-                        player['rating_before'] = version['rating'] if version else None
                         saved_player = saved_players.get(f'player_{seat}', {})
                         was_unrated = isinstance(saved_player, dict) and saved_player.get('rating_eligible') is False
                         player['rating_eligible'] = (player.get('rating_eligible') is not False and
