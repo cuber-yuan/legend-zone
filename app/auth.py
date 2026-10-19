@@ -13,10 +13,10 @@ def get_user_from_db(username):
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
-        cursor.execute("SELECT id, username, password_hash FROM users WHERE username = ?", (username,))
+        cursor.execute("SELECT id, username, password_hash, role, membership FROM users WHERE username = ?", (username,))
         row = cursor.fetchone()
         if row:
-            return {'id': row['id'], 'username': row['username'], 'password_hash': row['password_hash']}
+            return row
         return None
     finally:
         if conn:
@@ -43,10 +43,10 @@ def load_user(user_id):
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
-        cursor.execute("SELECT id, username FROM users WHERE id = ?", (user_id,))
+        cursor.execute("SELECT id, username, role, membership FROM users WHERE id = ?", (user_id,))
         row = cursor.fetchone()
         if row:
-            return User(row['id'], row['username'])
+            return User(row['id'], row['username'], row['role'], row['membership'])
         return None
     finally:
         if conn:
@@ -59,7 +59,7 @@ def login():
         password = request.form.get('password')
         user_data = get_user_from_db(username)
         if user_data and check_password_hash(user_data['password_hash'], password):
-            user = User(user_data['id'], user_data['username'])
+            user = User(user_data['id'], user_data['username'], user_data['role'], user_data['membership'])
             login_user(user)
             return jsonify({"message": "Login successful"})
         else:

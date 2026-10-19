@@ -6,6 +6,8 @@ CREATE TABLE users (
     username TEXT UNIQUE NOT NULL,
     password_hash TEXT NOT NULL,
     email TEXT,
+    role TEXT NOT NULL DEFAULT 'user' CHECK (role IN ('user','admin')),
+    membership TEXT NOT NULL DEFAULT 'standard' CHECK (membership IN ('standard','vip')),
     created_at TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
 );
 

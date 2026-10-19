@@ -192,6 +192,12 @@
                     <a href="{{ url_for('main.chat') }}"
                         class="nav-link {% if request.endpoint == 'main.chat' %}is-active{% endif %}">Chat</a>
                 </li>
+                {% if current_user.is_authenticated and current_user.is_admin %}
+                <li>
+                    <a href="{{ url_for('admin.test_page') }}"
+                        class="nav-link {% if request.blueprint == 'admin' %}is-active{% endif %}">Admin Test</a>
+                </li>
+                {% endif %}
                 <li class="nav-divider hidden lg:block" aria-hidden="true"></li>
                 {% if current_user.is_authenticated %}
                 <li>
