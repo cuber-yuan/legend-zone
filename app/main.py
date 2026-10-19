@@ -554,6 +554,12 @@ def bot_detail(bot_id):
                     # Expose only whether files exist — the absolute workdir would
                     # leak the server's directory layout to any visitor.
                     bot['has_files'] = bool(latest['file_path'])
+                    bot['can_download'] = bool(
+                        (bot['is_owner'] or not bot['is_private'])
+                        and (latest['source_code'] is not None or latest['file_path']))
+                # Version rows need metadata only, including for private Bots.
+                versions = [{key: value for key, value in version.items()
+                             if key not in ('source_code', 'file_path')} for version in versions]
     except Exception as e:
         print(f"Error loading bot {bot_id}: {e}")
         abort(500)

@@ -15,11 +15,14 @@ examples/
 
 .vscode/
 .idea/
-tests/*
-!tests/game-demo-ui.cjs
-!tests/test_game_demo.py
-!tests/test_bot_matches.py
-!tests/bot-matches-ui.cjs
+# Keep local tests and test artifacts out of Git.
+/tests/
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+test-results/
+playwright-report/
 
 *.swp
 *.bak

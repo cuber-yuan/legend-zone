@@ -121,7 +121,7 @@
       {% endwith %}
     </div>
     <div id="source-panel" class="bot-panel" role="tabpanel" aria-labelledby="source-tab" tabindex="0" hidden>
-    <div class="flex items-center justify-between bg-gray-800 px-4 py-2">
+    <div class="flex flex-wrap items-center justify-between gap-2 bg-gray-800 px-4 py-2">
       <div class="flex items-center gap-2">
         <h2 class="text-white font-semibold">Source code</h2>
         {% if bot.is_private %}
@@ -130,7 +130,13 @@
           <span class="px-2 py-0.5 rounded bg-gray-600 text-gray-200 text-xs font-medium">Public</span>
         {% endif %}
       </div>
-      <div class="flex items-center gap-2">
+      <div class="flex flex-wrap items-center gap-2">
+        {% if bot.can_download %}
+          <a href="{{ url_for('upload.download_bot', bot_id=bot.id) }}" id="download-bot"
+             class="px-3 py-1 rounded bg-gray-600 text-white text-sm hover:bg-gray-500 transition-colors duration-200">
+            Download
+          </a>
+        {% endif %}
         {% if bot.source_code %}
           <button type="button" id="copy-code"
                   class="px-3 py-1 rounded bg-gray-600 text-white text-sm hover:bg-gray-500 transition-colors duration-200">

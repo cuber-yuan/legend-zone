@@ -1,4 +1,4 @@
-from flask import Blueprint, request, jsonify, render_template, abort
+from flask import Blueprint, request, jsonify, render_template, abort, send_file
 from flask_login import login_required, current_user
 import os
 import shutil
@@ -128,6 +128,40 @@ def _validate_payload(language, description, source_code, bot_file):
     if language not in LANGUAGE_TO_ENTRY:
         return f"Unsupported language: {language}"
     return None
+
+
+@upload_bp.route('/bots/<string:bot_id>/download')
+def download_bot(bot_id):
+    from .services.bot_download import build_bot_download
+
+    with get_db_connection() as conn, conn.cursor() as cursor:
+        cursor.execute('SELECT id, user_id, bot_name, language, is_private FROM bots WHERE id=?', (bot_id,))
+        bot = cursor.fetchone()
+        if not bot:
+            abort(404)
+        is_owner = current_user.is_authenticated and current_user.id == bot['user_id']
+        if bot['is_private'] and not is_owner:
+            abort(403)
+        cursor.execute('SELECT version_number, source_code, file_path FROM bot_versions '
+                       'WHERE bot_id=? ORDER BY version_number DESC LIMIT 1', (bot_id,))
+        version = cursor.fetchone()
+    if not version:
+        abort(404)
+    try:
+        stream, filename, mimetype = build_bot_download(bot, version, UPLOAD_ROOT)
+    except (OSError, ValueError):
+        abort(404)
+    try:
+        response = send_file(stream, mimetype=mimetype, as_attachment=True,
+                             download_name=filename, conditional=False, etag=False)
+    except Exception:
+        stream.close()
+        raise
+    response.headers['Cache-Control'] = 'private, no-store'
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+    response.vary.add('Cookie')
+    response.call_on_close(stream.close)
+    return response
 
 
 @upload_bp.route('/upload-bot', methods=['POST'])
@@ -429,10 +463,10 @@ def delete_bot(bot_id):
 @upload_bp.route('/bots/<string:bot_id>/visibility', methods=['POST'])
 @login_required
 def set_visibility(bot_id):
-    """Flip whether this bot's source is visible to other users.
+    """Flip whether this bot's source is visible and downloadable to other users.
 
     The bot itself stays public — it appears in rankings and match listings, and
-    only its source code is gated. Note this governs the webpage alone: another
+    only its source code is gated. Note this governs HTTP access: another
     user's running bot can still read files off disk until the execution
     sandbox is tightened.
     """
