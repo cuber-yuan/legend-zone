@@ -1,4 +1,9 @@
   /* --- Latest Matches table --- */
+  .lm-bot-chip {
+    background: var(--bot-background, #f1f5f9); color: var(--bot-foreground, #475569);
+    box-shadow: inset 0 0 0 1px var(--bot-border, #e2e8f0);
+  }
+  .lm-bot-chip:hover { background: var(--bot-hover, #e2e8f0); }
   .lm-rating { font-size: 0.875rem; font-variant-numeric: tabular-nums; font-weight: 600; white-space: nowrap; }
   .lm-rating-up { color: #16a34a; }
   .lm-rating-down { color: #dc2626; }

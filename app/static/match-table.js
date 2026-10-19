@@ -17,15 +17,17 @@ window.MatchTable = (() => {
     // Bots jump to /bot/<id>, people to /profile/<username>; both are links.
     // The winner's card carries a small green "W" corner badge.
     // The version renders in a smaller, lighter font than the bot name.
-    function playerCard(name, isWinner, tone, botId, version, isHuman) {
+    function playerCard(name, isWinner, tone, botId, version, isHuman, rating) {
         if (!name) return '';
         const tones = {
             blue: 'bg-blue-100 text-blue-800 hover:bg-blue-200',
             purple: 'bg-purple-100 text-purple-800 hover:bg-purple-200'
         };
-        // Bots wear the cool chip, players the purple one; the glyph keeps the
-        // distinction readable without relying on colour alone.
-        const cls = isHuman ? (tones[tone] || tones.blue) : 'bg-teal-100 text-teal-900 hover:bg-teal-200';
+        // Bot ratings control their tone; humans keep their existing colors.
+        const cls = isHuman ? (tones[tone] || tones.blue) : 'lm-bot-chip';
+        const hasRating = typeof rating === 'number' && Number.isFinite(rating);
+        const ratingAttr = isHuman ? '' : ` data-bot-rating="${hasRating ? rating : ''}"`;
+        const ratingTitle = !isHuman && hasRating ? ` · Pre-match rating: ${rating.toFixed(2)}` : '';
         const glyph = glyphSvg(isHuman ? 'human' : 'bot', ' class="w-3.5 h-3.5 mr-1 opacity-80 flex-none"');
         const badge = isWinner
             ? '<span class="absolute -top-1.5 -right-1.5 flex items-center justify-center w-4 h-4 rounded-full bg-green-500 text-white text-[10px] font-bold shadow" title="Winner">W</span>'
@@ -40,9 +42,9 @@ window.MatchTable = (() => {
             : (isHuman && name !== 'HUMAN' ? `/profile/${encodeURIComponent(name)}` : null);
         if (href) {
             const label = botId ? 'View bot' : 'View profile';
-            return `<a href="${escapeAttr(href)}" class="lm-chip relative inline-flex items-center px-2.5 py-1 rounded-full ${cls} text-sm font-medium whitespace-nowrap transition-colors" title="${escapeAttr(label + ' — ' + name)}">${inner}</a>`;
+            return `<a href="${escapeAttr(href)}"${ratingAttr} class="lm-chip relative inline-flex items-center px-2.5 py-1 rounded-full ${cls} text-sm font-medium whitespace-nowrap transition-colors" title="${escapeAttr(label + ' — ' + name + ratingTitle)}">${inner}</a>`;
         }
-        return `<span class="lm-chip relative inline-flex items-center px-2.5 py-1 rounded-full ${cls} text-sm font-medium whitespace-nowrap">${inner}</span>`;
+        return `<span${ratingAttr} class="lm-chip relative inline-flex items-center px-2.5 py-1 rounded-full ${cls} text-sm font-medium whitespace-nowrap"${ratingTitle ? ` title="${escapeAttr('Pre-match rating: ' + rating.toFixed(2))}"` : ''}>${inner}</span>`;
     }
 
     function ratingChange(delta) {
@@ -69,8 +71,8 @@ window.MatchTable = (() => {
         matches.forEach(match => {
             // home.py already flattened match.player_1 / player_2 into
             // name strings plus player_1_id / player_1_version fields.
-            const p1Card = playerCard(match.player_1, match.winner === 0, 'purple', match.player_1_id, match.player_1_version, match.player_1_is_human);
-            const p2Card = playerCard(match.player_2, match.winner === 1, 'purple', match.player_2_id, match.player_2_version, match.player_2_is_human);
+            const p1Card = playerCard(match.player_1, match.winner === 0, 'purple', match.player_1_id, match.player_1_version, match.player_1_is_human, match.player_1_rating);
+            const p2Card = playerCard(match.player_2, match.winner === 1, 'purple', match.player_2_id, match.player_2_version, match.player_2_is_human, match.player_2_rating);
             const cards = [p1Card, p2Card].filter(Boolean);
             const playersStr = cards.length
                 ? `<span class="lm-players">${cards.join('')}</span>`
@@ -99,6 +101,7 @@ window.MatchTable = (() => {
                 </tr>
             `;
         });
+        BotRating.apply(tbody);
     }
     return { render };
 })();

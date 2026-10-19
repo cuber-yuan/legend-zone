@@ -8,7 +8,7 @@ import os
 from .code_executor import CodeExecutor
 import uuid
 from .db import get_db_connection
-from .services.match_listing import format_match
+from .services.match_listing import format_match, add_match_ratings
 
 home_bp = Blueprint('home', __name__)
 
@@ -69,7 +69,7 @@ def register_home_events(socketio):
             conn = get_db_connection()
             with conn.cursor() as cursor:
                 cursor.execute("SELECT id, game, players, winner, status, created_at FROM matches WHERE status = 'finished' ORDER BY created_at DESC, id DESC LIMIT 20")
-                matches = [format_match(row) for row in cursor.fetchall()]
+                matches = add_match_ratings(cursor, [format_match(row) for row in cursor.fetchall()])
         except Exception as e:
             print("Failed to fetch matches:", e)
             matches = []
