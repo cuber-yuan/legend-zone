@@ -44,6 +44,9 @@ def create_app(*, start_background_jobs=True):
     from db_schema import check_database
     check_database()
 
+    from .services.chat_store import cleanup_chat_history
+    cleanup_chat_history()
+
     # Build any C++ game judge binary that is missing or stale for this platform.
     from judges.build import ensure_judges_built
     ensure_judges_built()
@@ -98,6 +101,7 @@ def start_scheduler(app):
     Configure and start the APScheduler background scheduler.
     """
     from .services.battle_worker import schedule_all_games
+    from .services.chat_store import cleanup_chat_history
     # Keep scheduler logs from cluttering the console (optional)
     logging.getLogger('apscheduler').setLevel(logging.WARNING)
 
@@ -116,6 +120,9 @@ def start_scheduler(app):
         name='Run Automated Game Matches'
     )
     
+    scheduler.add_job(cleanup_chat_history, trigger='interval', minutes=1,
+                      id='chat_cleanup', name='Remove expired chat history', max_instances=1)
+
     # Start the scheduler
     scheduler.start()
 

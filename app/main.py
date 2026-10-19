@@ -1,6 +1,5 @@
 from flask import Blueprint, render_template, request, redirect, url_for, jsonify, abort
 from flask_login import login_required, current_user
-import datetime
 import uuid
 import json
 from .db import get_db_connection
@@ -8,17 +7,12 @@ from .services.bot_service import player_json_for_human
 from .services.utils import utc_now_iso
 from .home import clear_setup_tables
 from .services.match_listing import recent_bot_matches
+from .services.chat_store import chat_store, ChatStorageError
 
 main_bp = Blueprint('main', __name__)
 
 # Cap the rating chart so a long-lived bot does not render a thousand points.
 RATING_HISTORY_LIMIT = 20
-
-messages = []
-
-def clean_expired_messages():
-    now = datetime.datetime.now()
-    messages[:] = [msg for msg in messages if (now - msg["dt"]).total_seconds() < 86400]
 
 @main_bp.route('/')
 def home():
@@ -128,10 +122,11 @@ def rating():
 def chat():
     if request.method == 'POST':
         if not current_user.is_authenticated:
-            return jsonify(success=False, error="Login required"), 401 if request.headers.get('X-Requested-With') == 'XMLHttpRequest' else redirect(url_for('main.chat'))
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return jsonify(success=False, error='Login required'), 401
+            return redirect(url_for('main.chat'))
         message = request.form.get('message')
         if message:
-            clean_expired_messages()
             conn = None
             username = None
             try:
@@ -145,13 +140,10 @@ def chat():
                 if conn:
                     conn.close()
             if username:
-                msg_obj = {
-                    "user": username,
-                    "text": message,
-                    "time": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                    "dt": datetime.datetime.now()
-                }
-                messages.append(msg_obj)
+                try:
+                    msg_obj = chat_store.add(username, message)
+                except ChatStorageError:
+                    return jsonify(success=False, error='Unable to save your message. Please try again.'), 503
                 if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
                     return jsonify(success=True, message={
                         "user": msg_obj["user"],
@@ -161,19 +153,20 @@ def chat():
         if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
             return jsonify(success=False)
         return redirect(url_for('main.chat'))
-    clean_expired_messages()
+    try:
+        messages = chat_store.snapshot()
+    except ChatStorageError:
+        abort(503, description='Chat history is temporarily unavailable.')
     return render_template('chat.html', messages=messages)
 
 @main_bp.route('/chat/messages')
 def chat_messages():
-    clean_expired_messages()
-    return jsonify([
-        {
-            "user": msg["user"],
-            "text": msg["text"],
-            "time": msg["time"]
-        } for msg in messages
-    ])
+    try:
+        response = jsonify(chat_store.snapshot())
+    except ChatStorageError:
+        return jsonify(error='Chat history is temporarily unavailable.'), 503
+    response.headers['Cache-Control'] = 'no-store'
+    return response
 
 def get_latest_bots_for_game(game_name):
     """Return one row per logical bot for the game; versions are collapsed at

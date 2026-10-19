@@ -7,7 +7,7 @@
 <div class="chat-page">
     <section class="chat-card">
         <div class="chat-note">
-            <p>Chat history is kept for up to 24 hours. Messages may be lost if the server restarts.</p>
+            <p>Chat history is kept for up to 24 hours and expires automatically.</p>
         </div>
         <div class="chat-history-wrap">
         <div id="chat-history" class="chat-history">
@@ -31,6 +31,7 @@
                 <div class="chat-composer-actions">
                     <button type="submit" class="chat-send">Send</button>
                 </div>
+                <p id="chat-send-error" class="text-sm text-red-600 mt-2" role="alert" hidden></p>
             </form>
         </div>
         {% else %}
@@ -142,6 +143,8 @@ chatHistory.addEventListener('scroll', () => {
 function sendMessage(event) {
     event.preventDefault();
     const form = document.getElementById('chat-form');
+    const errorMessage = document.getElementById('chat-send-error');
+    errorMessage.hidden = true;
     const formData = new FormData(form);
     fetch(form.action, {
         method: 'POST',
@@ -155,7 +158,14 @@ function sendMessage(event) {
         if (data.success) {
             form.reset();
             fetchMessages(); // Refresh chat after sending
+        } else {
+            errorMessage.textContent = data.error || 'Unable to send your message. Please try again.';
+            errorMessage.hidden = false;
         }
+    })
+    .catch(() => {
+        errorMessage.textContent = 'Unable to send your message. Please try again.';
+        errorMessage.hidden = false;
     });
     return false;
 }

@@ -17,6 +17,8 @@ examples/
 .idea/
 # Keep local tests and test artifacts out of Git.
 /tests/
+/data/chat.json
+/data/.chat-*.tmp
 .pytest_cache/
 .coverage
 .coverage.*
