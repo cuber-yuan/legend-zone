@@ -1,15 +1,43 @@
 {% extends 'base.html' %}
-{% block title %}Admin Test{% endblock %}
+{% block title %}Admin Console{% endblock %}
 {% block content %}
+<link rel="stylesheet" href="{{ url_for('static', filename='admin.css') }}">
 <div class="max-w-screen-lg mx-auto mt-4">
   <section class="bg-white rounded-lg shadow-md overflow-hidden">
     <div class="px-5 py-5 sm:px-6 border-b border-slate-100">
-      <h1 class="text-xl sm:text-2xl font-semibold text-slate-900">Admin Test</h1>
-      <p class="mt-2 text-sm text-slate-500">A private workspace for administrator testing tools.</p>
+      <h1 class="text-xl sm:text-2xl font-semibold text-slate-900">Admin Console</h1>
     </div>
-    <div class="px-5 py-12 sm:px-6 text-center text-sm text-slate-500">
-      No testing tools have been added yet.
+    <div class="admin-tabs" role="tablist" aria-label="Administrator tools">
+      <button type="button" id="database-tab" class="admin-tab" role="tab" aria-selected="true"
+              aria-controls="database-panel">Database</button>
+    </div>
+    <div id="database-panel" role="tabpanel" aria-labelledby="database-tab" tabindex="0"
+         data-tables-url="{{ url_for('admin.database_tables') }}"
+         data-table-url="{{ url_for('admin.database_table') }}">
+      <div class="db-toolbar">
+        <label class="db-field">Table
+          <select id="db-table" disabled aria-label="Database table"><option>Loading…</option></select>
+        </label>
+        <label class="db-field db-page-size">Rows
+          <select id="db-page-size" aria-label="Rows per page"><option>25</option><option>50</option><option>100</option></select>
+        </label>
+        <button type="button" id="db-refresh" class="db-button" disabled>Refresh</button>
+      </div>
+      <p class="db-note">Read-only. Password hashes and Bot source code are hidden. Long values are previewed.</p>
+      <div id="db-status" class="db-status" role="status" aria-live="polite">Loading tables…</div>
+      <div id="db-grid" class="db-grid" role="region" aria-label="Database records" tabindex="0" hidden>
+        <table class="db-table"><thead id="db-head"></thead><tbody id="db-body"></tbody></table>
+      </div>
+      <div class="db-footer">
+        <span id="db-summary" aria-live="polite"></span>
+        <div class="db-pagination">
+          <button type="button" id="db-previous" class="db-button" disabled aria-label="Previous page">Previous</button>
+          <span id="db-page"></span>
+          <button type="button" id="db-next" class="db-button" disabled aria-label="Next page">Next</button>
+        </div>
+      </div>
     </div>
   </section>
 </div>
+<script src="{{ url_for('static', filename='admin.js') }}" defer></script>
 {% endblock %}

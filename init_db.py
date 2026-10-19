@@ -41,6 +41,7 @@ def init_db():
         default_games = [
             ('Gomoku', 'Five in a row', 1, 2, 2),
             ('Snake', 'Snake battle game', 1, 2, 2),
+            ('Mini Snake', 'Snake battle on a fixed 10-row by 11-column map', 1, 2, 2),
             ('Tank Battle', 'Tank battle game', 1, 2, 2),
             ('Tic Tac Toe', 'Classic 3x3 noughts and crosses', 1, 2, 2),
             ('Connect Four', 'Drop discs into columns and line up four in a row', 1, 2, 2),

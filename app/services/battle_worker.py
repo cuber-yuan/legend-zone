@@ -4,7 +4,7 @@ import random
 import time
 
 from ..gomoku import run_auto_gomoku_match
-from ..snake import run_auto_snake_match
+from ..snake import run_auto_snake_match, run_auto_msnake_match
 from ..tank2 import run_auto_tank_match
 from ..tictactoe import run_auto_tictactoe_match
 from ..connect4 import run_auto_connect4_match
@@ -49,11 +49,12 @@ def get_game_bot_counts():
 
 def schedule_all_games():
     """Allocate a fixed match budget across games in proportion to bot counts."""
-    games_to_run = ['Gomoku', 'Snake', 'Tank Battle', 'Tic Tac Toe', 'Connect Four']
+    games_to_run = ['Gomoku', 'Snake', 'Mini Snake', 'Tank Battle', 'Tic Tac Toe', 'Connect Four']
 
     auto_match_runners = {
         'Gomoku': run_auto_gomoku_match,
         'Snake': run_auto_snake_match,
+        'Mini Snake': run_auto_msnake_match,
         'Tank Battle': run_auto_tank_match,
         'Tic Tac Toe': run_auto_tictactoe_match,
         'Connect Four': run_auto_connect4_match,

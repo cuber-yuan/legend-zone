@@ -17,6 +17,22 @@ from .services.match_lifecycle import match_lifecycle, read_simultaneous_actions
 snake_bp = Blueprint('snake', __name__)
 sessions = {}
 active_matches = {}
+SNAKE_JUDGES = {'Snake': 'snake_judge', 'Mini Snake': 'msnake_judge'}
+
+
+def resolve_snake_game(data):
+    """Saved matches choose the rules; the browser cannot switch the judge."""
+    game_name = data.get('game_name', 'Snake')
+    if data.get('match_id'):
+        with get_db_connection() as conn, conn.cursor() as cursor:
+            cursor.execute('SELECT game FROM matches WHERE id=?', (data['match_id'],))
+            match = cursor.fetchone()
+        if not match:
+            raise ValueError('Match not found.')
+        game_name = match['game']
+    if not isinstance(game_name, str) or game_name not in SNAKE_JUDGES:
+        raise ValueError('Unsupported Snake game.')
+    return game_name, judge_binary_path(SNAKE_JUDGES[game_name])
 
 
 class SnakeGameSession:
@@ -78,8 +94,10 @@ def register_snake_events(socketio):
             try:
                 conn = get_db_connection()
                 with conn.cursor() as cursor:
-                    cursor.execute("SELECT status, displays, winner, players FROM matches WHERE id = ?", (match_id,))
+                    cursor.execute("SELECT game, status, displays, winner, players FROM matches WHERE id = ?", (match_id,))
                     match = cursor.fetchone()
+                if not match or match['game'] not in SNAKE_JUDGES:
+                    return
                 if match and match['status'] == 'finished':
                     displays = json.loads(match['displays']) if match['displays'] else []
                     emit('match_status', {
@@ -110,10 +128,11 @@ def register_snake_events(socketio):
 
         match_id = data.get('match_id')
 
-        cpp_path = judge_binary_path('snake_judge')
-        game_name = data.get('game_name', 'Snake')
-        if game_name == 'Mini Snake' or '/msnake' in data.get('page_path', ''):
-            cpp_path = judge_binary_path('msnake_judge')
+        try:
+            game_name, cpp_path = resolve_snake_game(data)
+        except ValueError as error:
+            emit('error', {'message': str(error)}, room=request.sid)
+            return
 
         game = SnakeGameSession(cpp_path)
         sid = request.sid
@@ -131,7 +150,7 @@ def register_snake_events(socketio):
             target = match_id if match_id else request.sid
             players = build_players_json(player_1_id_str, player_1_type, player_2_id_str, player_2_type, human_name=current_user.username)
             with match_lifecycle(
-                match_id=match_id, game_name='Snake', players=players,
+                match_id=match_id, game_name=game_name, players=players,
                 player_ids=(player_1_id_str, player_2_id_str),
                 player_types=(player_1_type, player_2_type), payload_col='displays',
                 socketio=socketio, namespace='/snake', room=target,
@@ -142,7 +161,7 @@ def register_snake_events(socketio):
                 ), room=target),
             ) as result:
                 result.rated = False
-                result.error_msg = 'Snake supports one human seat per match.'
+                result.error_msg = f'{game_name} supports one human seat per match.'
             return
 
         executor_1 = _get_bot_executor(player_1_id_str, match_id=match_id, seat=1) if player_1_type == 'bot' else None
@@ -163,7 +182,7 @@ def register_snake_events(socketio):
                 'latest_display': None,
             }
 
-        print(f"Starting snake game {game.game_id} (match={match_id}): "
+        print(f"Starting {game_name} game {game.game_id} (match={match_id}): "
               f"{player_1_id_str} ({player_1_type}) vs {player_2_id_str} ({player_2_type})")
 
         displays = []
@@ -180,7 +199,7 @@ def register_snake_events(socketio):
             result.error_msg = error_msg
 
         with match_lifecycle(
-            match_id=match_id, game_name='Snake', players=players,
+            match_id=match_id, game_name=game_name, players=players,
             player_ids=(player_1_id_str, player_2_id_str),
             player_types=(player_1_type, player_2_type), payload_col='displays',
             socketio=socketio, namespace='/snake', room=broadcast_target,
@@ -286,7 +305,7 @@ def register_snake_events(socketio):
         sessions[user_id]['pending_move'] = move
 
 
-def run_auto_snake_match(player_1_id, player_2_id):
+def run_auto_snake_match(player_1_id, player_2_id, *, game_name='Snake'):
     """
     Automated (AI vs AI) Snake match, invoked in the background by battle_worker.
     Mirrors the match loop in register_snake_events, except:
@@ -294,19 +313,24 @@ def run_auto_snake_match(player_1_id, player_2_id):
       - creates a matches record and writes back winner / displays when finished
       - calls update_bot_ratings to update ELO
     """
-    print(f"Running auto Snake match: {player_1_id} vs {player_2_id}")
+    if game_name not in SNAKE_JUDGES:
+        raise ValueError('Unsupported Snake game.')
+    print(f"Running auto {game_name} match: {player_1_id} vs {player_2_id}")
 
     executor_1 = _get_bot_executor(str(player_1_id))
     executor_2 = _get_bot_executor(str(player_2_id))
     if not executor_1 or not executor_2:
-        print("Error: Failed to load both bot executors for auto Snake match.")
+        for executor in (executor_1, executor_2):
+            if executor:
+                executor.cleanup()
+        print(f"Error: Failed to load both bot executors for auto {game_name} match.")
         return
 
     players = build_players_json(player_1_id, 'bot', player_2_id, 'bot')
     try:
-        match_id = create_match_record('Snake', players)
+        match_id = create_match_record(game_name, players)
     except Exception as e:
-        print("Failed to create auto Snake match record:", e)
+        print(f"Failed to create auto {game_name} match record:", e)
         executor_1.cleanup()
         executor_2.cleanup()
         return
@@ -314,14 +338,14 @@ def run_auto_snake_match(player_1_id, player_2_id):
     displays = []
     winner = -1
     with match_lifecycle(
-        match_id=match_id, game_name='Snake', players=players,
+        match_id=match_id, game_name=game_name, players=players,
         player_ids=(player_1_id, player_2_id), player_types=('bot', 'bot'),
         payload_col='displays', socketio=socketio, namespace='/snake',
         room=match_id, active_matches=active_matches,
         executors=(executor_1, executor_2),
     ) as result:
         result.payload = displays
-        cpp_judge = CppJudgeExecutor(judge_binary_path('snake_judge'))
+        cpp_judge = CppJudgeExecutor(judge_binary_path(SNAKE_JUDGES[game_name]))
         game_state_dict = cpp_judge.run_raw_json({})
         max_turn = 200
         judge_input = {'log': [], 'initdata': game_state_dict['initdata']}
@@ -354,3 +378,7 @@ def run_auto_snake_match(player_1_id, player_2_id):
             input_2['requests'].append(r1)
             input_2['responses'].append(r2)
         result.winner = winner if winner in (0, 1) else -1
+
+
+def run_auto_msnake_match(player_1_id, player_2_id):
+    return run_auto_snake_match(player_1_id, player_2_id, game_name='Mini Snake')

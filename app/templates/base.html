@@ -195,7 +195,7 @@
                 {% if current_user.is_authenticated and current_user.is_admin %}
                 <li>
                     <a href="{{ url_for('admin.test_page') }}"
-                        class="nav-link {% if request.blueprint == 'admin' %}is-active{% endif %}">Admin Test</a>
+                        class="nav-link {% if request.blueprint == 'admin' %}is-active{% endif %}">Admin Console</a>
                 </li>
                 {% endif %}
                 <li class="nav-divider hidden lg:block" aria-hidden="true"></li>
